@@ -56,8 +56,8 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
         saved_files = {}
         doc_types = ['photo', 'passport', 'patent', 'registration']
         
-        # Сначала получаем ID для работника
         worker_id = JSONSaver.get_next_id()
+        data['id'] = worker_id
         
         for doc_type in doc_types:
             temp_path = data.get(f'{doc_type}_temp_path')
@@ -79,6 +79,8 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
                 telegram_username=user.username
             )
             
+            logger.info("JSON сохранен: %s (ID: %s)", filename, worker_id)
+            
             await callback.message.edit_text(
                 f"✅ **Данные успешно сохранены!**\n\n"
                 f"🆔 **ID работника:** {worker_id}\n"
@@ -87,7 +89,7 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
                 parse_mode="Markdown"
             )
         except Exception as e:
-            logger.error(f"Ошибка сохранения JSON: {e}")
+            logger.error("Ошибка сохранения JSON: %s", e, exc_info=True)
             await callback.message.edit_text(
                 "❌ Произошла ошибка при сохранении данных. Попробуйте позже."
             )

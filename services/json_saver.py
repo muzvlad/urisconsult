@@ -91,6 +91,7 @@ class JSONSaver:
             data.pop('registration_temp_path', None)
             data.pop('editing_field', None)
 
+            logger.info("Запись JSON: %s", filepath)
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 

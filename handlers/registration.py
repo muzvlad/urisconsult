@@ -190,6 +190,15 @@ async def process_skip_to_documents(message: types.Message, state: FSMContext, d
         return True
     return False
 
+async def skip_photo(message: types.Message, state: FSMContext):
+    await process_skip_to_documents(message, state, 'photo', WorkerForm.passport)
+
+async def skip_passport(message: types.Message, state: FSMContext):
+    await process_skip_to_documents(message, state, 'passport', WorkerForm.patent)
+
+async def skip_patent(message: types.Message, state: FSMContext):
+    await process_skip_to_documents(message, state, 'patent', WorkerForm.registration)
+
 def register_registration_handlers(dp, form_class):
     """Регистрация обработчиков регистрации"""
     dp.message.register(process_name, form_class.name)
@@ -204,15 +213,6 @@ def register_registration_handlers(dp, form_class):
     dp.message.register(process_email, form_class.email)
     dp.message.register(process_date, form_class.date)
 
-    dp.message.register(
-        lambda message, state: process_skip_to_documents(message, state, 'photo', form_class.passport),
-        form_class.photo, F.text == "⏭ Пропустить"
-    )
-    dp.message.register(
-        lambda message, state: process_skip_to_documents(message, state, 'passport', form_class.patent),
-        form_class.passport, F.text == "⏭ Пропустить"
-    )
-    dp.message.register(
-        lambda message, state: process_skip_to_documents(message, state, 'patent', form_class.registration),
-        form_class.patent, F.text == "⏭ Пропустить"
-    )
+    dp.message.register(skip_photo, form_class.photo, F.text == "⏭ Пропустить")
+    dp.message.register(skip_passport, form_class.passport, F.text == "⏭ Пропустить")
+    dp.message.register(skip_patent, form_class.patent, F.text == "⏭ Пропустить")

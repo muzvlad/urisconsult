@@ -83,3 +83,20 @@ def register_document_handlers(dp, form_class):
     dp.message.register(process_passport, form_class.passport, F.photo | F.document)
     dp.message.register(process_patent, form_class.patent, F.photo | F.document)
     dp.message.register(process_registration, form_class.registration, F.photo | F.document)
+
+    dp.message.register(
+        lambda message: message.answer("❌ Отправьте изображение или нажмите 'Пропустить'"),
+        form_class.photo, F.text
+    )
+    dp.message.register(
+        lambda message: message.answer("❌ Отправьте изображение или нажмите 'Пропустить'"),
+        form_class.passport, F.text
+    )
+    dp.message.register(
+        lambda message: message.answer("❌ Отправьте изображение или нажмите 'Пропустить'"),
+        form_class.patent, F.text
+    )
+    dp.message.register(
+        lambda message: message.answer("❌ Отправьте изображение или нажмите 'Пропустить'"),
+        form_class.registration, F.text
+    )
