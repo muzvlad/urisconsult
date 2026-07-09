@@ -85,7 +85,7 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
             await callback.message.edit_text(
                 f"✅ **Данные успешно сохранены!**\n\n"
                 f"🆔 **ID работника:** {worker_id}\n"
-                f"📁 **Файл:** {filename}\n\n"
+                f"📝 **ФИО:** {data.get('name', 'Не указано')}\n\n"
                 f"Благодарим за заполнение анкеты!",
                 parse_mode="Markdown"
             )
