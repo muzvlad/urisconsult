@@ -2,10 +2,7 @@
 Сервис для сохранения файлов
 """
 import os
-import logging
 from config import DOCS_DIR, DOC_PREFIXES
-
-logger = logging.getLogger(__name__)
 
 class FileSaver:
     """Класс для сохранения файлов в папку docs"""
@@ -33,8 +30,6 @@ class FileSaver:
         new_path = os.path.join(DOCS_DIR, new_filename)
 
         os.rename(temp_path, new_path)
-        logger.info("Сохранен документ: %s", new_filename)
-
         return new_filename
     
     @staticmethod

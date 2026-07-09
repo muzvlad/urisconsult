@@ -15,16 +15,14 @@ from handlers.registration import register_registration_handlers, WorkerForm
 from handlers.documents import register_document_handlers
 from handlers.confirmation import register_confirmation_handlers
 
-# Настройка логирования
+# Настройка логирования — только ошибки
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
-# Убираем шум от библиотек
-logging.getLogger('aiogram').setLevel(logging.WARNING)
-logging.getLogger('aiohttp').setLevel(logging.WARNING)
-logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('aiogram').setLevel(logging.ERROR)
+logging.getLogger('aiohttp').setLevel(logging.ERROR)
+logging.getLogger('httpx').setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +39,11 @@ async def on_startup(bot: Bot):
     await set_commands(bot)
     for f in glob.glob(os.path.join(DOCS_DIR, "temp_*")):
         os.remove(f)
-    logger.info("Бот запущен и готов к работе")
+    print("Bot started")
 
 async def main():
     """Главная функция запуска бота"""
-    logger.info("Запуск бота...")
+    print("Starting bot...")
     
     # Инициализация бота и диспетчера
     bot = Bot(token=BOT_TOKEN)
@@ -64,7 +62,7 @@ async def main():
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
-        logger.info("Бот остановлен")
+        print("Bot stopped")
 
 if __name__ == "__main__":
     asyncio.run(main())
