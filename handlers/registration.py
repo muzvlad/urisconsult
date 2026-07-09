@@ -40,9 +40,8 @@ class WorkerForm(StatesGroup):
 
 # Валидаторы
 def validate_phone(phone: str) -> bool:
-    """Проверка формата телефона"""
-    phone_pattern = r'^\+7\s?\(?\d{3}\)?\s?\d{3}[-\s]?\d{2}[-\s]?\d{2}$'
-    return bool(re.match(phone_pattern, phone.replace(' ', '')))
+    """Любой непустой ввод допустим"""
+    return bool(phone.strip())
 
 def validate_email(email: str) -> bool:
     """Проверка формата email"""
@@ -105,7 +104,7 @@ async def process_manager(message: types.Message, state: FSMContext):
     """Обработка менеджера"""
     await state.update_data(manager=message.text.strip())
     await message.answer(
-        "📞 Введите основной номер телефона (в формате +7 (999) 999-99-99):",
+        "📞 Введите основной номер телефона (в формате +79999999999):",
         reply_markup=get_cancel_keyboard()
     )
     await state.set_state(WorkerForm.phone_main)
@@ -119,7 +118,7 @@ async def process_phone_main(message: types.Message, state: FSMContext):
     
     phone = message.text.strip()
     if not validate_phone(phone):
-        await message.answer("❌ Пожалуйста, введите телефон в формате +7 (999) 999-99-99")
+        await message.answer("❌ Пожалуйста, введите номер телефона")
         return
     
     await state.update_data(phone_main=phone)
@@ -139,8 +138,8 @@ async def process_phone_additional(message: types.Message, state: FSMContext):
     phone = message.text.strip()
     if phone == "⏭ Пропустить":
         phone = "Не указан"
-    elif phone and not validate_phone(phone) and phone != "Не указан":
-        await message.answer("❌ Пожалуйста, введите телефон в формате +7 (999) 999-99-99 или 'пропустить'")
+    elif phone and not validate_phone(phone):
+        await message.answer("❌ Пожалуйста, введите номер телефона или нажмите 'Пропустить'")
         return
     
     await state.update_data(phone_additional=phone)
@@ -193,7 +192,6 @@ async def process_skip_to_documents(message: types.Message, state: FSMContext, d
 
 def register_registration_handlers(dp, form_class):
     """Регистрация обработчиков регистрации"""
-    # Основная информация
     dp.message.register(process_name, form_class.name)
     dp.message.register(process_citizenship, form_class.citizenship)
     dp.message.register(process_gender, form_class.gender)
@@ -205,17 +203,16 @@ def register_registration_handlers(dp, form_class):
     dp.message.register(process_phone_additional, form_class.phone_additional)
     dp.message.register(process_email, form_class.email)
     dp.message.register(process_date, form_class.date)
-    
-    # Пропуск документов
+
     dp.message.register(
-        lambda m, s: process_skip_to_documents(m, s, 'photo', form_class.passport),
+        lambda message, state: process_skip_to_documents(message, state, 'photo', form_class.passport),
         form_class.photo, F.text == "⏭ Пропустить"
     )
     dp.message.register(
-        lambda m, s: process_skip_to_documents(m, s, 'passport', form_class.patent),
+        lambda message, state: process_skip_to_documents(message, state, 'passport', form_class.patent),
         form_class.passport, F.text == "⏭ Пропустить"
     )
     dp.message.register(
-        lambda m, s: process_skip_to_documents(m, s, 'patent', form_class.registration),
+        lambda message, state: process_skip_to_documents(message, state, 'patent', form_class.registration),
         form_class.patent, F.text == "⏭ Пропустить"
     )

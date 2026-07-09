@@ -10,14 +10,14 @@ def get_gender_keyboard():
     builder.button(text="Мужской")
     builder.button(text="Женский")
     builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
+    return builder.as_markup(resize_keyboard=True)
 
 def get_skip_keyboard():
     """Клавиатура с кнопкой пропустить"""
     builder = ReplyKeyboardBuilder()
     builder.button(text="⏭ Пропустить")
     builder.adjust(1)
-    return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
+    return builder.as_markup(resize_keyboard=True)
 
 def get_cancel_keyboard():
     """Клавиатура с кнопкой отмены"""
