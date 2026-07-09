@@ -43,6 +43,7 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
             return False
 
         ext = os.path.splitext(file_path)[1] or '.jpg'
+        data = await state.get_data()
         temp_path = os.path.join(DOCS_DIR, f"temp_{doc_type}_{message.from_user.id}{ext}")
 
         await bot.download_file(file_path, temp_path)

@@ -1,6 +1,8 @@
 """
 Обработчики команд
 """
+import os
+import glob
 import logging
 from aiogram import types, F
 from aiogram.filters import Command
@@ -8,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
+from config import DOCS_DIR
 from handlers.registration import WorkerForm
 
 logger = logging.getLogger(__name__)
@@ -21,9 +24,18 @@ def get_start_keyboard():
     )
     return keyboard
 
+def cleanup_user_temp_files(user_id: int):
+    """Удалить временные файлы пользователя"""
+    for f in glob.glob(os.path.join(DOCS_DIR, f"temp_*_{user_id}.*")):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
 async def cmd_start(message: types.Message, state: FSMContext):
     """Обработчик команды /start и кнопки"""
     await state.clear()
+    cleanup_user_temp_files(message.from_user.id)
 
     await message.answer(
         "👋 Здравствуйте! Я бот для заполнения анкет работников.\n\n"
@@ -37,6 +49,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def cmd_cancel(message: types.Message, state: FSMContext):
     """Обработчик команды /cancel"""
     await state.clear()
+    cleanup_user_temp_files(message.from_user.id)
     await message.answer(
         "❌ Заполнение анкеты отменено.\n"
         "Чтобы начать заново, нажмите кнопку ниже:",

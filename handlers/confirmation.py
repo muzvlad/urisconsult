@@ -10,6 +10,7 @@ from aiogram.types import ReplyKeyboardRemove
 from keyboards.reply_kb import get_confirmation_keyboard, get_edit_keyboard
 from services.file_saver import FileSaver
 from services.json_saver import JSONSaver
+from handlers.commands import cleanup_user_temp_files
 from handlers.registration import WorkerForm
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,7 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
     
     elif callback.data == "restart":
         await state.clear()
+        cleanup_user_temp_files(callback.from_user.id)
         await callback.message.edit_text(
             "🔄 Начинаем заполнение заново.\n"
             "Введите ваше ФИО:"

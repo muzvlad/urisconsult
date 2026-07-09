@@ -2,12 +2,14 @@
 Главный файл бота
 """
 import asyncio
+import glob
+import os
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, DOCS_DIR
 from handlers.commands import register_commands, get_start_keyboard
 from handlers.registration import register_registration_handlers, WorkerForm
 from handlers.documents import register_document_handlers
@@ -37,6 +39,8 @@ async def set_commands(bot: Bot):
 async def on_startup(bot: Bot):
     """Действия при запуске бота"""
     await set_commands(bot)
+    for f in glob.glob(os.path.join(DOCS_DIR, "temp_*")):
+        os.remove(f)
     logger.info("Бот запущен и готов к работе")
 
 async def main():
