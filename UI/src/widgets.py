@@ -2,10 +2,13 @@
 Виджеты UI: карточка сотрудника, просмотр документов, фото, колокольчик.
 """
 from __future__ import annotations
+import os
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable, List
 from pathlib import Path
+
+from PIL import Image, ImageTk
 
 from src.config import get_config
 from src.models import Worker
@@ -350,8 +353,3 @@ class DocumentViewer(tk.Frame):
     def _on_click(self) -> None:
         if self.on_open and self.doc_info.full_path:
             self.on_open(self.doc_info.full_path)
-
-
-# Импорты для работы с изображениями
-from PIL import Image, ImageTk
-import os

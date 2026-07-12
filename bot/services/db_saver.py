@@ -1,6 +1,7 @@
 """
 Сервис для сохранения данных в SQLite (нормализованная схема).
 """
+import json
 from datetime import datetime
 from config.documents import DOC_FLOWS
 from services import db
@@ -52,8 +53,8 @@ class DBSaver:
             'date': data.get('date', ''),
             'registration': data.get('registration', ''),
             'marital_status': data.get('russia_marital_status', ''),
-            'relatives_json': str(data.get('russia_relatives_list', [])),
-            'created_at': datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+            'relatives_json': json.dumps(data.get('russia_relatives_list', []), ensure_ascii=False),
+            'created_at': datetime.now().isoformat(),
             'telegram_id': user_id,
             'status': status,
             'rejection_reasons': '[]',

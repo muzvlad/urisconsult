@@ -4,6 +4,7 @@
 Включает валидацию MIME-типа и размера файла.
 """
 import os
+import shutil
 import logging
 from config import DOCS_DIR, MAX_FILE_SIZE, ALLOWED_MIME_TYPES
 from config.documents import DOC_PREFIXES
@@ -84,7 +85,11 @@ class FileSaver:
         new_filename = f"{prefix}_{worker_id}{ext}"
         new_path = os.path.join(DOCS_DIR, new_filename)
 
-        os.replace(temp_path, new_path)
+        try:
+            os.replace(temp_path, new_path)
+        except OSError:
+            shutil.copy2(temp_path, new_path)
+            os.remove(temp_path)
         logger.debug("Файл сохранён: %s -> %s (%d bytes)", temp_path, new_filename, file_size)
         return new_filename
 

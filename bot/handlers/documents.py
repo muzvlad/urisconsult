@@ -158,7 +158,6 @@ def register_document_handlers(dp, form_class):
         )
 
         # Обработка текста вместо файла (ошибка)
-        dp.message.register(
-            lambda m: m.answer("❌ Отправьте изображение или нажмите 'Пропустить'"),
-            state, F.text
-        )
+        async def _reject_text(m: types.Message):
+            await m.answer("❌ Отправьте изображение или нажмите 'Пропустить'")
+        dp.message.register(_reject_text, state, F.text)

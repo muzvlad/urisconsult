@@ -158,17 +158,17 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
     paths = get_paths()
     bot_config_dir = paths.bot_dir / "config"
 
-    # Добавляем в путь для импорта
-    import sys
-    if str(bot_config_dir.parent) not in sys.path:
-        sys.path.insert(0, str(bot_config_dir.parent))
-
+    # Сохраняем и восстанавливаем sys.path чтобы не засорять
+    old_path = sys.path.copy()
     try:
+        if str(bot_config_dir.parent) not in sys.path:
+            sys.path.insert(0, str(bot_config_dir.parent))
         from config.documents import DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
         return DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
     except ImportError:
-        # Fallback - минимальная конфигурация
         return {}, {}, {}
+    finally:
+        sys.path = old_path
 
 
 # ─── Константы БД ───

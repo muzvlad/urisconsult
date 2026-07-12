@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 Users/
 setup.bat
+.env
+.env.local
+.env.*.local

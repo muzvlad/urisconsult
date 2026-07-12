@@ -1,6 +1,48 @@
 # Changelog
 
-## v2.2 (12.07.2026)
+## v2.3 (13.07.2026)
+
+Аудит и исправление 22 проблем: безопасность, race conditions, ошибки运行时, синхронизация bot/UI.
+
+### Безопасность (CRITICAL)
+- Удалены `.env` файлы с реальными токенами (bot + urisconsult)
+- `bot/.gitignore` — добавлены `.env`, `.env.local`, `.env.*.local`
+- `setup.bat` — GitHub токен больше не вставляется в URL напрямую (`x-access-token:` формат)
+
+### Исправления运行时 (CRITICAL)
+- `get_next_id()` — race condition: два пользователя не получат одинаковый ID (SQL `ORDER BY DESC LIMIT 1`)
+- `documents.py` — unawaited coroutine: `lambda m: m.answer()` заменён на `async def`
+- `UI/src/main.py` — добавлен недостающий импорт `log_info` (был NameError)
+
+### Синхронизация bot↔UI (HIGH)
+- `worker_documents` — добавлен `UNIQUE(worker_id, doc_type)` в схеме бота (совпадает с UI)
+- `db_saver.py` — `str(relatives_list)` заменён на `json.dumps(ensure_ascii=False)` (совместимость с `json.loads()` в UI)
+- `db_saver.py` — формат даты заменён на ISO 8601 (совпадает с UI)
+
+### Код (HIGH)
+- `config/__init__.py` — `os.makedirs()` перенесён в `ensure_dirs()`, вызывается в `on_startup()` (нет side effects при import)
+- `commands.py` — `_find_rejected_worker()` заменён с O(n) полного скана на SQL `WHERE telegram_id=? AND status='rejected'`
+- `confirmation.py` — убран дублирующийся вывод пола
+- `db.py` — добавлена reconnection логика (проверка `SELECT 1` + пересоздание)
+- `widgets.py` — `from PIL` и `import os` перенесены наверх файла
+
+### Средний приоритет (MEDIUM)
+- `middleware.py` — добавлена периодическая очистка timestamps (>1000 пользователей)
+- `splash.py` — убран двойной `deiconify()`
+- `UI/src/config.py` — `sys.path` восстанавливается через `try/finally`
+- `UI/src/services.py` — шрифты разделены по `platform.system()` (Windows/Linux/macOS)
+- `file_saver.py` — `os.replace` с fallback на `shutil.copy2` (cross-device)
+- `documents.py` — убран `frozen=True` с `DocumentType` (category больше не через `object.__setattr__`)
+- `db.py` миграция — колонки валидируются через `isidentifier()` + квадратные скобки
+
+### Низкий приоритет (LOW)
+- `registration.py` — валидация телефона: ≥10 цифр; даты: проверка диапазонов; имени: только буквы
+
+### Удалено
+- `bot/urisconsult/` — вся директория со старым v1 кодом
+- `bot/setup.bat` — дубликат корневого `setup.bat`
+
+---
 
 Система обработки анкет: колокольчик уведомлений, принятие/отклонение, возврат на доработку.
 

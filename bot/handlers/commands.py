@@ -104,12 +104,13 @@ def _get_fix_keyboard():
 
 async def _find_rejected_worker(telegram_id: int) -> dict | None:
     """Найти отклонённую анкету по telegram_id."""
-    workers = await db.get_all_workers()
-    for w in workers:
-        if (w.get('telegram_id') == telegram_id and
-                w.get('status') == 'rejected'):
-            return w
-    return None
+    db_conn = await db.get_db()
+    cursor = await db_conn.execute(
+        "SELECT * FROM workers WHERE telegram_id = ? AND status = 'rejected' LIMIT 1",
+        (telegram_id,)
+    )
+    row = await cursor.fetchone()
+    return dict(row) if row else None
 
 
 async def cmd_cancel(message: types.Message, state: FSMContext):

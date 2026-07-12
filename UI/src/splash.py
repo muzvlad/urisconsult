@@ -136,7 +136,6 @@ def show_splash(root: tk.Tk, on_complete: Callable[[], None], min_duration: floa
     root.withdraw()
 
     def on_splash_complete():
-        root.deiconify()  # Показываем главное окно
         on_complete()
 
     return SplashScreen(root, on_complete=on_splash_complete, min_duration=min_duration)

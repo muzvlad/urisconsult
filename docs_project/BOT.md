@@ -70,14 +70,31 @@ python bot.py
 
 Путь: `Users/users.db` (SQLite)
 
-Таблица `workers` — 65 колонок:
+Таблица `workers`:
 
 | Группа | Колонки |
 |---|---|
 | Основное | id, name, citizenship, gender, position, object, object_address, manager |
 | Контакты | phone_main, phone_additional, email, date |
-| Документы | photo, passport, patent_*, student_*, eaeas_*, rvp_*, vnzh_*, russia_* |
-| Мета | registration, telegram_id, telegram_username, created_at, meetings |
+| Семья | marital_status, relatives_json |
+| Мета | registration, telegram_id, telegram_username, created_at |
+| Статус | status (pending/accepted/rejected), rejection_reasons |
+
+Таблица `worker_documents` (UNIQUE по worker_id + doc_type):
+
+| Колонка | Описание |
+|---|---|
+| worker_id | FK → workers.id |
+| doc_type | Ключ документа из DOC_FLOWS |
+| filename | Имя файла в users/docs/ |
+
+Таблица `worker_meetings`:
+
+| Колонка | Описание |
+|---|---|
+| worker_id | FK → workers.id |
+| date | Дата встречи |
+| note | Заметка |
 
 ### Файлы документов
 
@@ -91,9 +108,10 @@ python bot.py
 
 | Поле | Правило |
 |---|---|
-| Телефон | Цифры, +, -, (), пробелы. Минимум 10 цифр |
-| Email | Должен содержать @ и . |
-| Дата рождения | Формат ДД.ММ.ГГГГ, от 1900 до текущей даты |
+| ФИО | Минимум 2 слова, только буквы, пробелы, дефис |
+| Телефон | Минимум 10 цифр (любые символы автоматически фильтруются) |
+| Email | Формат name@domain.com |
+| Дата рождения | Формат ДД.ММ.ГГГГ, диапазон 1900-2100 |
 
 ## Технические детали
 

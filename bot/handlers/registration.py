@@ -51,7 +51,9 @@ WorkerForm = _build_worker_form()
 # ─── Валидаторы ─────────────────────────────────────────────────────
 
 def validate_phone(phone: str) -> bool:
-    return bool(phone.strip())
+    """Валидация телефона: минимум 10 цифр."""
+    digits = re.sub(r'\D', '', phone)
+    return len(digits) >= 10
 
 
 def validate_email(email: str) -> bool:
@@ -60,8 +62,13 @@ def validate_email(email: str) -> bool:
 
 
 def validate_date(date: str) -> bool:
-    date_pattern = r'^\d{2}\.\d{2}\.\d{4}$'
-    return bool(re.match(date_pattern, date))
+    """Валидация даты: формат ДД.ММ.ГГГГ + проверка диапазонов."""
+    date_pattern = r'^(\d{2})\.(\d{2})\.(\d{4})$'
+    match = re.match(date_pattern, date)
+    if not match:
+        return False
+    day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    return 1 <= day <= 31 and 1 <= month <= 12 and 1900 <= year <= 2100
 
 
 # ─── Обработчики состояний ──────────────────────────────────────────
@@ -70,6 +77,9 @@ async def process_name(message: types.Message, state: FSMContext):
     name = message.text.strip()
     if len(name.split()) < 2:
         await message.answer("❌ Пожалуйста, введите ФИО полностью (минимум 2 слова)")
+        return
+    if not all(c.isalpha() or c.isspace() or c == '-' for c in name):
+        await message.answer("❌ ФИО должно содержать только буквы, пробелы и дефис")
         return
     await state.update_data(name=name)
     await message.answer(

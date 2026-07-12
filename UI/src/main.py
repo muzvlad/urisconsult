@@ -13,7 +13,7 @@ from src.services import get_document_service, get_telegram_service, get_pdf_ser
 from src.models import Worker
 from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, PhotoWidget
 from src.dialogs import NotificationsWindow, RejectDialog, ask_yes_no, show_info, show_error, show_warning
-from src.logging_config import setup_logging, get_logger, log_error, log_exception
+from src.logging_config import setup_logging, get_logger, log_error, log_exception, log_info
 
 
 class DBViewerApp:

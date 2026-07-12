@@ -386,15 +386,26 @@ class PDFExportService:
         from reportlab.pdfbase.ttfonts import TTFont
 
         # Пробуем найти системные шрифты с поддержкой кириллицы
-        font_paths = [
-            "C:/Windows/Fonts/calibri.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            "C:/Windows/Fonts/times.ttf",
-            "C:/Windows/Fonts/verdana.ttf",
-            "C:/Windows/Fonts/segoeui.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-        ]
+        import platform
+        _system = platform.system()
+        if _system == "Windows":
+            font_paths = [
+                "C:/Windows/Fonts/calibri.ttf",
+                "C:/Windows/Fonts/arial.ttf",
+                "C:/Windows/Fonts/times.ttf",
+                "C:/Windows/Fonts/verdana.ttf",
+                "C:/Windows/Fonts/segoeui.ttf",
+            ]
+        elif _system == "Darwin":
+            font_paths = [
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+            ]
+        else:
+            font_paths = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            ]
 
         for fp in font_paths:
             if Path(fp).exists():

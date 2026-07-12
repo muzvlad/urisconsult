@@ -51,7 +51,6 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     # Дополнительные поля для России
     if citizenship == 'Россия':
         text += "\n👤 **Дополнительная информация:**\n"
-        text += f"👨 **Пол:** {data.get('gender', 'Не указано')}\n"
         text += f"💍 **Семейное положение:** {data.get('russia_marital_status', 'Не указано')}\n"
 
         relatives = data.get('russia_relatives_list', [])

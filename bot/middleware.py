@@ -40,6 +40,13 @@ class ThrottlingMiddleware(BaseMiddleware):
         timestamps = [t for t in timestamps if now - t < self.period]
         self.user_timestamps[user_id] = timestamps
 
+        # Периодическая очистка неактивных пользователей
+        if len(self.user_timestamps) > 1000:
+            self.user_timestamps = {
+                uid: ts for uid, ts in self.user_timestamps.items()
+                if any(now - t < self.period for t in ts)
+            }
+
         if len(timestamps) >= self.rate_limit:
             logger.warning("Rate limit exceeded для user %d", user_id)
             if isinstance(event, Message):

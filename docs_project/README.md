@@ -12,33 +12,40 @@ urisconsult/
 │   ├── seed_test_data.py       # Генерация тестовых анкет
 │   ├── backup_db.py            # Бэкап БД
 │   ├── config/
-│   │   ├── __init__.py         # Конфигурация (пути, токен)
+│   │   ├── __init__.py         # Конфигурация (пути, ensure_dirs)
 │   │   └── documents.py        # ЕДИНЫЙ конфиг документов
 │   ├── handlers/
 │   │   ├── commands.py         # /start, /cancel, обработка отклонений
 │   │   ├── registration.py     # FSM (динамический из конфига)
-│   │   ├── documents.py        # Generic handler (~120 строк)
+│   │   ├── documents.py        # Generic handler (~160 строк)
 │   │   └── confirmation.py     # Подтверждение
 │   ├── keyboards/              # Клавиатуры
 │   ├── services/
-│   │   ├── db.py               # SQLite (нормализованная схема)
-│   │   ├── db_saver.py         # Сохранение в БД
+│   │   ├── db.py               # SQLite (нормализованная схема, reconnection)
+│   │   ├── db_saver.py         # Сохранение в БД (json.dumps)
 │   │   └── file_saver.py       # Сохранение файлов + валидация
 │   └── logs/                   # Логи (auto-created)
 ├── UI/                         # Десктопное приложение
-│   ├── db_viewer.py            # Tkinter GUI + обработка анкет
-│   ├── build_exe.py            # Сборка в .exe
+│   ├── db_viewer.py            # Точка входа UI
+│   ├── src/
+│   │   ├── main.py             # Tkinter GUI
+│   │   ├── database.py         # Repository pattern
+│   │   ├── models.py           # Worker, WorkerDocument
+│   │   ├── services.py         # Document, Telegram, PDF services
+│   │   ├── widgets.py          # UI компоненты
+│   │   ├── dialogs.py          # Диалоги
+│   │   ├── splash.py           # Splash screen
+│   │   └── logging_config.py   # Логирование
+│   ├── tests/                  # 86+ тестов
 │   └── requirements.txt        # Зависимости
 ├── docs_project/
 │   ├── README.md               # Этот файл
-│   └── tests/                  # 62 теста
-│       ├── conftest.py
-│       ├── test_config_documents.py
-│       ├── test_db.py
-│       └── test_handlers.py
+│   ├── CHANGELOG.md            # История изменений
+│   ├── BOT.md                  # Документация бота
+│   └── tests/                  # 62 теста (config, db, handlers)
 ├── users/
 │   └── docs/                   # Документы сотрудников
-└── backups/                    # Бэкапы БД
+└── .gitignore
 ```
 
 ## Компоненты

@@ -24,11 +24,21 @@ _db: aiosqlite.Connection | None = None
 async def get_db() -> aiosqlite.Connection:
     """Получить соединение с БД (синглтон)."""
     global _db
-    if _db is None:
-        _db = await aiosqlite.connect(DB_PATH)
-        _db.row_factory = aiosqlite.Row
-        await _db.execute("PRAGMA journal_mode=WAL")
-        await _db.execute("PRAGMA foreign_keys=ON")
+    if _db is not None:
+        try:
+            await _db.execute("SELECT 1")
+            return _db
+        except Exception:
+            try:
+                await _db.close()
+            except Exception:
+                pass
+            _db = None
+
+    _db = await aiosqlite.connect(DB_PATH)
+    _db.row_factory = aiosqlite.Row
+    await _db.execute("PRAGMA journal_mode=WAL")
+    await _db.execute("PRAGMA foreign_keys=ON")
     return _db
 
 
@@ -80,7 +90,8 @@ async def init_db():
             doc_type TEXT NOT NULL,
             filename TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id)
+            FOREIGN KEY (worker_id) REFERENCES workers(id),
+            UNIQUE(worker_id, doc_type)
         )
     """)
 
@@ -224,15 +235,21 @@ async def _migrate_from_old_schema(db: aiosqlite.Connection):
     """)
 
     # Копируем документы из старой таблицы
-    for col in set().union(*(docs.keys() for docs in DOC_FLOWS.values())):
-        # Проверяем существует ли колонка в старой таблице
-        cursor = await db.execute(f"PRAGMA table_info(workers_old_v1)")
-        old_cols = {r[1] for r in await cursor.fetchall()}
-        if col in old_cols:
-            await db.execute(f"""
-                INSERT INTO worker_documents (worker_id, doc_type, filename)
-                SELECT id, ?, {col} FROM workers_old_v1 WHERE {col} IS NOT NULL AND {col} != ''
-            """, (col,))
+    _valid_col_pattern = set()
+    for docs in DOC_FLOWS.values():
+        for doc in docs:
+            _valid_col_pattern.add(doc.key)
+
+    cursor = await db.execute("PRAGMA table_info(workers_old_v1)")
+    old_cols = {r[1] for r in await cursor.fetchall()}
+
+    for col in _valid_col_pattern:
+        if col in old_cols and col.isidentifier():
+            await db.execute(
+                f"INSERT INTO worker_documents (worker_id, doc_type, filename)"
+                f" SELECT id, ?, [{col}] FROM workers_old_v1 WHERE [{col}] IS NOT NULL AND [{col}] != ''",
+                (col,)
+            )
 
     # Копируем встречи
     await db.execute("""
@@ -343,14 +360,16 @@ async def _migrate_from_json(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID."""
+    """Получить следующий доступный ID (атомарная операция)."""
     db = await get_db()
-    cursor = await db.execute("SELECT id FROM workers")
-    rows = await cursor.fetchall()
-    if not rows:
+    cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
+    row = await cursor.fetchone()
+    if not row:
         return "00001"
-    ids = [int(row[0]) for row in rows]
-    next_id = max(ids) + 1
+    try:
+        next_id = int(row[0]) + 1
+    except (ValueError, TypeError):
+        next_id = 1
     return str(next_id).zfill(5)
 
 

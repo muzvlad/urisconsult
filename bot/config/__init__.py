@@ -21,17 +21,17 @@ PROJECT_ROOT = os.path.dirname(BASE_DIR)  # корень проекта
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден. Создайте файл .env с BOT_TOKEN=ваш_токен")
 
 # Пути к папкам
 USERS_DIR = os.path.join(BASE_DIR, "Users")
 DB_PATH = os.path.join(USERS_DIR, "users.db")
 DOCS_DIR = os.path.join(PROJECT_ROOT, "users", "docs")
 
-# Создаем папки если их нет
-os.makedirs(USERS_DIR, exist_ok=True)
-os.makedirs(DOCS_DIR, exist_ok=True)
+
+def ensure_dirs():
+    """Создать необходимые папки (вызывается при старте бота)."""
+    os.makedirs(USERS_DIR, exist_ok=True)
+    os.makedirs(DOCS_DIR, exist_ok=True)
 
 # Форматы файлов
 ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.pdf']

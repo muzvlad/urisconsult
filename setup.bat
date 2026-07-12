@@ -28,7 +28,7 @@ if exist "!REPO_DIR!" (
     if "!GITHUB_TOKEN!"=="" (
         git clone https://github.com/muzvlad/urisconsult.git "!REPO_DIR!"
     ) else (
-        git clone https://!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git "!REPO_DIR!"
+        git clone https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git "!REPO_DIR!"
     )
 )
 if errorlevel 1 (
