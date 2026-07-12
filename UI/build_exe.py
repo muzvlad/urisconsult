@@ -64,7 +64,6 @@ def create_executable() -> bool:
             '--icon=NONE',            # Без иконки
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
-            '--add-data=src;src',     # Включить папку src
             # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',
@@ -89,6 +88,8 @@ def create_executable() -> bool:
             '--hidden-import=src.widgets',
             '--hidden-import=src.dialogs',
             '--hidden-import=src.main',
+            '--hidden-import=src.splash',
+            '--hidden-import=src.logging_config',
             db_viewer
         ]
 
