@@ -23,7 +23,6 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not installed!
     echo Download: https://www.python.org/downloads/
-    echo IMPORTANT: check "Add Python to PATH" during install!
     goto :end
 )
 for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PY_VER=%%i
@@ -42,15 +41,15 @@ if exist "!REPO_DIR!\bot\bot.py" (
         echo    OK: Repository updated
     )
 ) else (
+    set "CLONE_URL=https://github.com/muzvlad/urisconsult.git"
     if exist "!TOKEN_FILE!" (
         set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
-        call set GITHUB_TOKEN=%%GITHUB_TOKEN: =%%
+        set "CLONE_URL=https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git"
         echo    Cloning with token...
-        git clone --quiet https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git "!REPO_DIR!"
     ) else (
         echo    Cloning (public)...
-        git clone --quiet https://github.com/muzvlad/urisconsult.git "!REPO_DIR!"
     )
+    git clone --quiet "!CLONE_URL!" "!REPO_DIR!"
     if errorlevel 1 (
         echo [ERROR] Clone failed. Check internet or token.
         goto :end
@@ -61,7 +60,6 @@ echo.
 
 echo [4/5] Installing dependencies...
 
-REM --- Bot ---
 if not exist "!REPO_DIR!\bot\.venv" (
     echo    Creating venv for bot...
     python -m venv "!REPO_DIR!\bot\.venv"
@@ -75,7 +73,6 @@ if errorlevel 1 (
     echo    OK: Bot dependencies installed
 )
 
-REM --- UI ---
 if not exist "!REPO_DIR!\UI\.venv" (
     echo    Creating venv for UI...
     python -m venv "!REPO_DIR!\UI\.venv"
