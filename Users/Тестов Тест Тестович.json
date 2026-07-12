@@ -1,0 +1,21 @@
+{
+  "name": "Тестов Тест Тестович",
+  "citizenship": "РФ",
+  "gender": "Мужской",
+  "position": "Оператор",
+  "object": "ООО КОРПАР",
+  "object_address": "г. Москва",
+  "manager": "Муринов Мурин Муринович",
+  "phone_main": "89088888888",
+  "phone_additional": "89991111111",
+  "email": "test@mail.ru",
+  "date": "01.01.1990",
+  "id": "00003",
+  "created_at": "09.07.2026 15:06:23",
+  "telegram_id": 249204598,
+  "telegram_username": "muzvlad911",
+  "photo": "photo_00003.jpg",
+  "Паспорт": "pas_00003.jpg",
+  "Патент": "pat_00003.jpg",
+  "Регистрация": "reg_00003.jpg"
+}

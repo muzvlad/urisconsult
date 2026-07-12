@@ -359,7 +359,7 @@ def register_registration_handlers(dp, form_class):
 
     dp.message.register(skip_photo, form_class.photo, F.text == "⏭ Пропустить")
     dp.message.register(skip_passport, form_class.passport, F.text == "⏭ Пропустить")
-    dp.message.register(skip_patent, form_class.patent, F.text == "⏭ Пропустить")
+    dp.message.register(skip_patent, form_class.patent_patent, F.text == "⏭ Пропустить")
     
     # Обработчики для России (доп. поля)
     dp.message.register(process_russia_marital_status, form_class.russia_marital_status)
