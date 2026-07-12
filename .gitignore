@@ -39,6 +39,7 @@ bot/Users/docs/*
 .env
 .env.local
 .env.*.local
+.token
 
 # Logs
 *.log

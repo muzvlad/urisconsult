@@ -32,6 +32,7 @@ echo.
 
 echo [3/5] Cloning repository...
 set "REPO_DIR=%~dp0urisconsult"
+set "TOKEN_FILE=%~dp0.token"
 if exist "!REPO_DIR!\bot\bot.py" (
     echo    Folder exists, pulling latest...
     git -C "!REPO_DIR!" pull --quiet
@@ -41,10 +42,17 @@ if exist "!REPO_DIR!\bot\bot.py" (
         echo    OK: Repository updated
     )
 ) else (
-    echo    Cloning from GitHub...
-    git clone --quiet https://github.com/muzvlad/urisconsult.git "!REPO_DIR!"
+    if exist "!TOKEN_FILE!" (
+        set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
+        call set GITHUB_TOKEN=%%GITHUB_TOKEN: =%%
+        echo    Cloning with token...
+        git clone --quiet https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git "!REPO_DIR!"
+    ) else (
+        echo    Cloning (public)...
+        git clone --quiet https://github.com/muzvlad/urisconsult.git "!REPO_DIR!"
+    )
     if errorlevel 1 (
-        echo [ERROR] Clone failed. Check internet connection.
+        echo [ERROR] Clone failed. Check internet or token.
         goto :end
     )
     echo    OK: Repository downloaded
