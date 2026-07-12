@@ -511,17 +511,21 @@ def main() -> None:
         root = tk.Tk()
         root.withdraw()  # Скрываем до завершения загрузки
 
+        app_instance = {}
+
         def start_app():
             """Запуск основного приложения после splash."""
             root.deiconify()
-            app = DBViewerApp(root)
+            app_instance['app'] = DBViewerApp(root)
             logger.info("Application started")
-            root.mainloop()
-            logger.info("Application closed normally")
 
         # Показываем splash screen
         from src.splash import show_splash
         show_splash(root, on_complete=start_app, min_duration=1.5)
+
+        # Запускаем event loop — splash анимация и потом приложение
+        root.mainloop()
+        logger.info("Application closed normally")
 
     except Exception as e:
         log_exception("Application crashed")
