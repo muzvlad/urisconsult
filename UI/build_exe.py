@@ -1,100 +1,144 @@
 # -*- coding: utf-8 -*-
 """
-Скрипт для создания исполняемого файла из Python приложения
+Скрипт для создания исполняемого файла из Python приложения.
+Поддерживает новую модульную структуру в src/.
 """
 
 import subprocess
 import sys
 import os
+import shutil
 
-def install_pyinstaller():
-    """Установка PyInstaller если он не установлен"""
+
+def install_pyinstaller() -> bool:
+    """Установка PyInstaller если он не установлен."""
     try:
         import PyInstaller
-        print("PyInstaller уже установлен")
+        print("PyInstaller already installed")
         return True
     except ImportError:
-        print("Установка PyInstaller...")
-        result = subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], 
-                              capture_output=True, text=True)
+        print("Installing PyInstaller...")
+        result = subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"],
+                                capture_output=True, text=True, encoding='utf-8')
         if result.returncode == 0:
-            print("✅ PyInstaller успешно установлен")
+            print("PyInstaller successfully installed")
             return True
         else:
-            print("❌ Ошибка установки PyInstaller:")
+            print("Error installing PyInstaller:")
             print(result.stderr)
             return False
 
-def create_executable():
-    """Создание полностью автономного exe файла"""
+
+def clean_build_dirs() -> None:
+    """Очистка папок сборки."""
+    for dir_name in ['build', 'dist', '__pycache__']:
+        path = os.path.join(os.path.dirname(__file__), dir_name)
+        if os.path.exists(path):
+            shutil.rmtree(path, ignore_errors=True)
+            print(f"Cleaned: {dir_name}/")
+
+    # Удаляем .spec файлы
+    for file in os.listdir('.'):
+        if file.endswith('.spec'):
+            os.remove(file)
+            print(f"Cleaned: {file}")
+
+
+def create_executable() -> bool:
+    """Создание полностью автономного exe файла."""
     if not install_pyinstaller():
         return False
-    
+
     try:
-        # Команда для создания полностью автономного exe файла
+        # Определяем пути
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.join(base_dir, 'src')
+        db_viewer = os.path.join(base_dir, 'db_viewer.py')
+
+        # Команда для создания exe
         cmd = [
             'pyinstaller',
-            '--onefile',              # Создать один exe файл
+            '--onefile',              # Один exe файл
             '--windowed',             # Без консоли (GUI приложение)
             '--name=[Search]Driver',  # Имя exe файла
             '--icon=NONE',            # Без иконки
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
-            # Включаем все необходимые данные
-            '--add-data=Users;Users',  # Добавить папку Users (legacy)
-            # Скрытие консоли и оптимизация
-            '--strip',                # Удалить символы отладки
-            '--upx-dir=NONE',         # Без UPX сжатия (если нет UPX)
-            # Автоопределение зависимостей
+            '--add-data=src;src',     # Включить папку src
+            # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',
+            '--hidden-import=PIL.Image',
+            '--hidden-import=PIL.ImageTk',
             '--hidden-import=reportlab',
+            '--hidden-import=reportlab.pdfgen',
+            '--hidden-import=reportlab.lib.pagesizes',
+            '--hidden-import=reportlab.pdfbase',
+            '--hidden-import=reportlab.pdfbase.ttfonts',
+            '--hidden-import=reportlab.lib.utils',
+            '--hidden-import=urllib.request',
+            '--hidden-import=urllib.parse',
             '--hidden-import=json',
-            '--hidden-import=os',
-            '--hidden-import=pathlib',
+            '--hidden-import=sqlite3',
             '--hidden-import=threading',
-            'db_viewer.py'
+            '--hidden-import=concurrent.futures',
+            '--hidden-import=src.config',
+            '--hidden-import=src.database',
+            '--hidden-import=src.models',
+            '--hidden-import=src.services',
+            '--hidden-import=src.widgets',
+            '--hidden-import=src.dialogs',
+            '--hidden-import=src.main',
+            db_viewer
         ]
-        
-        print("\nСоздание полностью автономного исполняемого файла...")
-        print("Команда:", ' '.join(cmd))
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
+        print("\n" + "=" * 50)
+        print("Creating executable...")
+        print("=" * 50)
+        print("Command:", ' '.join(cmd))
+
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=base_dir, encoding='utf-8', errors='replace')
+
         if result.returncode == 0:
-            exe_path = os.path.join('dist', '[Search]Driver.exe')
+            exe_path = os.path.join(base_dir, 'dist', '[Search]Driver.exe')
             if os.path.exists(exe_path):
                 size_mb = os.path.getsize(exe_path) / 1024 / 1024
-                print(f"\n✅ Полностью автономный exe файл успешно создан!")
-                print(f"📁 Путь: {exe_path}")
-                print(f"⚖️  Размер: {size_mb:.1f} МБ")
-                print(f"\n🎉 Файл можно запускать на любом Windows компьютере без Python!")
+                print(f"\nExecutable created successfully!")
+                print(f"Path: {exe_path}")
+                print(f"Size: {size_mb:.1f} MB")
+                print(f"\nFile can run on any Windows computer without Python!")
                 return True
             else:
-                print("❌ Исполняемый файл не найден после сборки")
+                print("Executable not found after build")
                 return False
         else:
-            print("❌ Ошибка при создании exe файла:")
-            print(result.stderr)
+            print("Error creating exe file (see PyInstaller output above)")
             return False
-            
+
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
+
 
 def main():
     print("=" * 50)
-    print("Создание исполняемого файла DB Viewer")
+    print("Build URIS Consult DB Viewer to EXE")
     print("=" * 50)
-    
+
+    # Очистка перед сборкой
+    clean_build_dirs()
+
     if create_executable():
-        print("\n🎉 Готово! Приложение собрано в exe файл.")
-        print("Файл находится в папке 'dist'")
+        print("\nDone! Application built to exe file.")
+        print("File is in 'dist' folder")
     else:
-        print("\n💥 Произошла ошибка при создании exe файла.")
-        print("Проверьте сообщения выше для диагностики.")
-    
-    input("\nНажмите Enter для выхода...")
+        print("\nError creating exe file.")
+        print("Check messages above for diagnostics.")
+
+    input("\nPress Enter to exit...")
+
 
 if __name__ == "__main__":
     main()

@@ -2,53 +2,52 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-*.egg-info/
-dist/
-build/
-*.egg
-.pytest_cache/
 
-# Виртуальные окружения
-venv/
+# Virtual environments
 .venv/
+venv/
+env/
 ENV/
 
+# Build outputs
+dist/
+build/
+*.spec
+
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
 
-# Системные
+# OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Окружение
+# Project specific - databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Project specific - documents (generated/user content)
+users/docs/*
+!users/docs/.gitkeep
+bot/Users/docs/*
+!bot/Users/docs/.gitkeep
+
+# Environment files
 .env
+.env.local
+.env.*.local
 
-# Бот: старая версия
-bot/urisconsult/
-urisconsult/
+# Logs
+*.log
 
-# Данные (не коммитить)
-Users/
-bot/Users/users.db
-bot/Users/docs/
-UI/Users/
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
 
-# Логи
-bot/logs/
-
-# Бэкапы
-backups/
-
-# Временные файлы
-bot/temp/
-*.tmp
-
-# Тестовые файлы
-UI/test_*.py
-UI/debug_*.py
-UI/quick_*.py
+# Distribution / Packaging
+*.egg-info/
+*.egg
