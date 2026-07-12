@@ -29,7 +29,7 @@ class FileSaver:
         new_filename = f"{prefix}_{worker_id}{ext}"
         new_path = os.path.join(DOCS_DIR, new_filename)
 
-        os.rename(temp_path, new_path)
+        os.replace(temp_path, new_path)
         return new_filename
     
     @staticmethod
