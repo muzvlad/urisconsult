@@ -502,28 +502,14 @@ class DBViewerApp:
 
 
 def main() -> None:
-    """Точка входа с splash screen."""
-    # Настройка логирования
+    """Точка входа приложения."""
     setup_logging(level=logging.INFO)
     logger = get_logger()
 
     try:
         root = tk.Tk()
-        root.withdraw()  # Скрываем до завершения загрузки
-
-        app_instance = {}
-
-        def start_app():
-            """Запуск основного приложения после splash."""
-            root.deiconify()
-            app_instance['app'] = DBViewerApp(root)
-            logger.info("Application started")
-
-        # Показываем splash screen
-        from src.splash import show_splash
-        show_splash(root, on_complete=start_app, min_duration=1.5)
-
-        # Запускаем event loop — splash анимация и потом приложение
+        app = DBViewerApp(root)
+        logger.info("Application started")
         root.mainloop()
         logger.info("Application closed normally")
 

@@ -83,25 +83,16 @@ class WorkerListWidget(tk.Frame):
         header_frame.pack(fill=tk.X, padx=2, pady=(2, 0))
         header_frame.pack_propagate(False)
 
-        # Колонки
-        tk.Label(header_frame, text="Статус", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=6
-                 ).pack(side=tk.LEFT, padx=2)
-        tk.Label(header_frame, text="ID", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=8
-                 ).pack(side=tk.LEFT, padx=2)
-        tk.Label(header_frame, text="ФИО", bg='#ecf0f1', font=('Arial', 8, 'bold')
-                 ).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
-
-        # Кнопки сортировки (невидимые, по клику на заголовок)
-        # Используем Label с курсором hand2 для кликабельности
-        status_header = tk.Label(header_frame, text="Статус ▼", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=6, cursor='hand2')
+        # Кликабельные заголовки колонок
+        status_header = tk.Label(header_frame, text="Статус", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=6, cursor='hand2')
         status_header.pack(side=tk.LEFT, padx=2)
         status_header.bind('<Button-1>', lambda e: self._sort_by("status"))
 
-        id_header = tk.Label(header_frame, text="ID ▼", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=8, cursor='hand2')
+        id_header = tk.Label(header_frame, text="ID", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=8, cursor='hand2')
         id_header.pack(side=tk.LEFT, padx=2)
         id_header.bind('<Button-1>', lambda e: self._sort_by("id"))
 
-        name_header = tk.Label(header_frame, text="ФИО ▼", bg='#ecf0f1', font=('Arial', 8, 'bold'), cursor='hand2')
+        name_header = tk.Label(header_frame, text="ФИО", bg='#ecf0f1', font=('Arial', 8, 'bold'), cursor='hand2')
         name_header.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         name_header.bind('<Button-1>', lambda e: self._sort_by("name"))
 
