@@ -1,117 +1,111 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
-title URIS Consult — Setup
+title URIS Consult Setup
 
 echo ========================================
-echo     URIS CONSULT — УСТАНОВЩИК
+echo      URIS CONSULT - SETUP
 echo ========================================
 echo.
 
-REM ─── 1. Проверка Git ───
-echo [1/5] Проверка Git...
+echo [1/5] Checking Git...
 git --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Git не установлен!
-    echo Скачайте: https://git-scm.com/download/win
+    echo [ERROR] Git not installed!
+    echo Download: https://git-scm.com/download/win
     goto :end
 )
 for /f "tokens=*" %%i in ('git --version') do set GIT_VER=%%i
 echo    OK: %GIT_VER%
 echo.
 
-REM ─── 2. Проверка Python ───
-echo [2/5] Проверка Python...
+echo [2/5] Checking Python...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python не установлен!
-    echo Скачайте: https://www.python.org/downloads/
-    echo ВАЖНО: поставьте галочку "Add Python to PATH" при установке!
+    echo [ERROR] Python not installed!
+    echo Download: https://www.python.org/downloads/
+    echo IMPORTANT: check "Add Python to PATH" during install!
     goto :end
 )
 for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PY_VER=%%i
 echo    OK: %PY_VER%
 echo.
 
-REM ─── 3. Клонирование репозитория ───
-echo [3/5] Клонирование репозитория...
+echo [3/5] Cloning repository...
 set "REPO_DIR=%~dp0urisconsult"
 if exist "!REPO_DIR!\bot\bot.py" (
-    echo    Папка существует, обновляю...
+    echo    Folder exists, pulling latest...
     git -C "!REPO_DIR!" pull --quiet
     if errorlevel 1 (
-        echo    [WARN] Не удалось обновить, использую текущую версию
+        echo    [WARN] Could not pull, using current version
     ) else (
-        echo    OK: Репозиторий обновлён
+        echo    OK: Repository updated
     )
 ) else (
-    echo    Клонирование с GitHub...
+    echo    Cloning from GitHub...
     git clone --quiet https://github.com/muzvlad/urisconsult.git "!REPO_DIR!"
     if errorlevel 1 (
-        echo [ERROR] Ошибка клонирования. Проверьте подключение к интернету.
+        echo [ERROR] Clone failed. Check internet connection.
         goto :end
     )
-    echo    OK: Репозиторий скачан
+    echo    OK: Repository downloaded
 )
 echo.
 
-REM ─── 4. Установка зависимостей ───
-echo [4/5] Установка зависимостей...
+echo [4/5] Installing dependencies...
 
-REM --- Бот ---
+REM --- Bot ---
 if not exist "!REPO_DIR!\bot\.venv" (
-    echo    Создание venv для бота...
+    echo    Creating venv for bot...
     python -m venv "!REPO_DIR!\bot\.venv"
 )
-echo    Установка пакетов (бот)...
-"!REPO_DIR!\bot\.venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
+echo    Installing packages (bot)...
+"!REPO_DIR!\bot\.venv\Scripts\python.exe" -m pip install --quiet --upgrade pip 2>nul
 "!REPO_DIR!\bot\.venv\Scripts\python.exe" -m pip install --quiet -r "!REPO_DIR!\bot\requirements.txt"
 if errorlevel 1 (
-    echo    [WARN] Ошибка установки зависимостей бота
+    echo    [WARN] Bot dependencies install failed
 ) else (
-    echo    OK: Зависимости бота установлены
+    echo    OK: Bot dependencies installed
 )
 
 REM --- UI ---
 if not exist "!REPO_DIR!\UI\.venv" (
-    echo    Создание venv для UI...
+    echo    Creating venv for UI...
     python -m venv "!REPO_DIR!\UI\.venv"
 )
-echo    Установка пакетов (UI)...
-"!REPO_DIR!\UI\.venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
+echo    Installing packages (UI)...
+"!REPO_DIR!\UI\.venv\Scripts\python.exe" -m pip install --quiet --upgrade pip 2>nul
 "!REPO_DIR!\UI\.venv\Scripts\python.exe" -m pip install --quiet -r "!REPO_DIR!\UI\requirements.txt"
 if errorlevel 1 (
-    echo    [WARN] Ошибка установки зависимостей UI
+    echo    [WARN] UI dependencies install failed
 ) else (
-    echo    OK: Зависимости UI установлены
+    echo    OK: UI dependencies installed
 )
 echo.
 
-REM ─── 5. Настройка .env ───
-echo [5/5] Настройка конфигурации...
+echo [5/5] Configuration...
 if not exist "!REPO_DIR!\bot\.env" (
     echo.
-    echo    Для работы бота нужен токен от @BotFather
+    echo    Bot token needed from @BotFather
     echo.
-    set /p BOT_TOKEN="    Введите токен (или Enter для пропуска): "
+    set /p BOT_TOKEN="    Enter token (or press Enter to skip): "
     if "!BOT_TOKEN!"=="" (
         echo BOT_TOKEN=YOUR_TOKEN_HERE> "!REPO_DIR!\bot\.env"
-        echo    [WARN] Токен не введён. Отредактируйте bot\.env перед запуском.
+        echo    [WARN] No token. Edit bot\.env before running bot.
     ) else (
         echo BOT_TOKEN=!BOT_TOKEN!> "!REPO_DIR!\bot\.env"
-        echo    OK: bot\.env создан
+        echo    OK: bot\.env created
     )
 ) else (
-    echo    OK: bot\.env уже существует
+    echo    OK: bot\.env already exists
 )
 echo.
 
 echo ========================================
-echo     УСТАНОВКА ЗАВЕРШЕНА!
+echo      SETUP COMPLETE
 echo ========================================
 echo.
-echo Запуск бота:   !REPO_DIR!\bot\bot.py
-echo Запуск UI:     !REPO_DIR!\UI\db_viewer.py
+echo Run bot:   !REPO_DIR!\bot\bot.py
+echo Run UI:    !REPO_DIR!\UI\db_viewer.py
 echo.
 
 :end
