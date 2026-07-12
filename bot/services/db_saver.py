@@ -1,55 +1,82 @@
 """
-Сервис для сохранения данных в SQLite
+Сервис для сохранения данных в SQLite (нормализованная схема).
 """
-import asyncio
 from datetime import datetime
-from config import JSON_DOC_FIELDS
+from config.documents import DOC_FLOWS
 from services import db
 
 
 class DBSaver:
-    """Класс для сохранения данных в SQLite базу"""
+    """Класс для сохранения данных в SQLite базу."""
 
     @staticmethod
     async def get_next_id() -> str:
-        """Получить следующий доступный ID"""
+        """Получить следующий доступный ID."""
         return await db.get_next_id()
 
     @staticmethod
     async def save_worker_data(user_id: int, data: dict, telegram_username: str = None) -> tuple:
         """
-        Сохранить данные работника в БД
+        Сохранить данные работника в БД.
+
+        Если анкета была отклонена — статус меняется на 'pending' (ожидает обработки).
 
         Args:
             user_id: ID пользователя в Telegram
-            data: словарь с данными
+            data: словарь с данными (включая temp_path ключи для документов)
             telegram_username: username в Telegram
 
         Returns:
-            tuple: (worker_id, unused_name)
+            tuple: (worker_id, name)
         """
         worker_id = data.get('id', await db.get_next_id())
         data['id'] = worker_id
 
-        data['created_at'] = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        data['telegram_id'] = user_id
+        # Определяем статус: если было исправление — ставим 'pending'
+        editing_rejected = data.get('editing_rejected', False)
+        status = 'pending' if editing_rejected else data.get('status', 'pending')
+
+        # Подготавливаем личные данные
+        save_data = {
+            'id': worker_id,
+            'name': data.get('name', ''),
+            'citizenship': data.get('citizenship', ''),
+            'gender': data.get('gender', ''),
+            'position': data.get('position', ''),
+            'object': data.get('object', ''),
+            'object_address': data.get('object_address', ''),
+            'manager': data.get('manager', ''),
+            'phone_main': data.get('phone_main', ''),
+            'phone_additional': data.get('phone_additional', ''),
+            'email': data.get('email', ''),
+            'date': data.get('date', ''),
+            'registration': data.get('registration', ''),
+            'marital_status': data.get('russia_marital_status', ''),
+            'relatives_json': str(data.get('russia_relatives_list', [])),
+            'created_at': datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+            'telegram_id': user_id,
+            'status': status,
+            'rejection_reasons': '[]',
+        }
         if telegram_username:
-            data['telegram_username'] = telegram_username
+            save_data['telegram_username'] = telegram_username
 
+        # Сохраняем работника
+        await db.save_worker(save_data)
+
+        # Сохраняем документы (из saved_files или temp_path)
+        doc_files = {}
         if 'saved_files' in data:
-            for doc_type, saved_filename in data['saved_files'].items():
-                json_field = JSON_DOC_FIELDS.get(doc_type)
-                if json_field:
-                    data[json_field] = saved_filename
+            doc_files.update(data['saved_files'])
 
-        data.pop('saved_files', None)
-        data.pop('temp_files', None)
-        data.pop('editing_field', None)
-        
-        # Удаляем все временные пути документов
-        temp_keys = [key for key in data.keys() if key.endswith('_temp_path')]
-        for key in temp_keys:
-            data.pop(key, None)
+        # Также собираем temp_path если файлы ещё не перемещены
+        for cat_docs in DOC_FLOWS.values():
+            for doc in cat_docs:
+                temp_key = f'{doc.key}_temp_path'
+                if temp_key in data and data[temp_key]:
+                    doc_files[doc.key] = data[temp_key]
 
-        await db.save_worker(data)
+        if doc_files:
+            await db.save_documents(worker_id, doc_files)
+
         return worker_id, data.get('name', '')

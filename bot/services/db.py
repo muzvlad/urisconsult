@@ -1,35 +1,52 @@
 """
-Сервис для работы с SQLite базой данных
+Сервис для работы с SQLite базой данных (нормализованная схема).
+
+Схема:
+  workers            — личная информация
+  worker_documents   — документы (фото, паспорта и т.д.)
+  worker_meetings    — встречи
 """
 import os
 import json
+import logging
 import aiosqlite
+
 from config import DB_PATH, USERS_DIR
+from config.documents import DOC_FLOWS, DOC_PREFIXES
 
-_db = None
+logger = logging.getLogger(__name__)
 
+_db: aiosqlite.Connection | None = None
+
+
+# ─── Соединение ──────────────────────────────────────────────────────
 
 async def get_db() -> aiosqlite.Connection:
-    """Получить соединение с БД (синглтон)"""
+    """Получить соединение с БД (синглтон)."""
     global _db
     if _db is None:
         _db = await aiosqlite.connect(DB_PATH)
         _db.row_factory = aiosqlite.Row
         await _db.execute("PRAGMA journal_mode=WAL")
+        await _db.execute("PRAGMA foreign_keys=ON")
     return _db
 
 
 async def close_db():
-    """Закрыть соединение с БД"""
+    """Закрыть соединение с БД."""
     global _db
     if _db is not None:
         await _db.close()
         _db = None
 
 
+# ─── Инициализация ──────────────────────────────────────────────────
+
 async def init_db():
-    """Инициализация БД: создание таблицы и миграция из JSON"""
+    """Инициализация БД: создание таблиц и миграция из JSON/старой схемы."""
     db = await get_db()
+
+    # Таблица работников (только личная информация)
     await db.execute("""
         CREATE TABLE IF NOT EXISTS workers (
             id TEXT PRIMARY KEY,
@@ -44,67 +61,196 @@ async def init_db():
             phone_additional TEXT,
             email TEXT,
             date TEXT,
-            photo TEXT,
-            passport TEXT,
-            patent_snils TEXT,
-            patent_registration TEXT,
-            patent_migration_card TEXT,
-            patent_dms TEXT,
-            patent_patent TEXT,
-            patent_inn TEXT,
-            patent_receipt TEXT,
-            patent_language_cert TEXT,
-            patent_bank_details TEXT,
-            patent_fingerprint_card TEXT,
-            student_snils TEXT,
-            student_registration TEXT,
-            student_migration_card TEXT,
-            student_dms TEXT,
-            student_inn TEXT,
-            student_fingerprint_card TEXT,
-            student_university_cert TEXT,
-            student_bank_details TEXT,
-            eaeas_registration TEXT,
-            eaeas_migration_card TEXT,
-            eaeas_dms TEXT,
-            eaeas_inn TEXT,
-            eaeas_snils TEXT,
-            eaeas_fingerprint_card TEXT,
-            eaeas_bank_details TEXT,
-            rvp_migration_card TEXT,
-            rvp_dms_oms TEXT,
-            rvp_inn TEXT,
-            rvp_snils TEXT,
-            rvp_bank_details TEXT,
-            vnzh_migration_card TEXT,
-            vnzh_vnzh TEXT,
-            vnzh_dms_oms TEXT,
-            vnzh_inn TEXT,
-            vnzh_snils TEXT,
-            vnzh_work_book TEXT,
-            vnzh_bank_details TEXT,
-            russia_passport_propiska TEXT,
-            russia_propiska TEXT,
-            russia_inn TEXT,
-            russia_snils TEXT,
-            russia_education_doc TEXT,
-            russia_work_book TEXT,
-            russia_military_doc TEXT,
-            russia_marital_status TEXT,
-            russia_relatives TEXT DEFAULT '[]',
             registration TEXT,
+            marital_status TEXT,
+            relatives_json TEXT DEFAULT '[]',
             telegram_id INTEGER,
             telegram_username TEXT,
             created_at TEXT,
-            meetings TEXT DEFAULT '[]'
+            status TEXT DEFAULT 'pending',
+            rejection_reasons TEXT DEFAULT '[]'
         )
     """)
+
+    # Таблица документов (нормализовано)
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS worker_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    # Таблица встреч
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS worker_meetings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id TEXT NOT NULL,
+            date TEXT,
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    # Индексы
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
+
     await db.commit()
-    await _migrate_json(db)
+
+    # Миграция: старая схема → новая
+    await _migrate_from_old_schema(db)
+    # Миграция: JSON-файлы → БД
+    await _migrate_from_json(db)
 
 
-async def _migrate_json(db: aiosqlite.Connection):
-    """Миграция существующих JSON-файлов в БД"""
+# ─── Миграция со старой схемы ────────────────────────────────────────
+
+async def _migrate_from_old_schema(db: aiosqlite.Connection):
+    """Если есть старая таблица workers с колонками документов — мигрировать в новую схему."""
+    cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='workers'")
+    row = await cursor.fetchone()
+    if row is None:
+        return
+
+    create_sql = row[0]
+    # Если в CREATE TABLE есть колонка 'patent_snils' — это старая схема
+    if 'patent_snils' not in create_sql:
+        return
+
+    logger.info("Обнаружена старая схема БД. Миграция в нормализованную...")
+
+    # Читаем все данные из старой таблицы
+    cursor = await db.execute("SELECT * FROM workers")
+    rows = await cursor.fetchall()
+    old_columns = [desc[0] for desc in cursor.description]
+
+    for row in rows:
+        old_data = dict(zip(old_columns, row))
+
+        # Определяем колонки документов
+        doc_columns = set()
+        for cat_docs in DOC_FLOWS.values():
+            for doc in cat_docs:
+                doc_columns.add(doc.key)
+
+        # Личные данные (всё кроме документов и мета-полей)
+        meta_fields = {'id'} | doc_columns | {'meetings', 'russia_marital_status', 'russia_relatives'}
+        personal = {k: v for k, v in old_data.items() if k not in meta_fields}
+
+        # Семейное положение и родственники — отдельные поля
+        personal['marital_status'] = old_data.get('russia_marital_status', '')
+        personal['relatives_json'] = old_data.get('russia_relatives', '[]')
+
+        # Вставляем работника (без документов)
+        placeholders = ', '.join(['?'] * len(personal))
+        cols = ', '.join(personal.keys())
+        await db.execute(f"INSERT OR IGNORE INTO workers ({cols}) VALUES ({placeholders})",
+                         list(personal.values()))
+
+        # Мигрируем документы
+        for col in old_columns:
+            if col in doc_columns:
+                filename = old_data.get(col)
+                if filename:
+                    await db.execute(
+                        "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                        (old_data['id'], col, filename)
+                    )
+
+        # Мигрируем встречи
+        meetings_raw = old_data.get('meetings', '[]')
+        if isinstance(meetings_raw, str):
+            try:
+                meetings = json.loads(meetings_raw)
+            except (json.JSONDecodeError, TypeError):
+                meetings = []
+        else:
+            meetings = meetings_raw or []
+
+        for m in meetings:
+            if isinstance(m, dict):
+                await db.execute(
+                    "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                    (old_data['id'], m.get('date', ''), m.get('note', m.get('description', '')))
+                )
+
+    await db.commit()
+
+    # Переименовываем старую таблицу (бэкап)
+    await db.execute("ALTER TABLE workers RENAME TO workers_old_v1")
+    await db.commit()
+
+    # Создаём новую таблицу workers
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS workers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            citizenship TEXT,
+            gender TEXT,
+            position TEXT,
+            object TEXT,
+            object_address TEXT,
+            manager TEXT,
+            phone_main TEXT,
+            phone_additional TEXT,
+            email TEXT,
+            date TEXT,
+            registration TEXT,
+            marital_status TEXT,
+            relatives_json TEXT DEFAULT '[]',
+            telegram_id INTEGER,
+            telegram_username TEXT,
+            created_at TEXT
+        )
+    """)
+
+    # Копируем данные из старой таблицы в новую
+    await db.execute("""
+        INSERT OR IGNORE INTO workers
+        (id, name, citizenship, gender, position, object, object_address,
+         manager, phone_main, phone_additional, email, date,
+         registration, telegram_id, telegram_username, created_at)
+        SELECT id, name, citizenship, gender, position, object, object_address,
+               manager, phone_main, phone_additional, email, date,
+               registration, telegram_id, telegram_username, created_at
+        FROM workers_old_v1
+    """)
+
+    # Копируем документы из старой таблицы
+    for col in set().union(*(docs.keys() for docs in DOC_FLOWS.values())):
+        # Проверяем существует ли колонка в старой таблице
+        cursor = await db.execute(f"PRAGMA table_info(workers_old_v1)")
+        old_cols = {r[1] for r in await cursor.fetchall()}
+        if col in old_cols:
+            await db.execute(f"""
+                INSERT INTO worker_documents (worker_id, doc_type, filename)
+                SELECT id, ?, {col} FROM workers_old_v1 WHERE {col} IS NOT NULL AND {col} != ''
+            """, (col,))
+
+    # Копируем встречи
+    await db.execute("""
+        INSERT INTO worker_meetings (worker_id, date, note)
+        SELECT id, '', meetings FROM workers_old_v1
+        WHERE meetings IS NOT NULL AND meetings != '[]' AND meetings != ''
+    """)
+
+    # Удаляем старую таблицу
+    await db.execute("DROP TABLE IF EXISTS workers_old_v1")
+    await db.commit()
+    logger.info("Миграция в нормализованную схему завершена.")
+
+
+# ─── Миграция из JSON ────────────────────────────────────────────────
+
+async def _migrate_from_json(db: aiosqlite.Connection):
+    """Миграция существующих JSON-файлов в БД."""
     if not os.path.exists(USERS_DIR):
         return
 
@@ -112,104 +258,92 @@ async def _migrate_json(db: aiosqlite.Connection):
     if not json_files:
         return
 
-    existing = await db.execute("SELECT id FROM workers")
-    existing_ids = {row[0] async for row in existing}
-    if existing_ids:
-        return
+    # Проверяем, есть ли уже данные в БД
+    cursor = await db.execute("SELECT COUNT(*) FROM workers")
+    count = (await cursor.fetchone())[0]
+    if count > 0:
+        return  # Уже есть данные — не мигрируем
 
     for filename in json_files:
         filepath = os.path.join(USERS_DIR, filename)
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+
             worker_id = data.get('id', '')
-            if not worker_id or worker_id in existing_ids:
+            if not worker_id:
                 continue
-            await db.execute("""
-                INSERT OR IGNORE INTO workers
-                (id, name, citizenship, gender, position, object, object_address,
-                 manager, phone_main, phone_additional, email, date,
-                 photo, passport, patent_snils, patent_registration, patent_migration_card,
-                 patent_dms, patent_patent, patent_inn, patent_receipt,
-                 patent_language_cert, patent_bank_details, patent_fingerprint_card,
-                 student_snils, student_registration, student_migration_card,
-                 student_dms, student_inn, student_fingerprint_card,
-                 student_university_cert, student_bank_details,
-                 eaeas_registration, eaeas_migration_card, eaeas_dms,
-                 eaeas_inn, eaeas_snils, eaeas_fingerprint_card, eaeas_bank_details,
-                 rvp_migration_card, rvp_dms_oms, rvp_inn, rvp_snils, rvp_bank_details,
-                 vnzh_migration_card, vnzh_vnzh, vnzh_dms_oms, vnzh_inn, vnzh_snils,
-                 vnzh_work_book, vnzh_bank_details,
-                 registration,
-                 telegram_id, telegram_username, created_at, meetings)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                worker_id,
-                data.get('name', ''),
-                data.get('citizenship', ''),
-                data.get('gender', ''),
-                data.get('position', ''),
-                data.get('object', ''),
-                data.get('object_address', ''),
-                data.get('manager', ''),
-                data.get('phone_main', ''),
-                data.get('phone_additional', ''),
-                data.get('email', ''),
-                data.get('date', ''),
-                data.get('photo', ''),
-                data.get('\u041f\u0430\u0441\u043f\u043e\u0440\u0442', ''),
-                data.get('patent_snils', ''),
-                data.get('patent_registration', ''),
-                data.get('patent_migration_card', ''),
-                data.get('patent_dms', ''),
-                data.get('\u041f\u0430\u0442\u0435\u043d\u0442', ''),
-                data.get('patent_inn', ''),
-                data.get('patent_receipt', ''),
-                data.get('patent_language_cert', ''),
-                data.get('patent_bank_details', ''),
-                data.get('patent_fingerprint_card', ''),
-                data.get('student_snils', ''),
-                data.get('student_registration', ''),
-                data.get('student_migration_card', ''),
-                data.get('student_dms', ''),
-                data.get('student_inn', ''),
-                data.get('student_fingerprint_card', ''),
-                data.get('student_university_cert', ''),
-                data.get('student_bank_details', ''),
-                data.get('eaeas_registration', ''),
-                data.get('eaeas_migration_card', ''),
-                data.get('eaeas_dms', ''),
-                data.get('eaeas_inn', ''),
-                data.get('eaeas_snils', ''),
-                data.get('eaeas_fingerprint_card', ''),
-                data.get('eaeas_bank_details', ''),
-                data.get('rvp_migration_card', ''),
-                data.get('rvp_dms_oms', ''),
-                data.get('rvp_inn', ''),
-                data.get('rvp_snils', ''),
-                data.get('rvp_bank_details', ''),
-                data.get('vnzh_migration_card', ''),
-                data.get('vnzh_vnzh', ''),
-                data.get('vnzh_dms_oms', ''),
-                data.get('vnzh_inn', ''),
-                data.get('vnzh_snils', ''),
-                data.get('vnzh_work_book', ''),
-                data.get('vnzh_bank_details', ''),
-                data.get('\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f', ''),
-                data.get('telegram_id'),
-                data.get('telegram_username', ''),
-                data.get('created_at', ''),
-                json.dumps(data.get('meetings', []), ensure_ascii=False)
-            ))
-            existing_ids.add(worker_id)
-        except (json.JSONDecodeError, KeyError):
+
+            # Личные данные
+            personal = {
+                'id': worker_id,
+                'name': data.get('name', ''),
+                'citizenship': data.get('citizenship', ''),
+                'gender': data.get('gender', ''),
+                'position': data.get('position', ''),
+                'object': data.get('object', ''),
+                'object_address': data.get('object_address', ''),
+                'manager': data.get('manager', ''),
+                'phone_main': data.get('phone_main', ''),
+                'phone_additional': data.get('phone_additional', ''),
+                'email': data.get('email', ''),
+                'date': data.get('date', ''),
+                'registration': data.get('registration', ''),
+                'telegram_id': data.get('telegram_id'),
+                'telegram_username': data.get('telegram_username', ''),
+                'created_at': data.get('created_at', ''),
+            }
+
+            placeholders = ', '.join(['?'] * len(personal))
+            cols = ', '.join(personal.keys())
+            await db.execute(
+                f"INSERT OR IGNORE INTO workers ({cols}) VALUES ({placeholders})",
+                list(personal.values())
+            )
+
+            # Документы — все ключи из DOC_FLOWS
+            for cat_docs in DOC_FLOWS.values():
+                for doc in cat_docs:
+                    # Старый JSON мог хранить под русскими названиями
+                    value = data.get(doc.key, '')
+                    if not value and doc.key == 'passport':
+                        value = data.get('Паспорт', '')
+                    if not value and doc.key == 'patent_patent':
+                        value = data.get('Патент', '')
+                    if not value and doc.key == 'registration':
+                        value = data.get('Регистрация', '')
+
+                    if value:
+                        await db.execute(
+                            "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                            (worker_id, doc.key, value)
+                        )
+
+            # Встречи
+            meetings = data.get('meetings', [])
+            if isinstance(meetings, str):
+                try:
+                    meetings = json.loads(meetings)
+                except (json.JSONDecodeError, TypeError):
+                    meetings = []
+            for m in (meetings or []):
+                if isinstance(m, dict):
+                    await db.execute(
+                        "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                        (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+                    )
+
+        except (json.JSONDecodeError, KeyError, OSError) as e:
+            logger.warning("Ошибка миграции JSON %s: %s", filename, e)
             continue
 
     await db.commit()
 
 
+# ─── CRUD операции ──────────────────────────────────────────────────
+
 async def get_next_id() -> str:
-    """Получить следующий доступный ID"""
+    """Получить следующий доступный ID."""
     db = await get_db()
     cursor = await db.execute("SELECT id FROM workers")
     rows = await cursor.fetchall()
@@ -221,118 +355,196 @@ async def get_next_id() -> str:
 
 
 async def save_worker(data: dict) -> str:
-    """
-    Сохранить работника в БД (INSERT или UPDATE по id).
-
-    Returns: worker_id
-    """
+    """Сохранить работника в БД (INSERT или UPDATE по id)."""
     db = await get_db()
     worker_id = data.get('id', '')
-    await db.execute("""
-        INSERT OR REPLACE INTO workers
-        (id, name, citizenship, gender, position, object, object_address,
-         manager, phone_main, phone_additional, email, date,
-         photo, passport, patent_snils, patent_registration, patent_migration_card,
-         patent_dms, patent_patent, patent_inn, patent_receipt,
-         patent_language_cert, patent_bank_details, patent_fingerprint_card,
-         student_snils, student_registration, student_migration_card,
-         student_dms, student_inn, student_fingerprint_card,
-         student_university_cert, student_bank_details,
-         eaeas_registration, eaeas_migration_card, eaeas_dms,
-         eaeas_inn, eaeas_snils, eaeas_fingerprint_card, eaeas_bank_details,
-         rvp_migration_card, rvp_dms_oms, rvp_inn, rvp_snils, rvp_bank_details,
-         vnzh_migration_card, vnzh_vnzh, vnzh_dms_oms, vnzh_inn, vnzh_snils,
-         vnzh_work_book, vnzh_bank_details,
-         russia_passport_propiska, russia_propiska, russia_inn, russia_snils,
-         russia_education_doc, russia_work_book, russia_military_doc,
-         russia_marital_status, russia_relatives,
-         registration,
-         telegram_id, telegram_username, created_at, meetings)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (
-        worker_id,
-        data.get('name', ''),
-        data.get('citizenship', ''),
-        data.get('gender', ''),
-        data.get('position', ''),
-        data.get('object', ''),
-        data.get('object_address', ''),
-        data.get('manager', ''),
-        data.get('phone_main', ''),
-        data.get('phone_additional', ''),
-        data.get('email', ''),
-        data.get('date', ''),
-        data.get('photo', ''),
-        data.get('passport', ''),
-        data.get('patent_snils', ''),
-        data.get('patent_registration', ''),
-        data.get('patent_migration_card', ''),
-        data.get('patent_dms', ''),
-        data.get('patent_patent', ''),
-        data.get('patent_inn', ''),
-        data.get('patent_receipt', ''),
-        data.get('patent_language_cert', ''),
-        data.get('patent_bank_details', ''),
-        data.get('patent_fingerprint_card', ''),
-        data.get('student_snils', ''),
-        data.get('student_registration', ''),
-        data.get('student_migration_card', ''),
-        data.get('student_dms', ''),
-        data.get('student_inn', ''),
-        data.get('student_fingerprint_card', ''),
-        data.get('student_university_cert', ''),
-        data.get('student_bank_details', ''),
-        data.get('eaeas_registration', ''),
-        data.get('eaeas_migration_card', ''),
-        data.get('eaeas_dms', ''),
-        data.get('eaeas_inn', ''),
-        data.get('eaeas_snils', ''),
-        data.get('eaeas_fingerprint_card', ''),
-        data.get('eaeas_bank_details', ''),
-        data.get('rvp_migration_card', ''),
-        data.get('rvp_dms_oms', ''),
-        data.get('rvp_inn', ''),
-        data.get('rvp_snils', ''),
-        data.get('rvp_bank_details', ''),
-        data.get('vnzh_migration_card', ''),
-        data.get('vnzh_vnzh', ''),
-        data.get('vnzh_dms_oms', ''),
-        data.get('vnzh_inn', ''),
-        data.get('vnzh_snils', ''),
-        data.get('vnzh_work_book', ''),
-        data.get('vnzh_bank_details', ''),
-        data.get('russia_passport_propiska', ''),
-        data.get('russia_propiska', ''),
-        data.get('russia_inn', ''),
-        data.get('russia_snils', ''),
-        data.get('russia_education_doc', ''),
-        data.get('russia_work_book', ''),
-        data.get('russia_military_doc', ''),
-        data.get('russia_marital_status', ''),
-        json.dumps(data.get('russia_relatives_list', []), ensure_ascii=False),
-        data.get('registration', ''),
-        data.get('telegram_id'),
-        data.get('telegram_username', ''),
-        data.get('created_at', ''),
-        json.dumps(data.get('meetings', []), ensure_ascii=False)
-    ))
+
+    # Личные данные (без документов)
+    personal_keys = [
+        'id', 'name', 'citizenship', 'gender', 'position', 'object',
+        'object_address', 'manager', 'phone_main', 'phone_additional',
+        'email', 'date', 'registration', 'marital_status', 'relatives_json',
+        'telegram_id', 'telegram_username', 'created_at',
+    ]
+
+    personal = {k: data.get(k, '' if k != 'telegram_id' else None) for k in personal_keys}
+
+    placeholders = ', '.join(['?'] * len(personal))
+    cols = ', '.join(personal.keys())
+    await db.execute(
+        f"INSERT OR REPLACE INTO workers ({cols}) VALUES ({placeholders})",
+        list(personal.values())
+    )
+
+    # Документы — удаляем старые и вставляем новые
+    await db.execute("DELETE FROM worker_documents WHERE worker_id = ?", (worker_id,))
+
+    for cat_docs in DOC_FLOWS.values():
+        for doc in cat_docs:
+            filename = data.get(doc.key, '')
+            if filename:
+                await db.execute(
+                    "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                    (worker_id, doc.key, filename)
+                )
+
+    # Встречи — удаляем старые и вставляем новые
+    await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
+
+    meetings = data.get('meetings', [])
+    if isinstance(meetings, str):
+        try:
+            meetings = json.loads(meetings)
+        except (json.JSONDecodeError, TypeError):
+            meetings = []
+    for m in (meetings or []):
+        if isinstance(m, dict):
+            await db.execute(
+                "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+            )
+
     await db.commit()
     return worker_id
 
 
-async def get_worker(worker_id: str) -> dict | None:
-    """Получить работника по ID"""
+async def save_documents(worker_id: str, doc_files: dict[str, str]):
+    """Сохранить документы работника. doc_files = {doc_type: filename}."""
     db = await get_db()
+    # Удаляем старые документы этого типа
+    for doc_type in doc_files:
+        await db.execute(
+            "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ?",
+            (worker_id, doc_type)
+        )
+    # Вставляем новые
+    for doc_type, filename in doc_files.items():
+        if filename:
+            await db.execute(
+                "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                (worker_id, doc_type, filename)
+            )
+    await db.commit()
+
+
+async def get_worker(worker_id: str) -> dict | None:
+    """Получить работника по ID (с документами и встречами)."""
+    db = await get_db()
+
     cursor = await db.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
     row = await cursor.fetchone()
     if row is None:
         return None
-    return dict(row)
+
+    result = dict(row)
+
+    # Документы
+    cursor = await db.execute(
+        "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+        (worker_id,)
+    )
+    docs = await cursor.fetchall()
+    result['documents'] = {row[0]: row[1] for row in docs}
+
+    # Встречи
+    cursor = await db.execute(
+        "SELECT date, note FROM worker_meetings WHERE worker_id = ? ORDER BY id",
+        (worker_id,)
+    )
+    meetings = await cursor.fetchall()
+    result['meetings_list'] = [{'date': row[0], 'note': row[1]} for row in meetings]
+
+    return result
 
 
 async def get_all_workers() -> list[dict]:
-    """Получить всех работников"""
+    """Получить всех работников (без документов для производительности)."""
     db = await get_db()
     cursor = await db.execute("SELECT * FROM workers ORDER BY id")
     rows = await cursor.fetchall()
     return [dict(row) for row in rows]
+
+
+async def get_worker_documents(worker_id: str) -> dict[str, str]:
+    """Получить документы работника: {doc_type: filename}."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+        (worker_id,)
+    )
+    rows = await cursor.fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+async def search_workers(query: str) -> list[dict]:
+    """Поиск работников по ФИО."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM workers WHERE name LIKE ? ORDER BY id",
+        (f"%{query}%",)
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+# ─── Управление статусом анкеты ─────────────────────────────────────
+
+async def get_pending_workers() -> list[dict]:
+    """Получить работников со статусом pending (ожидающие обработки)."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM workers WHERE status = 'pending' ORDER BY created_at DESC"
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+async def get_pending_count() -> int:
+    """Количество анкет, ожидающих обработки."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT COUNT(*) FROM workers WHERE status = 'pending'"
+    )
+    row = await cursor.fetchone()
+    return row[0]
+
+
+async def accept_worker(worker_id: str):
+    """Принять анкету — установить статус 'accepted'."""
+    db = await get_db()
+    await db.execute(
+        "UPDATE workers SET status = 'accepted', rejection_reasons = '[]' WHERE id = ?",
+        (worker_id,)
+    )
+    await db.commit()
+
+
+async def reject_worker(worker_id: str, reasons: list[str]):
+    """Отклонить анкету с указанием причин."""
+    import json
+    db = await get_db()
+    await db.execute(
+        "UPDATE workers SET status = 'rejected', rejection_reasons = ? WHERE id = ?",
+        (json.dumps(reasons, ensure_ascii=False), worker_id)
+    )
+    await db.commit()
+
+
+async def resubmit_worker(worker_id: str):
+    """Клиент переподал анкету — вернуть статус 'pending'."""
+    db = await get_db()
+    await db.execute(
+        "UPDATE workers SET status = 'pending', rejection_reasons = '[]' WHERE id = ?",
+        (worker_id,)
+    )
+    await db.commit()
+
+
+async def get_worker_status(worker_id: str) -> str | None:
+    """Получить статус работника."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT status FROM workers WHERE id = ?", (worker_id,)
+    )
+    row = await cursor.fetchone()
+    return row[0] if row else None

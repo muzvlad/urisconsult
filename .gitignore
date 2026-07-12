@@ -7,6 +7,7 @@ __pycache__/
 dist/
 build/
 *.egg
+.pytest_cache/
 
 # Виртуальные окружения
 venv/
@@ -36,6 +37,12 @@ Users/
 bot/Users/users.db
 bot/Users/docs/
 UI/Users/
+
+# Логи
+bot/logs/
+
+# Бэкапы
+backups/
 
 # Временные файлы
 bot/temp/
