@@ -1,5 +1,46 @@
-venv/
+# Python
 __pycache__/
-*.pyc
-Users/
-setup.bat
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Виртуальные окружения
+venv/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Системные
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Окружение
+.env
+
+# Бот: старая версия
+bot/urisconsult/
+
+# Данные (не коммитить)
+bot/Users/users.db
+bot/Users/docs/
+users/docs/
+UI/Users/
+
+# Временные файлы
+bot/temp/
+*.tmp
+
+# Тестовые файлы
+UI/test_*.py
+UI/debug_*.py
+UI/quick_*.py
