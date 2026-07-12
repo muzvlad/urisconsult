@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 import sys
+import logging
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
