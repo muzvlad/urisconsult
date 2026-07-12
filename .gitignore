@@ -29,11 +29,12 @@ desktop.ini
 
 # Бот: старая версия
 bot/urisconsult/
+urisconsult/
 
 # Данные (не коммитить)
+Users/
 bot/Users/users.db
 bot/Users/docs/
-users/docs/
 UI/Users/
 
 # Временные файлы
