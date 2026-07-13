@@ -12,7 +12,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import DB_PATH, USERS_DIR, DOCS_DIR
-from config.documents import DOC_FLOWS
+from services.db import init_db, get_db
 
 
 TEST_WORKERS = [
@@ -100,75 +100,18 @@ TEST_WORKERS = [
 ]
 
 
-def create_test_workers():
+async def create_test_workers():
     """Создать 5 тестовых работников в БД."""
     os.makedirs(USERS_DIR, exist_ok=True)
     os.makedirs(DOCS_DIR, exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
+    await init_db()
 
-    # Создаём таблицы если их нет
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS workers (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            citizenship TEXT,
-            gender TEXT,
-            position TEXT,
-            object TEXT,
-            object_address TEXT,
-            manager TEXT,
-            phone_main TEXT,
-            phone_additional TEXT,
-            email TEXT,
-            date TEXT,
-            registration TEXT,
-            marital_status TEXT,
-            relatives_json TEXT DEFAULT '[]',
-            telegram_id INTEGER,
-            telegram_username TEXT,
-            created_at TEXT
-        )
-    """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS worker_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            worker_id TEXT NOT NULL,
-            doc_type TEXT NOT NULL,
-            filename TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id)
-        )
-    """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS worker_meetings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            worker_id TEXT NOT NULL,
-            date TEXT,
-            note TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id)
-        )
-    """)
-
-    # Добавляем колонки status и rejection_reasons если их нет
-    try:
-        conn.execute("ALTER TABLE workers ADD COLUMN status TEXT DEFAULT 'pending'")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        conn.execute("ALTER TABLE workers ADD COLUMN rejection_reasons TEXT DEFAULT '[]'")
-    except sqlite3.OperationalError:
-        pass
-
-    # Вставляем работников
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    db = await get_db()
+
     for w in TEST_WORKERS:
-        conn.execute("""
+        await db.execute("""
             INSERT OR REPLACE INTO workers
             (id, name, citizenship, gender, position, object, object_address,
              manager, phone_main, phone_additional, email, date, registration,
@@ -182,8 +125,8 @@ def create_test_workers():
             w.get('rejection_reasons', '[]'), now
         ))
 
-    conn.commit()
-    conn.close()
+    await db.commit()
+    await db.close()
     print(f"Создано {len(TEST_WORKERS)} тестовых анкет в {DB_PATH}")
 
     for w in TEST_WORKERS:
@@ -192,4 +135,4 @@ def create_test_workers():
 
 
 if __name__ == "__main__":
-    create_test_workers()
+    asyncio.run(create_test_workers())

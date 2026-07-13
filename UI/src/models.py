@@ -172,12 +172,13 @@ class WorkerStatus:
 
     @classmethod
     def get_display(cls, status: str) -> str:
+        from src.config import get_config
         config = get_config()
         icons = config.status_icons
-        colors = config.status_colors
         return f"{icons.get(status, '?')} {status.capitalize()}"
 
     @classmethod
     def get_color(cls, status: str) -> str:
+        from src.config import get_config
         config = get_config()
         return config.status_colors.get(status, "#999")

@@ -1,5 +1,42 @@
 # Changelog
 
+## v2.5 (13.07.2026)
+
+Глубокий аудит проекта. Исправлено 13 проблем безопасности, багов и code smell. Обновлены тесты.
+
+### Безопасность
+- **SSL verification** — убрано отключение `check_hostname=False` в `TelegramService` (MITM-уязвимость)
+
+### Баги
+- **Race condition в `get_next_id()`** — обёрнуто в `BEGIN IMMEDIATE` транзакцию
+- **PDF экспорт** — исправлен путь к документам: `docs_dir/id/prefix.ext` вместо `docs_dir/prefix_id.ext`
+- **`validate_date`** — теперь ловит невалидные даты (31 февраля, 30 апреля и т.д.) через `datetime()`
+- **`process_edit`** — безопасный `replace` callback_data с проверкой префикса
+- **`DocumentViewer`** — исправлено сообщение об ошибке (убрано дублирование prefix)
+- **`models.py`** — добавлен недостающий `import get_config` в `WorkerStatus`
+
+### Память и производительность
+- **`_notified_workers`** — заменён in-memory `set` на БД-колонку `notified_at`. Теперь уведомления не дублируются при рестарте бота
+- **`ThrottlingMiddleware`** — корректная очистка неактивных пользователей каждые 100 запросов (вместо порога >1000)
+
+### Архитектура
+- Добавлен `bot/handlers/__init__.py`
+- `seed_test_data.py` — использует `db.init_db()` вместо дублирования DDL
+- `reject_worker()` — сбрасывает `notified_at` при отклонении
+- `resubmit_worker()` — сбрасывает `notified_at` при переподаче
+- UI `database.py` — `update_status()` сбрасывает `notified_at` при отклонении
+- Background task `check_rejected_workers` — корректная отмена через `task.cancel()` в `finally`
+
+### Зависимости
+- `bot/requirements.txt` — обновлены версии (aiogram 3.4+, aiohttp 3.9+, Pillow 10.4+)
+- Добавлен корневой `requirements.txt` (bot + UI)
+
+### Тесты
+- 46/46 тестов проходят
+- Тесты обновлены под вложенную структуру файлов `id/prefix.ext`
+
+---
+
 ## v2.4 (13.07.2026)
 
 Исправления: русские названия в уведомлениях, убрана фоновая рассылка, документы по папкам, миграция БД.

@@ -197,13 +197,9 @@ class TelegramService:
         }).encode()
 
         try:
-            import ssl
             log_info(f"Sending rejection to chat_id={telegram_id}, worker={worker.id}")
             req = urllib.request.Request(url, data=data, method="POST")
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            with urllib.request.urlopen(req, timeout=self.config.telegram_timeout, context=ctx) as resp:
+            with urllib.request.urlopen(req, timeout=self.config.telegram_timeout) as resp:
                 result = resp.read().decode()
                 log_info(f"Telegram API response: {resp.status} - {result}")
                 if callback:
@@ -331,11 +327,13 @@ class PDFExportService:
                 filename_doc = db_docs.get(doc.key, '')
                 if filename_doc and worker.id:
                     doc_path = None
-                    for ext in self.config.image_extensions:
-                        tp = self.paths.docs_dir / f"{doc.prefix}_{worker.id}{ext}"
-                        if tp.exists():
-                            doc_path = tp
-                            break
+                    worker_dir = self.paths.docs_dir / worker.id
+                    if worker_dir.exists():
+                        for ext in self.config.image_extensions:
+                            tp = worker_dir / f"{doc.prefix}{ext}"
+                            if tp.exists():
+                                doc_path = tp
+                                break
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
                     update_progress()

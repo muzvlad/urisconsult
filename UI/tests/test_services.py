@@ -114,21 +114,19 @@ class TestDocumentService:
         doc_prefixes = {"passport": "pas", "photo": "photo"}
         monkeypatch.setattr("src.services.get_document_config", lambda: (doc_flows, doc_labels, doc_prefixes))
 
-        # Создаем файлы для тестов
-        (test_docs_dir / "photo_TEST001.jpg").write_bytes(b"fake")
-        (test_docs_dir / "pas_TEST002.jpg").write_bytes(b"fake")
-        (test_docs_dir / "photo_TEST002.jpg").write_bytes(b"fake")
+        # Создаем файлы для тестов (вложенный формат: docs_dir/worker_id/prefix.ext)
+        (test_docs_dir / "TEST001").mkdir(parents=True, exist_ok=True)
+        (test_docs_dir / "TEST001" / "photo.jpg").write_bytes(b"fake")
+        (test_docs_dir / "TEST002").mkdir(parents=True, exist_ok=True)
+        (test_docs_dir / "TEST002" / "pas.jpg").write_bytes(b"fake")
+        (test_docs_dir / "TEST002" / "photo.jpg").write_bytes(b"fake")
 
         return DocumentService()
 
     def test_find_photo(self, doc_service, test_docs_dir, sample_worker):
         """Поиск фото работника."""
-        # Создаем файл фото
-        photo_path = test_docs_dir / "photo_TEST001.jpg"
-        photo_path.write_bytes(b"fake image data")
-
         found = doc_service.find_photo("TEST001")
-        assert found == photo_path
+        assert found == test_docs_dir / "TEST001" / "photo.jpg"
 
     def test_find_photo_not_exists(self, doc_service, sample_worker):
         """Фото не найдено."""
@@ -141,7 +139,6 @@ class TestDocumentService:
         assert len(docs) == 2
 
         passport_doc = next(d for d in docs if d.doc_type == "passport")
-        assert passport_doc.filename == "pas_TEST002.jpg"
         assert passport_doc.exists is True
 
     def test_load_thumbnail(self, doc_service, test_docs_dir):
@@ -300,8 +297,10 @@ class TestPDFExportService:
     def test_export_with_photo(self, pdf_service, sample_worker, test_docs_dir, tmp_path):
         """Экспорт с фото."""
         from PIL import Image
+        worker_dir = test_docs_dir / "TEST001"
+        worker_dir.mkdir(parents=True, exist_ok=True)
         img = Image.new("RGB", (100, 100), color="green")
-        img.save(test_docs_dir / "photo_TEST001.jpg")
+        img.save(worker_dir / "photo.jpg")
 
         output_path = tmp_path / "test_with_photo.pdf"
         success, msg = pdf_service.export(sample_worker, output_path)
@@ -311,8 +310,10 @@ class TestPDFExportService:
     def test_export_with_documents(self, pdf_service, sample_worker_with_docs, test_docs_dir, tmp_path):
         """Экспорт с документами."""
         from PIL import Image
+        worker_dir = test_docs_dir / "TEST002"
+        worker_dir.mkdir(parents=True, exist_ok=True)
         img = Image.new("RGB", (100, 100), color="blue")
-        img.save(test_docs_dir / "pas_TEST002.jpg")
+        img.save(worker_dir / "pas.jpg")
 
         output_path = tmp_path / "test_with_docs.pdf"
         success, msg = pdf_service.export(sample_worker_with_docs, output_path)

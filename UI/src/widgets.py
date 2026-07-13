@@ -317,7 +317,7 @@ class DocumentViewer(tk.Frame):
             return
 
         if not self.doc_info.exists or not self.doc_info.full_path:
-            tk.Label(self, text=f"Файл не найден ({self.doc_info.prefix}_{self.doc_info.filename})",
+            tk.Label(self, text=f"Файл не найден ({self.doc_info.filename or 'не загружен'})",
                      font=('Arial', 9), bg='white', fg='orange').pack(pady=3)
             return
 

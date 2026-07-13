@@ -62,13 +62,18 @@ def validate_email(email: str) -> bool:
 
 
 def validate_date(date: str) -> bool:
-    """Валидация даты: формат ДД.ММ.ГГГГ + проверка диапазонов."""
+    """Валидация даты: формат ДД.ММ.ГГГГ + реальная проверка через datetime."""
+    from datetime import datetime
     date_pattern = r'^(\d{2})\.(\d{2})\.(\d{4})$'
     match = re.match(date_pattern, date)
     if not match:
         return False
-    day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
-    return 1 <= day <= 31 and 1 <= month <= 12 and 1900 <= year <= 2100
+    try:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        datetime(year, month, day)
+        return True
+    except ValueError:
+        return False
 
 
 # ─── Обработчики состояний ──────────────────────────────────────────

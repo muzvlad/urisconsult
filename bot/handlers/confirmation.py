@@ -159,7 +159,8 @@ async def process_edit(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    field = callback.data.replace("edit_", "")
+    # Извлекаем поле: edit_name -> name, edit_phone_main -> phone_main
+    field = callback.data.replace("edit_", "", 1) if callback.data.startswith("edit_") else callback.data
     await state.update_data(editing_field=field)
 
     field_names = {

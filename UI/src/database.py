@@ -124,9 +124,16 @@ class WorkerRepository:
     def update_status(self, worker_id: str, status: str, reasons: Optional[List[str]] = None) -> bool:
         """Обновить статус сотрудника."""
         reasons_json = json.dumps(reasons or [], ensure_ascii=False)
-        sql = f"UPDATE {WORKERS_TABLE} SET status = ?, rejection_reasons = ? WHERE id = ?"
+        # При отклонении сбрасываем notified_at, чтобы бот отправил уведомление
+        notified_at = "NULL" if status == "rejected" else None
+        if status == "rejected":
+            sql = f"UPDATE {WORKERS_TABLE} SET status = ?, rejection_reasons = ?, notified_at = NULL WHERE id = ?"
+            params = (status, reasons_json, worker_id)
+        else:
+            sql = f"UPDATE {WORKERS_TABLE} SET status = ?, rejection_reasons = ? WHERE id = ?"
+            params = (status, reasons_json, worker_id)
         with self.db.get_connection() as conn:
-            cursor = conn.execute(sql, (status, reasons_json, worker_id))
+            cursor = conn.execute(sql, params)
             return cursor.rowcount > 0
 
     def accept(self, worker_id: str) -> bool:

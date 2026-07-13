@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS {WORKER_MEETINGS_TABLE} (
 MIGRATIONS = [
     ("status", "TEXT DEFAULT 'pending'"),
     ("rejection_reasons", "TEXT DEFAULT '[]'"),
+    ("notified_at", "TEXT"),
 ]
 
 

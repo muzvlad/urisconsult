@@ -113,6 +113,12 @@ async def init_db():
     await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
     await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
 
+    # Миграция: добавить notified_at если нет
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN notified_at TEXT")
+    except Exception:
+        pass  # колонка уже существует
+
     await db.commit()
 
     # Миграция: старая схема → новая
@@ -367,15 +373,16 @@ async def _migrate_from_json(db: aiosqlite.Connection):
 async def get_next_id() -> str:
     """Получить следующий доступный ID (атомарная операция)."""
     db = await get_db()
-    cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
-    row = await cursor.fetchone()
-    if not row:
-        return "00001"
-    try:
-        next_id = int(row[0]) + 1
-    except (ValueError, TypeError):
-        next_id = 1
-    return str(next_id).zfill(5)
+    async with db.execute("BEGIN IMMEDIATE"):
+        cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
+        row = await cursor.fetchone()
+        if not row:
+            return "00001"
+        try:
+            next_id = int(row[0]) + 1
+        except (ValueError, TypeError):
+            next_id = 1
+        return str(next_id).zfill(5)
 
 
 async def save_worker(data: dict) -> str:
@@ -545,10 +552,9 @@ async def accept_worker(worker_id: str):
 
 async def reject_worker(worker_id: str, reasons: list[str]):
     """Отклонить анкету с указанием причин."""
-    import json
     db = await get_db()
     await db.execute(
-        "UPDATE workers SET status = 'rejected', rejection_reasons = ? WHERE id = ?",
+        "UPDATE workers SET status = 'rejected', rejection_reasons = ?, notified_at = NULL WHERE id = ?",
         (json.dumps(reasons, ensure_ascii=False), worker_id)
     )
     await db.commit()
@@ -558,7 +564,7 @@ async def resubmit_worker(worker_id: str):
     """Клиент переподал анкету — вернуть статус 'pending'."""
     db = await get_db()
     await db.execute(
-        "UPDATE workers SET status = 'pending', rejection_reasons = '[]' WHERE id = ?",
+        "UPDATE workers SET status = 'pending', rejection_reasons = '[]', notified_at = NULL WHERE id = ?",
         (worker_id,)
     )
     await db.commit()
@@ -572,3 +578,24 @@ async def get_worker_status(worker_id: str) -> str | None:
     )
     row = await cursor.fetchone()
     return row[0] if row else None
+
+
+async def mark_notified(worker_id: str):
+    """Пометить работника как уведомлённого."""
+    from datetime import datetime
+    db = await get_db()
+    await db.execute(
+        "UPDATE workers SET notified_at = ? WHERE id = ?",
+        (datetime.now().isoformat(), worker_id)
+    )
+    await db.commit()
+
+
+async def get_unnotified_rejected_workers() -> list[dict]:
+    """Получить отклонённых работников, которым ещё не отправлено уведомление."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '')"
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]

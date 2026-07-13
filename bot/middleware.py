@@ -27,6 +27,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         self.rate_limit = rate_limit
         self.period = period
         self.user_timestamps: dict[int, list[float]] = defaultdict(list)
+        self._cleanup_counter = 0
 
     async def __call__(self, handler, event: Message, data: dict):
         user_id = event.from_user.id if event.from_user else None
@@ -40,12 +41,16 @@ class ThrottlingMiddleware(BaseMiddleware):
         timestamps = [t for t in timestamps if now - t < self.period]
         self.user_timestamps[user_id] = timestamps
 
-        # Периодическая очистка неактивных пользователей
-        if len(self.user_timestamps) > 1000:
-            self.user_timestamps = {
-                uid: ts for uid, ts in self.user_timestamps.items()
-                if any(now - t < self.period for t in ts)
-            }
+        # Периодическая очистка неактивных пользователей (каждые 100 запросов)
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= 100:
+            self._cleanup_counter = 0
+            inactive_keys = [
+                uid for uid, ts in self.user_timestamps.items()
+                if not ts or all(now - t >= self.period for t in ts)
+            ]
+            for uid in inactive_keys:
+                del self.user_timestamps[uid]
 
         if len(timestamps) >= self.rate_limit:
             logger.warning("Rate limit exceeded для user %d", user_id)
