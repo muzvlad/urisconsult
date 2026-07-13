@@ -179,6 +179,33 @@ class WorkerRepository:
         except Exception:
             return False
 
+    def delete_worker(self, worker_id: str) -> bool:
+        """Полностью удалить сотрудника: БД + файлы документов."""
+        import os, glob
+        from src.config import get_paths
+
+        paths = get_paths()
+
+        # Удаляем документы из БД
+        self.db.execute(f"DELETE FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?", (worker_id,))
+        self.db.execute(f"DELETE FROM {WORKER_MEETINGS_TABLE} WHERE worker_id = ?", (worker_id,))
+
+        # Удаляем файлы документов с диска
+        docs_dir = paths.docs_dir
+        if docs_dir.exists():
+            for pattern in [f"*_{worker_id}.*", f"*_{worker_id}_*"]:
+                for f in docs_dir.glob(pattern):
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+
+        # Удаляем сотрудника
+        sql = f"DELETE FROM {WORKERS_TABLE} WHERE id = ?"
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(sql, (worker_id,))
+            return cursor.rowcount > 0
+
 
 class DocumentRepository:
     """Репозиторий для документов сотрудников."""

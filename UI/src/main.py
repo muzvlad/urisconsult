@@ -332,6 +332,52 @@ class DBViewerApp:
             log_error(f"Error rejecting worker {worker.id}: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка: {e}")
 
+    def _edit_worker(self, worker: Worker) -> None:
+        """Открыть диалог редактирования сотрудника."""
+        from src.dialogs import EditDialog
+
+        def on_save(updated: Worker):
+            try:
+                if self.db.workers.update(updated):
+                    show_info(self.root, "Готово", f"Анкета #{updated.id} обновлена!")
+                    self._refresh_current_worker()
+                    self._refresh_pending_count()
+                    log_info(f"Worker {updated.id} updated")
+                else:
+                    show_error(self.root, "Ошибка", "Не удалось обновить запись")
+            except Exception as e:
+                log_error(f"Error updating worker {updated.id}: {e}", exc_info=True)
+                show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+        EditDialog(self.root, worker, on_save)
+
+    def _delete_worker(self, worker: Worker) -> None:
+        """Удалить сотрудника из БД и файлов."""
+        from src.dialogs import ask_yes_no
+
+        if not ask_yes_no(self.root, "Удаление",
+                          f"Удалить анкету #{worker.id} — {worker.name}?\n\n"
+                          f"Все документы будут удалены с диска.\n"
+                          f"Это действие необратимо!"):
+            return
+
+        try:
+            if self.db.workers.delete_worker(worker.id):
+                show_info(self.root, "Готово", f"Анкета #{worker.id} удалена!")
+                self.current_worker = None
+                self._refresh_current_list()
+                self._refresh_pending_count()
+                # Очистить панель деталей
+                if self.scrollable_frame:
+                    for w in self.scrollable_frame.winfo_children():
+                        w.destroy()
+                log_info(f"Worker {worker.id} deleted")
+            else:
+                show_error(self.root, "Ошибка", "Не удалось удалить запись")
+        except Exception as e:
+            log_error(f"Error deleting worker {worker.id}: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
     def _refresh_current_worker(self) -> None:
         """Обновить отображение текущего сотрудника."""
         if self.current_worker:
@@ -377,6 +423,22 @@ class DBViewerApp:
 
         tk.Label(left_col, text=status_text,
                  font=('Arial', 11, 'bold'), bg='white', fg=status_color).pack(anchor=tk.W, pady=(2, 0))
+
+        # Кнопки управления
+        btn_frame = tk.Frame(left_col, bg='white')
+        btn_frame.pack(anchor=tk.W, pady=(8, 0))
+
+        tk.Button(btn_frame, text="✏️ Редактировать",
+                  command=lambda: self._edit_worker(worker),
+                  bg=self.config.accent_blue, fg='white', font=('Arial', 9),
+                  padx=10, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT, padx=(0, 5))
+
+        tk.Button(btn_frame, text="🗑 Удалить",
+                  command=lambda: self._delete_worker(worker),
+                  bg=self.config.accent_red, fg='white', font=('Arial', 9),
+                  padx=10, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT)
 
         tk.Label(right_col, text=f"ИД: {worker.id}",
                  font=('Arial', 12), bg='white').pack(anchor=tk.NE)

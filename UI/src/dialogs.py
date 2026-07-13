@@ -280,3 +280,111 @@ def show_warning(parent: tk.Widget, title: str, message: str) -> None:
 def show_error(parent: tk.Widget, title: str, message: str) -> None:
     """Ошибка."""
     messagebox.showerror(title, message, parent=parent)
+
+
+# ─── Диалог редактирования сотрудника ───
+
+class EditDialog:
+    """Диалог редактирования всех полей сотрудника."""
+
+    def __init__(self, parent: tk.Widget, worker: Worker,
+                 on_save: Callable[[Worker], None]):
+        self.worker = worker
+        self.on_save = on_save
+        self.config = get_config()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Редактировать анкету #{worker.id}")
+        self.dialog.configure(bg='#f0f0f0')
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        self._center_window(550, 650)
+        self._build_ui()
+
+    def _center_window(self, w: int, h: int) -> None:
+        self.dialog.update_idletasks()
+        sw = self.dialog.winfo_screenwidth()
+        sh = self.dialog.winfo_screenheight()
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        self.dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _build_ui(self) -> None:
+        header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
+        header.pack(fill=tk.X)
+        tk.Label(header, text=f"✏️ Редактировать анкету #{self.worker.id}",
+                 font=('Arial', 14, 'bold'), bg='#2c3e50', fg='white').pack(pady=5)
+        tk.Label(header, text=self.worker.name,
+                 font=('Arial', 11), bg='#2c3e50', fg='#bbb').pack()
+
+        # Прокручиваемая область
+        canvas_frame = tk.Frame(self.dialog, bg='#f0f0f0')
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(canvas_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        inner = tk.Frame(canvas, bg='white')
+
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", tags="inner")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        def on_canvas_cfg(event):
+            canvas.itemconfig("inner", width=event.width)
+        canvas.bind("<Configure>", on_canvas_cfg)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        canvas.bind("<MouseWheel>",
+                    lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+        # Поля для редактирования
+        fields = [
+            ('name', 'ФИО'),
+            ('citizenship', 'Гражданство'),
+            ('gender', 'Пол'),
+            ('position', 'Должность'),
+            ('object', 'Объект'),
+            ('object_address', 'Адрес объекта'),
+            ('manager', 'Менеджер'),
+            ('phone_main', 'Основной телефон'),
+            ('phone_additional', 'Доп. телефон'),
+            ('email', 'Email'),
+            ('date', 'Дата рождения'),
+            ('registration', 'Регистрация'),
+        ]
+
+        self.entries: Dict[str, tk.Entry] = {}
+        for key, label in fields:
+            row = tk.Frame(inner, bg='white')
+            row.pack(fill=tk.X, padx=10, pady=3)
+            tk.Label(row, text=f"{label}:", bg='white', font=('Arial', 10, 'bold'),
+                     width=18, anchor='w').pack(side=tk.LEFT)
+            entry = tk.Entry(row, font=('Arial', 10))
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            entry.insert(0, getattr(self.worker, key, '') or '')
+            self.entries[key] = entry
+
+        # Кнопки
+        btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
+                  bg='#95a5a6', fg='white', font=('Arial', 10),
+                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT, padx=(15, 5))
+
+        tk.Button(btn_frame, text="Сохранить",
+                  command=self._save,
+                  bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
+                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.RIGHT, padx=(5, 15))
+
+    def _save(self) -> None:
+        """Сохранить изменения."""
+        for key, entry in self.entries.items():
+            setattr(self.worker, key, entry.get().strip())
+
+        self.dialog.destroy()
+        self.on_save(self.worker)
