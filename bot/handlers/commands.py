@@ -37,7 +37,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
     if data.startswith("fix_rejected:"):
         worker = await db.get_worker(worker_id)
         if not worker:
-            await callback.message.answer("❌ Анкета не найдена.")
+            await callback.message.answer("Анкета не найдена.")
             return
 
         reasons = worker.get('rejection_reasons', '[]')
@@ -48,7 +48,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
                 reasons = []
 
         await callback.message.edit_text(
-            "✏️ Начинаем исправление анкеты.\n"
+            "Начинаем исправление анкеты.\n"
             "Будет предложено исправить только отклонённые поля.",
         )
 
@@ -61,18 +61,16 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
 
         if reasons:
-            from handlers.commands import _ask_rejected_field
-            await state.set_state(WorkerForm.fix_value)
             await _ask_rejected_field(callback.message, state, reasons[0], reasons, 0)
         else:
-            await callback.message.answer("📝 Введите ваше ФИО:")
+            await callback.message.answer("Введите ваше ФИО:")
             await state.set_state(WorkerForm.name)
 
     elif data.startswith("new_rejected:"):
         await db.resubmit_worker(worker_id)
         await state.clear()
         await callback.message.edit_text(
-            "📝 Начинаем заполнение новой анкеты.\n"
+            "Начинаем заполнение новой анкеты.\n"
             "Введите ваше ФИО полностью:",
         )
         await state.set_state(WorkerForm.name)
@@ -80,7 +78,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
 
 def get_start_keyboard():
     """Клавиатура с кнопкой Start"""
-    button = KeyboardButton(text="🚀 Начать регистрацию")
+    button = KeyboardButton(text="Начать регистрацию")
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[button]],
         resize_keyboard=True
@@ -98,14 +96,10 @@ def cleanup_user_temp_files(user_id: int):
 
 
 async def cmd_start(message: types.Message, state: FSMContext):
-    """Обработчик команды /start и кнопки.
-
-    Проверяет, есть ли отклонённая анкета у пользователя.
-    """
+    """Обработчик команды /start и кнопки."""
     await state.clear()
     cleanup_user_temp_files(message.from_user.id)
 
-    # Ищем отклонённую анкету пользователя
     telegram_id = message.from_user.id
     rejected = await _find_rejected_worker(telegram_id)
 
@@ -118,32 +112,29 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 reasons = []
 
         reasons_text = '\n'.join(
-            f"  • {DOC_LABELS.get(r, r)}" for r in reasons
+            f"  {DOC_LABELS.get(r, r)}" for r in reasons
         )
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✏️ Исправить анкету",
+                InlineKeyboardButton(text="Исправить анкету",
                                      callback_data=f"fix_rejected:{rejected['id']}"),
-                InlineKeyboardButton(text="📝 Новая анкета",
+                InlineKeyboardButton(text="Новая анкета",
                                      callback_data=f"new_rejected:{rejected['id']}"),
             ]
         ])
 
         await message.answer(
-            f"📋 У вас есть отклонённая анкета #{rejected['id']}.\n\n"
+            f"У вас есть отклонённая анкета #{rejected['id']}.\n\n"
             f"Необходимо исправить:\n{reasons_text}",
             reply_markup=keyboard
         )
     else:
-        # Обычная регистрация
         await message.answer(
-            "👋 Здравствуйте! Я бот для заполнения анкет работников.\n\n"
-            "Я помогу вам собрать всю необходимую информацию и сохранить её в правильном формате."
+            "Здравствуйте! Я бот для заполнения анкет работников.\n\n"
+            "Помогу собрать информацию и сохранить её в правильном формате."
         )
-        await message.answer(
-            "📝 Введите ваше ФИО полностью (например: Иванов Иван Иванович):"
-        )
+        await message.answer("Введите ваше ФИО полностью (например: Иванов Иван Иванович):")
         await state.set_state(WorkerForm.name)
 
 
@@ -151,8 +142,8 @@ def _get_fix_keyboard():
     """Клавиатура для выбора: исправить или новая анкета."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="✏️ Исправить анкету")],
-            [KeyboardButton(text="📝 Новая анкета")],
+            [KeyboardButton(text="Исправить анкету")],
+            [KeyboardButton(text="Новая анкета")],
         ],
         resize_keyboard=True
     )
@@ -174,8 +165,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
     await state.clear()
     cleanup_user_temp_files(message.from_user.id)
     await message.answer(
-        "❌ Заполнение анкеты отменено.\n"
-        "Чтобы начать заново, нажмите кнопку ниже:",
+        "Заполнение анкеты отменено.\nЧтобы начать заново, нажмите кнопку ниже:",
         reply_markup=get_start_keyboard()
     )
 
@@ -186,41 +176,34 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
     rejected_worker_id = data.get('rejected_worker_id')
     reasons = data.get('rejection_reasons', [])
 
-    if message.text == "✏️ Исправить анкету":
-        # Начинаем исправление — запрашиваем только отклонённые поля
+    if message.text == "Исправить анкету":
         await message.answer(
-            "✏️ Начинаем исправление анкеты.\n"
+            "Начинаем исправление анкеты.\n"
             "Будет предложено исправить только отклонённые поля.",
             reply_markup=types.ReplyKeyboardRemove()
         )
 
-        # Сохраняем данные отклонённой анкеты в state
         worker = await db.get_worker(rejected_worker_id)
         if worker:
-            await state.update_data(**{
-                k: worker.get(k) for k in [
-                    'name', 'citizenship', 'gender', 'position', 'object',
-                    'object_address', 'manager', 'phone_main', 'phone_additional',
-                    'email', 'date', 'registration',
-                ]
-            })
+            worker_data = {}
+            for k in ['name', 'citizenship', 'gender', 'position', 'object',
+                       'object_address', 'manager', 'phone_main', 'phone_additional',
+                       'email', 'date', 'registration']:
+                worker_data[k] = worker.get(k)
+            await state.update_data(**worker_data)
             await state.update_data(editing_rejected=True, rejection_reasons=reasons)
 
-        # Начинаем с первого отклонённого поля
         if reasons:
-            first_field = reasons[0]
-            await _ask_rejected_field(message, state, first_field, reasons, 0)
+            await _ask_rejected_field(message, state, reasons[0], reasons, 0)
         else:
-            await message.answer("📝 Введите ваше ФИО:")
+            await message.answer("Введите ваше ФИО:")
             await state.set_state(WorkerForm.name)
 
-    elif message.text == "📝 Новая анкета":
-        # Сбрасываем статус на pending и начинаем заново
+    elif message.text == "Новая анкета":
         await db.resubmit_worker(rejected_worker_id)
         await state.clear()
         await message.answer(
-            "📝 Начинаем заполнение новой анкеты.\n"
-            "Введите ваше ФИО полностью:",
+            "Начинаем заполнение новой анкеты.\nВведите ваше ФИО полностью:",
             reply_markup=types.ReplyKeyboardRemove()
         )
         await state.set_state(WorkerForm.name)
@@ -230,88 +213,17 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
                              reply_markup=_get_fix_keyboard())
 
 
-async def _ask_rejected_field(message, state, field, reasons, index):
-    """Запросить исправление конкретного отклонённого поля."""
-    from keyboards.reply_kb import get_skip_keyboard, get_gender_keyboard
-    from keyboards.inline_kb import get_citizenship_keyboard
-
-    field_prompts = {
-        'name': "📝 Введите исправленное ФИО:",
-        'citizenship': "🌍 Выберите категорию:",
-        'gender': "⚥ Выберите ваш пол:",
-        'position': "💼 Введите должность:",
-        'object': "🏢 Введите объект:",
-        'object_address': "📍 Введите адрес объекта:",
-        'manager': "👤 Введите ФИО менеджера:",
-        'phone_main': "📞 Введите основной телефон:",
-        'phone_additional': "📞 Введите доп. телефон (или 'пропустить'):",
-        'email': "📧 Введите email:",
-        'date': "📅 Введите дату рождения (ДД.ММ.ГГГГ):",
-        'registration': "📋 Введите регистрацию:",
-    }
-
-    # Для документов
-    doc_states = {
-        'photo': WorkerForm.photo,
-        'passport': WorkerForm.passport,
-    }
-    for cat_docs in DOC_FLOWS.values():
-        for doc in cat_docs:
-            if doc.key not in doc_states:
-                doc_states[doc.key] = getattr(WorkerForm, doc.key, None)
-
-    # Пропуск если не текстовые поля
-    skip_fields = {'photo', 'passport'}
-    skip_fields.update({d.key for docs in DOC_FLOWS.values() for d in docs})
-
-    if field in skip_fields and field not in field_prompts:
-        # Документ — запрашиваем отправку файла
-        doc_label = DOC_LABELS.get(field, field)
-        prompt = f"📎 Отправьте исправленный файл: {doc_label}"
-        await message.answer(prompt, reply_markup=get_skip_keyboard())
-        state_obj = doc_states.get(field)
-        if state_obj:
-            await state.set_state(state_obj)
-            await state.update_data(
-                fix_current_field=field,
-                fix_reasons=reasons,
-                fix_index=index
-            )
-        return
-
-    # Текстовое поле
-    prompt = field_prompts.get(field, f"Введите значение для {field}:")
-    await message.answer(prompt)
-
-    # Устанавливаем правильную клавиатуру
-    if field == 'citizenship':
-        await message.answer("🌍 Выберите категорию:",
-                             reply_markup=get_citizenship_keyboard())
-        await state.set_state(WorkerForm.citizenship)
-    elif field == 'gender':
-        await message.answer("⚥ Выберите пол:",
-                             reply_markup=get_gender_keyboard())
-        await state.set_state(WorkerForm.gender)
-    elif field == 'phone_additional':
-        await state.set_state(WorkerForm.phone_additional)
-    elif field in WorkerForm.__dict__:
-        state_obj = getattr(WorkerForm, field, None)
-        if state_obj:
-            await state.set_state(state_obj)
-
-    await state.update_data(
-        fix_current_field=field,
-        fix_reasons=reasons,
-        fix_index=index
-    )
-
+# ─── Все текстовые поля в режиме исправления ловятся здесь ───────────
 
 async def process_fix_value(message: types.Message, state: FSMContext):
-    """Обработка исправленного значения."""
+    """Обработка исправленного значения (текстовые поля)."""
     data = await state.get_data()
     field = data.get('fix_current_field')
     reasons = data.get('fix_reasons', [])
     index = data.get('fix_index', 0)
+
+    if not field:
+        return
 
     # Сохраняем исправленное значение
     await state.update_data(**{field: message.text.strip()})
@@ -322,9 +234,8 @@ async def process_fix_value(message: types.Message, state: FSMContext):
         next_field = reasons[next_index]
         await _ask_rejected_field(message, state, next_field, reasons, next_index)
     else:
-        # Все поля исправлены — показываем подтверждение
         from handlers.confirmation import show_confirmation
-        await message.answer("✅ Все замечания исправлены!",
+        await message.answer("Все замечания исправлены!",
                              reply_markup=types.ReplyKeyboardRemove())
         await show_confirmation(message, state)
 
@@ -332,15 +243,76 @@ async def process_fix_value(message: types.Message, state: FSMContext):
 async def any_message(message: types.Message):
     """Ответ на любое сообщение, когда бот не в состоянии"""
     await message.answer(
-        "Для начала работы нажмите кнопку ⬇️",
+        "Для начала работы нажмите кнопку ниже",
         reply_markup=get_start_keyboard()
+    )
+
+
+def _ask_rejected_field_prompt(field):
+    """Получить текст запроса для поля."""
+    field_prompts = {
+        'name': "Введите исправленное ФИО:",
+        'citizenship': "Введите категорию (Патент/Студент/ЕАЭС/РВП/ВНЖ/Россия):",
+        'gender': "Введите пол (Мужской/Женский):",
+        'position': "Введите должность:",
+        'object': "Введите объект:",
+        'object_address': "Введите адрес объекта:",
+        'manager': "Введите ФИО менеджера:",
+        'phone_main': "Введите основной телефон:",
+        'phone_additional': "Введите доп. телефон (или 'пропустить'):",
+        'email': "Введите email:",
+        'date': "Введите дату рождения (ДД.ММ.ГГГГ):",
+        'registration': "Введите регистрацию:",
+    }
+    return field_prompts.get(field, f"Введите значение для {field}:")
+
+
+async def _ask_rejected_field(message, state, field, reasons, index):
+    """Запросить исправление конкретного отклонённого поля."""
+    from keyboards.reply_kb import get_skip_keyboard
+
+    # Все документы из конфига
+    all_doc_keys = set()
+    for cat_docs in DOC_FLOWS.values():
+        for doc in cat_docs:
+            all_doc_keys.add(doc.key)
+
+    if field in all_doc_keys:
+        # Документ — запрашиваем отправку файла
+        doc_label = DOC_LABELS.get(field, field)
+        await message.answer(f"Отправьте исправленный файл: {doc_label}",
+                             reply_markup=get_skip_keyboard())
+        doc_states = {'photo': WorkerForm.photo, 'passport': WorkerForm.passport}
+        for cat_docs in DOC_FLOWS.values():
+            for doc in cat_docs:
+                if doc.key not in doc_states:
+                    doc_states[doc.key] = getattr(WorkerForm, doc.key, None)
+        state_obj = doc_states.get(field)
+        if state_obj:
+            await state.set_state(state_obj)
+        await state.update_data(
+            fix_current_field=field,
+            fix_reasons=reasons,
+            fix_index=index
+        )
+        return
+
+    # Текстовое поле — ВСЕГДА fix_value
+    prompt = _ask_rejected_field_prompt(field)
+    await message.answer(prompt)
+
+    await state.set_state(WorkerForm.fix_value)
+    await state.update_data(
+        fix_current_field=field,
+        fix_reasons=reasons,
+        fix_index=index
     )
 
 
 def register_commands(dp, form_class):
     """Регистрация обработчиков команд"""
     dp.message.register(cmd_start, Command("start"))
-    dp.message.register(cmd_start, lambda message: message.text == "🚀 Начать регистрацию")
+    dp.message.register(cmd_start, lambda message: message.text == "Начать регистрацию")
     dp.message.register(cmd_cancel, Command("cancel"))
 
     # Inline кнопки из уведомлений об отклонении
@@ -352,7 +324,7 @@ def register_commands(dp, form_class):
     # Обработка выбора исправления
     dp.message.register(process_fix_choice, form_class.fix_choice)
 
-    # Обработка исправленных значений (текстовые поля)
+    # Обработка исправленных значений — ТОЛЬКО fix_value
     dp.message.register(process_fix_value, form_class.fix_value)
 
     dp.message.register(any_message, default_state, F.text)
