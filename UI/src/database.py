@@ -47,19 +47,34 @@ class DatabaseConnection:
 
     def _sync_docs_from_disk(self, conn: sqlite3.Connection) -> None:
         """Сканировать docs_dir и дописать недостающие записи в worker_documents."""
-        from src.config import get_paths, get_document_config
+        from src.config import get_paths
         paths = get_paths()
         docs_dir = paths.docs_dir
 
         if not docs_dir.exists():
             return
 
-        # Префиксы → doc_type маппинг
-        flows, _, _ = get_document_config()
+        # Маппинг префиксов файлов → doc_type (из конфига бота или дефолтный)
         prefix_to_doc = {}
-        for cat_docs in flows.values():
-            for doc in cat_docs:
-                prefix_to_doc[doc.prefix] = doc.key
+        try:
+            from src.config import get_document_config
+            flows, _, _ = get_document_config()
+            for cat_docs in flows.values():
+                for doc in cat_docs:
+                    prefix_to_doc[doc.prefix] = doc.key
+        except Exception:
+            pass
+
+        # Фоллбэк — дефолтный маппинг если конфиг не загрузился
+        if not prefix_to_doc:
+            prefix_to_doc = {
+                'photo': 'photo', 'pas': 'passport', 'pat': 'patent_patent',
+                'snils': 'patent_snils', 'reg': 'patent_registration',
+                'mig': 'patent_migration_card', 'dms': 'patent_dms',
+                'inn': 'patent_inn', 'chek': 'patent_receipt',
+                'lang': 'patent_language_cert', 'bank': 'patent_bank_details',
+                'dactyl': 'patent_fingerprint_card',
+            }
 
         # Все worker_id из БД
         worker_ids = {row[0] for row in conn.execute(f"SELECT id FROM {WORKERS_TABLE}").fetchall()}
