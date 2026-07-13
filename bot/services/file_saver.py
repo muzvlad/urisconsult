@@ -82,8 +82,12 @@ class FileSaver:
         prefix = DOC_PREFIXES.get(doc_type, 'doc')
         ext = os.path.splitext(temp_path)[1].lower()
 
-        new_filename = f"{prefix}_{worker_id}{ext}"
-        new_path = os.path.join(DOCS_DIR, new_filename)
+        # Папка для документов работника
+        worker_dir = os.path.join(DOCS_DIR, worker_id)
+        os.makedirs(worker_dir, exist_ok=True)
+
+        new_filename = f"{prefix}{ext}"
+        new_path = os.path.join(worker_dir, new_filename)
 
         try:
             os.replace(temp_path, new_path)

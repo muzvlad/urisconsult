@@ -67,9 +67,11 @@ class DocumentService:
 
     def _find_document_file(self, worker_id: str, prefix: str) -> Optional[Path]:
         """Найти файл документа по префиксу и ID."""
-        base_name = f"{prefix}_{worker_id}"
+        worker_dir = self.paths.docs_dir / worker_id
+        if not worker_dir.exists():
+            return None
         for ext in self.config.image_extensions:
-            path = self.paths.docs_dir / f"{base_name}{ext}"
+            path = worker_dir / f"{prefix}{ext}"
             if path.exists():
                 return path
         return None
