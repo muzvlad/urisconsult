@@ -20,6 +20,7 @@ from config import DOCS_DIR
 from config.documents import DOC_FLOWS, DOC_LABELS, get_doc_flow
 from handlers.registration import WorkerForm
 from services import db
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
     rejected = await _find_rejected_worker(telegram_id)
 
     if rejected:
-        # Есть отклонённая анкета — предлагаем исправить
         reasons = rejected.get('rejection_reasons', '[]')
         if isinstance(reasons, str):
             try:
@@ -120,16 +120,19 @@ async def cmd_start(message: types.Message, state: FSMContext):
             f"  • {DOC_LABELS.get(r, r)}" for r in reasons
         )
 
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Исправить анкету",
+                                     callback_data=f"fix_rejected:{rejected['id']}"),
+                InlineKeyboardButton(text="📝 Новая анкета",
+                                     callback_data=f"new_rejected:{rejected['id']}"),
+            ]
+        ])
+
         await message.answer(
             f"📋 У вас есть отклонённая анкета #{rejected['id']}.\n\n"
-            f"Необходимо исправить:\n{reasons_text}\n\n"
-            f"Хотите исправить? (нажмите 'Исправить анкету' или 'Новая анкета')",
-            reply_markup=_get_fix_keyboard()
-        )
-        await state.set_state(WorkerForm.fix_choice)
-        await state.update_data(
-            rejected_worker_id=rejected['id'],
-            rejection_reasons=reasons
+            f"Необходимо исправить:\n{reasons_text}",
+            reply_markup=keyboard
         )
     else:
         # Обычная регистрация
