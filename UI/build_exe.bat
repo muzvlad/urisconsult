@@ -1,5 +1,5 @@
 @echo off
-cd /d C:\Projects\urisconsult\UI
+cd /d "%~dp0"
 rmdir /s /q dist 2>nul
 rmdir /s /q build 2>nul
 del "[Search]Driver.spec" 2>nul
