@@ -68,12 +68,23 @@ class DatabaseConnection:
         # Фоллбэк — дефолтный маппинг если конфиг не загрузился
         if not prefix_to_doc:
             prefix_to_doc = {
-                'photo': 'photo', 'pas': 'passport', 'pat': 'patent_patent',
-                'snils': 'patent_snils', 'reg': 'patent_registration',
-                'mig': 'patent_migration_card', 'dms': 'patent_dms',
-                'inn': 'patent_inn', 'chek': 'patent_receipt',
-                'lang': 'patent_language_cert', 'bank': 'patent_bank_details',
+                'photo': 'photo',
+                'pas': 'passport',
+                'pat': 'patent_patent',
+                'snils': 'patent_snils',
+                'reg': 'patent_registration',
+                'mig': 'patent_migration_card',
+                'dms': 'patent_dms',
+                'inn': 'patent_inn',
+                'chek': 'patent_receipt',
+                'lang': 'patent_language_cert',
+                'bank': 'patent_bank_details',
                 'dactyl': 'patent_fingerprint_card',
+                'propiska': 'russia_passport_propiska',
+                'edu': 'russia_education_doc',
+                'trud': 'russia_work_book',
+                'voen': 'russia_military_doc',
+                'vnzh': 'vnzh_vnzh',
             }
 
         # Все worker_id из БД

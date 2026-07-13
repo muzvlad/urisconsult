@@ -16,6 +16,56 @@ from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, Phot
 from src.dialogs import NotificationsWindow, RejectDialog, ask_yes_no, show_info, show_error, show_warning
 from src.logging_config import setup_logging, get_logger, log_error, log_exception, log_info
 
+# Русские названия документов (fallback если конфиг не загрузился)
+_DOC_LABELS_FALLBACK = {
+    'photo': 'Фото (селфи)',
+    'passport': 'Паспорт',
+    'patent_snils': 'СНИЛС',
+    'patent_registration': 'Регистрация',
+    'patent_migration_card': 'Миграционная карта',
+    'patent_dms': 'ДМС',
+    'patent_patent': 'Патент',
+    'patent_inn': 'ИНН',
+    'patent_receipt': 'Чек по патенту',
+    'patent_language_cert': 'Сертификат о знании языка',
+    'patent_bank_details': 'Реквизиты банковской карты',
+    'patent_fingerprint_card': 'Дактилоскопическая карта',
+    'student_snils': 'СНИЛС',
+    'student_registration': 'Регистрация',
+    'student_migration_card': 'Миграционная карта',
+    'student_dms': 'ДМС',
+    'student_inn': 'ИНН',
+    'student_fingerprint_card': 'Дактилоскопическая карта',
+    'student_university_cert': 'Справка из ВУЗа',
+    'student_bank_details': 'Реквизиты банковской карты',
+    'eaeas_registration': 'Регистрация',
+    'eaeas_migration_card': 'Миграционная карта',
+    'eaeas_dms': 'ДМС',
+    'eaeas_inn': 'ИНН',
+    'eaeas_snils': 'СНИЛС',
+    'eaeas_fingerprint_card': 'Дактилоскопическая карта',
+    'eaeas_bank_details': 'Реквизиты банковской карты',
+    'rvp_migration_card': 'Миграционная карта',
+    'rvp_dms_oms': 'ДМС/ОМС',
+    'rvp_inn': 'ИНН',
+    'rvp_snils': 'СНИЛС',
+    'rvp_bank_details': 'Реквизиты банковской карты',
+    'vnzh_migration_card': 'Миграционная карта',
+    'vnzh_vnzh': 'ВНЖ',
+    'vnzh_dms_oms': 'ДМС/ОМС',
+    'vnzh_inn': 'ИНН',
+    'vnzh_snils': 'СНИЛС',
+    'vnzh_work_book': 'Трудовая книжка/ЭТК',
+    'vnzh_bank_details': 'Реквизиты банковской карты',
+    'russia_passport_propiska': 'Паспорт (прописка)',
+    'russia_propiska': 'Прописка',
+    'russia_inn': 'ИНН',
+    'russia_snils': 'СНИЛС',
+    'russia_education_doc': 'Документ об образовании',
+    'russia_work_book': 'Трудовая книжка/ЭТК',
+    'russia_military_doc': 'Военный билет/Приписное',
+}
+
 
 class DBViewerApp:
     """Главное приложение просмотра карточек сотрудников."""
@@ -521,19 +571,13 @@ class DBViewerApp:
                 tk.Label(info_inner, text=rel_text.strip(),
                          font=('Arial', 10), bg='white', anchor='w',
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
-            else:
-                print(f"RELS DEBUG: worker={worker.id} relatives_json={worker.relatives_json!r} parsed={relatives!r}")
         except Exception as e:
-            print(f"RELS ERROR: {e}")
+            pass
 
         # ── Документы ──
         try:
             db_docs = self.db.documents.get_by_worker(worker.id)
             citizenship = worker.citizenship
-            
-            # debug — покажем прямой SQL тоже
-            direct = self.db.db.fetchall("SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?", (worker.id,))
-            print(f"DOCS DEBUG: worker={worker.id} repository={db_docs} direct_sql={len(direct)} rows db_path={self.db.db.db_path}")
 
             # Показываем все документы из БД у которых есть файл
             from src.services import DocumentInfo
@@ -543,17 +587,16 @@ class DBViewerApp:
                     continue
                 worker_dir = self.doc_service.paths.docs_dir / worker.id
                 full_path = worker_dir / filename if worker_dir.exists() else None
-                exists = full_path.exists() if full_path else False
-                print(f"  {doc_type}: filename={filename} worker_dir={worker_dir} exists={exists}")
                 if full_path and full_path.exists():
                     label = self.doc_service.get_document_label(doc_type)
+                    if label == doc_type:
+                        label = _DOC_LABELS_FALLBACK.get(doc_type, doc_type)
                     existing_docs.append(DocumentInfo(
                         doc_type=doc_type, label=label,
                         prefix='', filename=filename,
                         exists=True, full_path=full_path,
                     ))
 
-            print(f"DOCS DEBUG: existing_docs count={len(existing_docs)}")
             if existing_docs:
                 docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
                 docs_header.pack(fill=tk.X, padx=5, pady=5)
