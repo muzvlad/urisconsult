@@ -62,6 +62,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
 
         if reasons:
             from handlers.commands import _ask_rejected_field
+            await state.set_state(WorkerForm.fix_value)
             await _ask_rejected_field(callback.message, state, reasons[0], reasons, 0)
         else:
             await callback.message.answer("📝 Введите ваше ФИО:")

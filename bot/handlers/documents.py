@@ -56,7 +56,23 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
         temp_files.append(temp_path)
         await state.update_data(**{f'{doc_key}_temp_path': temp_path, 'temp_files': temp_files})
 
-        # Переходим к следующему документу
+        # Если estamos в режиме исправления — переходим к следующему отклонённому полю
+        fix_reasons = data.get('fix_reasons', [])
+        fix_index = data.get('fix_index', -1)
+        if fix_reasons and fix_index >= 0:
+            from handlers.commands import _ask_rejected_field
+            next_index = fix_index + 1
+            if next_index < len(fix_reasons):
+                await _ask_rejected_field(message, state, fix_reasons[next_index],
+                                         fix_reasons, next_index)
+            else:
+                from handlers.confirmation import show_confirmation
+                await message.answer("✅ Все замечания исправлены!",
+                                     reply_markup=ReplyKeyboardRemove())
+                await show_confirmation(message, state)
+            return True
+
+        # Обычный режим — переходим к следующему документу
         citizenship = data.get('citizenship', 'Патент')
         await _go_next(message, state, doc_key, citizenship)
 
@@ -73,7 +89,24 @@ async def _skip_document(message: types.Message, state: FSMContext, doc_key: str
     """Пропустить документ и перейти к следующему."""
     await state.update_data(**{f'{doc_key}_temp_path': None})
 
+    # Если estamos в режиме исправления — переходим к следующему отклонённому полю
     data = await state.get_data()
+    fix_reasons = data.get('fix_reasons', [])
+    fix_index = data.get('fix_index', -1)
+    if fix_reasons and fix_index >= 0:
+        from handlers.commands import _ask_rejected_field
+        next_index = fix_index + 1
+        if next_index < len(fix_reasons):
+            await _ask_rejected_field(message, state, fix_reasons[next_index],
+                                     fix_reasons, next_index)
+        else:
+            from handlers.confirmation import show_confirmation
+            await message.answer("✅ Все замечания исправлены!",
+                                 reply_markup=ReplyKeyboardRemove())
+            await show_confirmation(message, state)
+        return
+
+    # Обычный режим
     citizenship = data.get('citizenship', 'Патент')
     await _go_next(message, state, doc_key, citizenship)
 
