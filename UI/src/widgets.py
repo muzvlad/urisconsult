@@ -271,7 +271,7 @@ class PhotoWidget(tk.Frame):
         try:
             image = Image.open(photo_path)
             display_image = image.copy()
-            display_image.thumbnail(self.config.photo_size, Image.Resampling.LANCZOS)
+            display_image.thumbnail(self.config.thumbnail_size, Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(display_image)
 
             label = tk.Label(self, image=photo, bg='white', cursor='hand2',
