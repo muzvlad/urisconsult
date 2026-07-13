@@ -151,13 +151,18 @@ async def _migrate_from_old_schema(db: aiosqlite.Connection):
             for doc in cat_docs:
                 doc_columns.add(doc.key)
 
-        # Личные данные (всё кроме документов и мета-полей)
+        # Личные данные — только колонки которые ЕСТЬ в старой таблице
         meta_fields = {'id'} | doc_columns | {'meetings', 'russia_marital_status', 'russia_relatives'}
         personal = {k: v for k, v in old_data.items() if k not in meta_fields}
 
-        # Семейное положение и родственники — отдельные поля
-        personal['marital_status'] = old_data.get('russia_marital_status', '')
-        personal['relatives_json'] = old_data.get('russia_relatives', '[]')
+        # Семейное положение и родственники — маппим из старых колонок если есть
+        if 'russia_marital_status' in old_columns:
+            personal['marital_status'] = old_data.get('russia_marital_status', '')
+        if 'russia_relatives' in old_columns:
+            personal['relatives_json'] = old_data.get('russia_relatives', '[]')
+
+        # Убираем None → пустая строка
+        personal = {k: (v if v is not None else '') for k, v in personal.items()}
 
         # Вставляем работника (без документов)
         placeholders = ', '.join(['?'] * len(personal))
@@ -332,7 +337,7 @@ async def _migrate_from_json(db: aiosqlite.Connection):
 
                     if value:
                         await db.execute(
-                            "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                            "INSERT OR IGNORE INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
                             (worker_id, doc.key, value)
                         )
 
