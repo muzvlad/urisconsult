@@ -34,9 +34,14 @@ logging.basicConfig(
             backupCount=3,
             encoding='utf-8',
         ),
-        logging.StreamHandler(),
     ]
 )
+# В консоль — только ошибки
+_console = logging.StreamHandler()
+_console.setLevel(logging.ERROR)
+_console.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+logging.getLogger().addHandler(_console)
+
 logging.getLogger('aiogram').setLevel(logging.WARNING)
 logging.getLogger('aiohttp').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)

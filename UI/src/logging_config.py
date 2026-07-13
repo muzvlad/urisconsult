@@ -53,10 +53,10 @@ def setup_logging(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # Консольный обработчик
+    # Консольный обработчик — только ошибки
     if log_to_console:
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(level)
+        console_handler.setLevel(logging.ERROR)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
