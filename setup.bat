@@ -32,11 +32,22 @@ echo.
 REM --- Clone or pull ---
 echo [3/5] Cloning repository...
 set "REPO_DIR=%~dp0urisconsult"
-if exist "!REPO_DIR!\bot\bot.py" goto :pull
-
 set "TOKEN_FILE=%~dp0.token"
-if not exist "!TOKEN_FILE!" goto :clone_public
+if not exist "!REPO_DIR!\bot\bot.py" goto :clone
 
+REM --- Pull ---
+if not exist "!TOKEN_FILE!" goto :pull_public
+set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
+git -C "!REPO_DIR!" pull --quiet
+goto :clone_done
+
+:pull_public
+git -C "!REPO_DIR!" pull --quiet
+goto :clone_done
+
+REM --- Clone ---
+:clone
+if not exist "!TOKEN_FILE!" goto :clone_public
 set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
 echo    Cloning with token...
 git clone --quiet "https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git" "!REPO_DIR!"
@@ -46,10 +57,6 @@ goto :clone_done
 echo    Cloning (public)...
 git clone --quiet "https://github.com/muzvlad/urisconsult.git" "!REPO_DIR!"
 goto :clone_done
-
-:pull
-echo    Pulling latest...
-git -C "!REPO_DIR!" pull --quiet
 
 :clone_done
 if errorlevel 1 (
