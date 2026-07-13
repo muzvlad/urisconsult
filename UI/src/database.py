@@ -42,6 +42,56 @@ class DatabaseConnection:
 
             conn.commit()
 
+            # Синхронизация файлов на диске → БД
+            self._sync_docs_from_disk(conn)
+
+    def _sync_docs_from_disk(self, conn: sqlite3.Connection) -> None:
+        """Сканировать docs_dir и дописать недостающие записи в worker_documents."""
+        from src.config import get_paths, get_document_config
+        paths = get_paths()
+        docs_dir = paths.docs_dir
+
+        if not docs_dir.exists():
+            return
+
+        # Префиксы → doc_type маппинг
+        flows, _, _ = get_document_config()
+        prefix_to_doc = {}
+        for cat_docs in flows.values():
+            for doc in cat_docs:
+                prefix_to_doc[doc.prefix] = doc.key
+
+        # Все worker_id из БД
+        worker_ids = {row[0] for row in conn.execute(f"SELECT id FROM {WORKERS_TABLE}").fetchall()}
+
+        added = 0
+        for worker_id in worker_ids:
+            worker_dir = docs_dir / worker_id
+            if not worker_dir.exists():
+                continue
+
+            existing = {
+                row[0] for row in conn.execute(
+                    f"SELECT doc_type FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?",
+                    (worker_id,)
+                ).fetchall()
+            }
+
+            for filename in worker_dir.iterdir():
+                if filename.name.startswith('.') or filename.name.startswith('temp_'):
+                    continue
+                prefix = filename.stem
+                doc_type = prefix_to_doc.get(prefix)
+                if doc_type and doc_type not in existing:
+                    conn.execute(
+                        f"INSERT OR IGNORE INTO {WORKER_DOCUMENTS_TABLE} (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                        (worker_id, doc_type, filename.name)
+                    )
+                    added += 1
+
+        if added:
+            conn.commit()
+
     @contextmanager
     def get_connection(self) -> Iterator[sqlite3.Connection]:
         """Контекстный менеджер для соединения."""
