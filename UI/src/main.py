@@ -488,56 +488,68 @@ class DBViewerApp:
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # Родственники
-        relatives = getattr(worker, 'relatives_json', '[]')
-        if isinstance(relatives, str):
-            try:
-                import json
-                relatives = json.loads(relatives)
-            except (json.JSONDecodeError, TypeError):
-                relatives = []
-        if relatives:
-            rel_text = "Родственники:\n"
-            for i, rel in enumerate(relatives, 1):
-                if isinstance(rel, dict):
-                    name = rel.get('name', '')
-                    year = rel.get('birth_year', '')
-                    phone = rel.get('phone', '')
-                    rel_text += f"  {i}. {name}, {year}, {phone}\n"
-            tk.Label(info_inner, text=rel_text.strip(),
-                     font=('Arial', 10), bg='white', anchor='w',
-                     wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
+        try:
+            relatives = getattr(worker, 'relatives_json', '[]')
+            if isinstance(relatives, str):
+                try:
+                    import json
+                    relatives = json.loads(relatives)
+                except (json.JSONDecodeError, TypeError):
+                    relatives = []
+            if relatives:
+                rel_text = "Родственники:\n"
+                for i, rel in enumerate(relatives, 1):
+                    if isinstance(rel, dict):
+                        name = rel.get('name', '')
+                        year = rel.get('birth_year', '')
+                        phone = rel.get('phone', '')
+                        rel_text += f"  {i}. {name}, {year}, {phone}\n"
+                tk.Label(info_inner, text=rel_text.strip(),
+                         font=('Arial', 10), bg='white', anchor='w',
+                         wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
+            else:
+                print(f"RELS DEBUG: worker={worker.id} relatives_json={worker.relatives_json!r} parsed={relatives!r}")
+        except Exception as e:
+            print(f"RELS ERROR: {e}")
 
         # ── Документы ──
-        db_docs = self.db.documents.get_by_worker(worker.id)
-        citizenship = worker.citizenship
+        try:
+            db_docs = self.db.documents.get_by_worker(worker.id)
+            citizenship = worker.citizenship
 
-        # Показываем все документы из БД у которых есть файл
-        from src.services import DocumentInfo
-        existing_docs = []
-        for doc_type, filename in db_docs.items():
-            if not filename:
-                continue
-            worker_dir = self.doc_service.paths.docs_dir / worker.id
-            full_path = worker_dir / filename if worker_dir.exists() else None
-            if full_path and full_path.exists():
-                label = self.doc_service.get_document_label(doc_type)
-                existing_docs.append(DocumentInfo(
-                    doc_type=doc_type, label=label,
-                    prefix='', filename=filename,
-                    exists=True, full_path=full_path,
-                ))
+            # Показываем все документы из БД у которых есть файл
+            from src.services import DocumentInfo
+            existing_docs = []
+            for doc_type, filename in db_docs.items():
+                if not filename:
+                    continue
+                worker_dir = self.doc_service.paths.docs_dir / worker.id
+                full_path = worker_dir / filename if worker_dir.exists() else None
+                if full_path and full_path.exists():
+                    label = self.doc_service.get_document_label(doc_type)
+                    existing_docs.append(DocumentInfo(
+                        doc_type=doc_type, label=label,
+                        prefix='', filename=filename,
+                        exists=True, full_path=full_path,
+                    ))
 
-        if existing_docs:
-            docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
-            docs_header.pack(fill=tk.X, padx=5, pady=5)
+            if existing_docs:
+                docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
+                docs_header.pack(fill=tk.X, padx=5, pady=5)
 
-            tk.Label(docs_header, text=f"Документы ({citizenship}):",
-                     font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
+                tk.Label(docs_header, text=f"Документы ({citizenship}):",
+                         font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
 
-            for doc in existing_docs:
-                DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
-                    fill=tk.X, padx=5, pady=3
-                )
+                for doc in existing_docs:
+                    DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
+                        fill=tk.X, padx=5, pady=3
+                    )
+        except Exception as e:
+            import traceback
+            print(f"DOCS ERROR: {e}")
+            traceback.print_exc()
+            tk.Label(self.scrollable_frame, text=f"Ошибка загрузки документов: {e}",
+                     font=('Arial', 10), bg='white', fg='red').pack(anchor=tk.W, padx=10, pady=5)
 
         # ── Замечания (если отклонена) ──
         if worker.is_rejected and worker.reasons:
