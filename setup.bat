@@ -38,11 +38,21 @@ if not exist "!REPO_DIR!\bot\bot.py" goto :clone
 REM --- Pull ---
 if not exist "!TOKEN_FILE!" goto :pull_public
 set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
-git -C "!REPO_DIR!" pull --quiet
+git -C "!REPO_DIR!" pull --quiet 2>nul
+if errorlevel 1 (
+    echo    [WARN] Pull failed, trying fetch+reset...
+    git -C "!REPO_DIR!" fetch --quiet 2>nul
+    git -C "!REPO_DIR!" reset --hard origin/master --quiet 2>nul
+)
 goto :clone_done
 
 :pull_public
-git -C "!REPO_DIR!" pull --quiet
+git -C "!REPO_DIR!" pull --quiet 2>nul
+if errorlevel 1 (
+    echo    [WARN] Pull failed, trying fetch+reset...
+    git -C "!REPO_DIR!" fetch --quiet 2>nul
+    git -C "!REPO_DIR!" reset --hard origin/master --quiet 2>nul
+)
 goto :clone_done
 
 REM --- Clone ---
@@ -50,12 +60,20 @@ REM --- Clone ---
 if not exist "!TOKEN_FILE!" goto :clone_public
 set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
 echo    Cloning with token...
-git clone --quiet "https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git" "!REPO_DIR!"
+git clone --quiet "https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git" "!REPO_DIR!" 2>nul
+if errorlevel 1 (
+    echo    [ERROR] Clone failed. Check internet connection and token.
+    goto :end
+)
 goto :clone_done
 
 :clone_public
 echo    Cloning (public)...
-git clone --quiet "https://github.com/muzvlad/urisconsult.git" "!REPO_DIR!"
+git clone --quiet "https://github.com/muzvlad/urisconsult.git" "!REPO_DIR!" 2>nul
+if errorlevel 1 (
+    echo    [ERROR] Clone failed. Check internet connection.
+    goto :end
+)
 goto :clone_done
 
 :clone_done
