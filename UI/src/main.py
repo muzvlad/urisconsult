@@ -539,7 +539,7 @@ class DBViewerApp:
             from src.services import DocumentInfo
             existing_docs = []
             for doc_type, filename in db_docs.items():
-                if not filename:
+                if not filename or doc_type == 'photo':
                     continue
                 worker_dir = self.doc_service.paths.docs_dir / worker.id
                 full_path = worker_dir / filename if worker_dir.exists() else None
