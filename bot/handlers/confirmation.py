@@ -76,6 +76,10 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
         user = callback.from_user
         citizenship = data.get('citizenship', '')
 
+        # Генерируем ID заранее, чтобы документы сохранились с правильным именем
+        worker_id = data.get('id', '') or await DBSaver.get_next_id()
+        data['id'] = worker_id
+
         # Сохраняем документы
         saved_files = {}
         if citizenship in DOC_FLOWS:
@@ -84,7 +88,7 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
                 if temp_path and os.path.exists(temp_path):
                     try:
                         saved_filename = FileSaver.save_document(
-                            temp_path, data.get('id', ''), doc.key
+                            temp_path, worker_id, doc.key
                         )
                         saved_files[doc.key] = saved_filename
                     except Exception as e:
