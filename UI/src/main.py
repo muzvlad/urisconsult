@@ -509,7 +509,14 @@ class DBViewerApp:
 
         # ── Документы ──
         citizenship = worker.citizenship
-        if citizenship in self.doc_service._doc_flows:
+        # Нормализация citizenship для совпадения с ключами DOC_FLOWS
+        citizenship_map = {
+            'Российская Федерация': 'Россия',
+            'РФ': 'Россия',
+        }
+        normalized_citizenship = citizenship_map.get(citizenship, citizenship)
+
+        if normalized_citizenship in self.doc_service._doc_flows:
             docs = self.doc_service.get_worker_documents(worker)
             existing_docs = [d for d in docs if d.exists and d.full_path]
 

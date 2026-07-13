@@ -92,9 +92,11 @@ class RejectDialog:
 
         # Добавляем документы из конфига для данной категории
         citizenship = self.worker.citizenship
+        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
+        normalized = citizenship_map.get(citizenship, citizenship)
         docs_found = False
-        if citizenship in self.doc_flows:
-            for doc in self.doc_flows[citizenship]:
+        if normalized in self.doc_flows:
+            for doc in self.doc_flows[normalized]:
                 fields.append((doc.key, f"[Док] {doc.label}"))
                 docs_found = True
 

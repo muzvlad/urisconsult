@@ -48,7 +48,13 @@ class DocumentService:
         """Получить список документов сотрудника с информацией о файлах."""
         db_docs = get_db_service().documents.get_by_worker(worker.id)
         citizenship = worker.citizenship
-        flow = self._doc_flows.get(citizenship, self._doc_flows.get("Патент", []))
+        # Нормализация citizenship для совпадения с ключами DOC_FLOWS
+        citizenship_map = {
+            'Российская Федерация': 'Россия',
+            'РФ': 'Россия',
+        }
+        normalized = citizenship_map.get(citizenship, citizenship)
+        flow = self._doc_flows.get(normalized, self._doc_flows.get("Патент", []))
 
         result = []
         for doc in flow:
@@ -308,7 +314,9 @@ class PDFExportService:
         update_progress()
         y -= 20
         citizenship = worker.citizenship
-        if citizenship in self.doc_service._doc_flows:
+        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
+        normalized = citizenship_map.get(citizenship, citizenship)
+        if normalized in self.doc_service._doc_flows:
             c.setFont(self._font_name, 14)
             c.drawString(50, y, f"Документы ({citizenship}):")
             update_progress()
@@ -390,9 +398,11 @@ class PDFExportService:
         if self.doc_service.find_photo(worker.id):
             count += 1
         citizenship = worker.citizenship
-        if citizenship in self.doc_service._doc_flows:
+        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
+        normalized = citizenship_map.get(citizenship, citizenship)
+        if normalized in self.doc_service._doc_flows:
             db_docs = get_db_service().documents.get_by_worker(worker.id)
-            for doc in self.doc_service._doc_flows[citizenship]:
+            for doc in self.doc_service._doc_flows[normalized]:
                 count += 1
         if worker.is_rejected and worker.reasons:
             count += len(worker.reasons) + 1
