@@ -147,14 +147,18 @@ class TelegramService:
         self._executor.submit(self._send_rejection_sync, worker, reasons, callback)
 
     def _send_rejection_sync(self, worker: Worker, reasons: List[str], callback: Optional[Callable[[bool, str], None]]) -> None:
+        from src.logging_config import log_info, log_error
+
         token = self._get_token()
         if not token:
+            log_error("Telegram token not found")
             if callback:
                 callback(False, "Токен бота не найден")
             return
 
         telegram_id = worker.telegram_id
         if not telegram_id:
+            log_error(f"Worker {worker.id} has no telegram_id")
             if callback:
                 callback(False, "У сотрудника нет telegram_id")
             return
@@ -182,15 +186,15 @@ class TelegramService:
         }).encode()
 
         try:
+            log_info(f"Sending rejection to chat_id={telegram_id}, worker={worker.id}")
             req = urllib.request.Request(url, data=data, method="POST")
             with urllib.request.urlopen(req, timeout=self.config.telegram_timeout) as resp:
-                if resp.status == 200:
-                    if callback:
-                        callback(True, "Уведомление отправлено")
-                else:
-                    if callback:
-                        callback(False, f"Ошибка Telegram API: {resp.status}")
+                result = resp.read().decode()
+                log_info(f"Telegram API response: {resp.status} - {result}")
+                if callback:
+                    callback(True, "Уведомление отправлено")
         except Exception as e:
+            log_error(f"Telegram send error: {e}")
             if callback:
                 callback(False, f"Ошибка отправки: {e}")
 

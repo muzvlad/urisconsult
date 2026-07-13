@@ -76,15 +76,22 @@ class DBViewerApp:
 
     def _setup_keybindings(self) -> None:
         """Настройка горячих клавиш."""
-        # Enter в поле поиска - уже привязан в _create_search_bar
-        # Escape - очистка поиска или закрытие диалогов
         self.root.bind('<Escape>', lambda e: self._on_escape())
-        # F5 - обновление
-        self.root.bind('<F5>', lambda e: self._refresh_pending_count())
-        # Ctrl+F - фокус на поиск
+        self.root.bind('<F5>', lambda e: self._refresh_all())
         self.root.bind('<Control-f>', lambda e: self._focus_search())
-        # Ctrl+R - обновить список
         self.root.bind('<Control-r>', lambda e: self._refresh_current_list())
+        # Периодическое обновление колокольчика
+        self._auto_refresh_bell()
+
+    def _auto_refresh_bell(self) -> None:
+        """Автоматическое обновление колокольчика каждые 15 секунд."""
+        self._refresh_pending_count()
+        self.root.after(15000, self._auto_refresh_bell)
+
+    def _refresh_all(self) -> None:
+        """Обновить всё: колокольчик + текущий список."""
+        self._refresh_pending_count()
+        self._refresh_current_list()
 
     def _on_escape(self) -> None:
         """Обработка Escape."""
@@ -467,6 +474,7 @@ class DBViewerApp:
             ('email', 'Электронная почта'),
             ('date', 'Дата рождения'),
             ('registration', 'Регистрация'),
+            ('marital_status', 'Семейное положение'),
         ]
 
         for field_key, field_label in fields:
@@ -478,6 +486,26 @@ class DBViewerApp:
                 tk.Label(info_inner, text=f"{field_label}: {display}",
                          font=('Arial', 11), bg='white', anchor='w',
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
+
+        # Родственники
+        relatives = getattr(worker, 'relatives_json', '[]')
+        if isinstance(relatives, str):
+            try:
+                import json
+                relatives = json.loads(relatives)
+            except (json.JSONDecodeError, TypeError):
+                relatives = []
+        if relatives:
+            rel_text = "Родственники:\n"
+            for i, rel in enumerate(relatives, 1):
+                if isinstance(rel, dict):
+                    name = rel.get('name', '')
+                    year = rel.get('birth_year', '')
+                    phone = rel.get('phone', '')
+                    rel_text += f"  {i}. {name}, {year}, {phone}\n"
+            tk.Label(info_inner, text=rel_text.strip(),
+                     font=('Arial', 10), bg='white', anchor='w',
+                     wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # ── Документы ──
         citizenship = worker.citizenship

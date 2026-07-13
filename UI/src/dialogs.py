@@ -88,14 +88,21 @@ class RejectDialog:
             ('manager', 'Менеджер'), ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'), ('email', 'Email'),
             ('date', 'Дата рождения'), ('registration', 'Регистрация'),
-            ('photo', 'Фото'), ('passport', 'Паспорт'),
         ]
 
+        # Добавляем ВСЕ документы из конфига для данной категории
         citizenship = self.worker.citizenship
         if citizenship in self.doc_flows:
             for doc in self.doc_flows[citizenship]:
-                if doc.key not in [f[0] for f in fields]:
-                    fields.append((doc.key, doc.label))
+                fields.append((doc.key, doc.label))
+        else:
+            # Если категория неизвестна — добавляем все документы из всех категорий
+            seen = set()
+            for cat_docs in self.doc_flows.values():
+                for doc in cat_docs:
+                    if doc.key not in seen:
+                        fields.append((doc.key, doc.label))
+                        seen.add(doc.key)
 
         for key, label in fields:
             var = tk.BooleanVar()
