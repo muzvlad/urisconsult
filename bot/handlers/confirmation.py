@@ -23,6 +23,7 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     """Показать данные для подтверждения."""
     data = await state.get_data()
     citizenship = data.get('citizenship', '')
+    worker_id = data.get('id', '')
 
     # Формируем сообщение с данными
     text = "📋 **Проверьте введенные данные:**\n\n"
@@ -38,15 +39,26 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     text += f"📧 **Email:** {data.get('email', 'Не указано')}\n"
     text += f"📅 **Дата рождения:** {data.get('date', 'Не указано')}\n\n"
 
-    # Документы
+    # Документы — проверяем temp_path ИЛИ существующий файл в БД
     text += "📎 **Загруженные файлы:**\n"
+
+    # Получаем существующие документы из БД если это исправление
+    existing_docs = {}
+    if data.get('editing_rejected') and worker_id:
+        from services import db
+        existing_docs = await db.get_worker_documents(worker_id)
 
     if citizenship in DOC_FLOWS:
         for doc in DOC_FLOWS[citizenship]:
             temp_key = f'{doc.key}_temp_path'
-            has_file = bool(data.get(temp_key))
+            has_temp = bool(data.get(temp_key))
+            has_existing = bool(existing_docs.get(doc.key))
+            has_file = has_temp or has_existing
             status = '✅' if has_file else '❌'
-            text += f"{doc.label}: {status}\n"
+            label = doc.label
+            if has_existing and not has_temp:
+                label += " (ранее загружен)"
+            text += f"{label}: {status}\n"
 
     # Дополнительные поля для России
     if citizenship == 'Россия':
