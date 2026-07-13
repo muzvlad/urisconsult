@@ -508,29 +508,42 @@ class DBViewerApp:
                      wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # ── Документы ──
+        db_docs = self.db.documents.get_by_worker(worker.id)
         citizenship = worker.citizenship
-        # Нормализация citizenship для совпадения с ключами DOC_FLOWS
-        citizenship_map = {
-            'Российская Федерация': 'Россия',
-            'РФ': 'Россия',
-        }
+        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
         normalized_citizenship = citizenship_map.get(citizenship, citizenship)
 
-        if normalized_citizenship in self.doc_service._doc_flows:
-            docs = self.doc_service.get_worker_documents(worker)
-            existing_docs = [d for d in docs if d.exists and d.full_path]
+        # Получаем labels из конфига (если доступен)
+        doc_labels = self.doc_service._doc_labels if self.doc_service._doc_labels else {}
+        doc_prefixes = self.doc_service._doc_prefixes if self.doc_service._doc_prefixes else {}
 
-            if existing_docs:
-                docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
-                docs_header.pack(fill=tk.X, padx=5, pady=5)
+        # Собираем документы из БД + файлов
+        existing_docs = []
+        for doc_type, filename in db_docs.items():
+            if not filename:
+                continue
+            prefix = doc_prefixes.get(doc_type, '')
+            label = doc_labels.get(doc_type, doc_type)
+            full_path = self.doc_service._find_document_file(worker.id, prefix)
+            if full_path:
+                from src.services import DocumentInfo
+                existing_docs.append(DocumentInfo(
+                    doc_type=doc_type, label=label,
+                    prefix=prefix, filename=filename,
+                    exists=True, full_path=full_path,
+                ))
 
-                tk.Label(docs_header, text=f"Документы ({citizenship}):",
-                         font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
+        if existing_docs:
+            docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
+            docs_header.pack(fill=tk.X, padx=5, pady=5)
 
-                for doc in existing_docs:
-                    DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
-                        fill=tk.X, padx=5, pady=3
-                    )
+            tk.Label(docs_header, text=f"Документы ({citizenship}):",
+                     font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
+
+            for doc in existing_docs:
+                DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
+                    fill=tk.X, padx=5, pady=3
+                )
 
         # ── Замечания (если отклонена) ──
         if worker.is_rejected and worker.reasons:
