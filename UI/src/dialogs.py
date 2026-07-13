@@ -248,15 +248,12 @@ class NotificationsWindow:
             messagebox.showerror("Ошибка", f"Ошибка: {e}", parent=self.window)
 
     def _handle_reject(self, worker: Worker, reasons: List[str]) -> None:
-        """Обработка отклонения анкеты."""
+        """Обработка отклонения анкеты — бот отправит уведомление через 60 сек."""
         try:
             if self.db.workers.reject(worker.id, reasons):
-                # Отправка в Telegram
-                telegram = get_telegram_service()
-                telegram.send_rejection(worker, reasons)
-
                 messagebox.showinfo("Готово",
-                                    f"Анкета #{worker.id} отклонена.\nЗамечания отправлены клиенту.",
+                                    f"Анкета #{worker.id} отклонена.\n"
+                                    f"Клиент получит уведомление в Telegram.",
                                     parent=self.window)
                 self.window.destroy()
                 self.on_refresh()

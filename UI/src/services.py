@@ -165,8 +165,17 @@ class TelegramService:
                 callback(False, "У сотрудника нет telegram_id")
             return
 
+        # Русские названия полей
+        field_labels = {
+            'name': 'ФИО', 'citizenship': 'Гражданство', 'gender': 'Пол',
+            'position': 'Должность', 'object': 'Объект', 'object_address': 'Адрес',
+            'manager': 'Менеджер', 'phone_main': 'Основной телефон',
+            'phone_additional': 'Доп. телефон', 'email': 'Email',
+            'date': 'Дата рождения', 'registration': 'Регистрация',
+        }
         doc_labels = get_document_config()[1]
-        reasons_text = "\n".join(f"  - {doc_labels.get(r, r)}" for r in reasons)
+        field_labels.update(doc_labels)
+        reasons_text = "\n".join(f"  - {field_labels.get(r, r)}" for r in reasons)
         text = (
             f"❌ Ваша анкета #{worker.id} отклонена.\n\n"
             f"Необходимо исправить:\n{reasons_text}"
