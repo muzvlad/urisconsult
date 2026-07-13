@@ -143,6 +143,25 @@ DOC_LABELS: Dict[str, str] = {
     for doc in docs
 }
 
+# Русские названия ВСЕХ полей (для уведомлений)
+FIELD_LABELS: Dict[str, str] = {
+    'name': 'ФИО',
+    'citizenship': 'Гражданство',
+    'gender': 'Пол',
+    'position': 'Должность',
+    'object': 'Объект',
+    'object_address': 'Адрес объекта',
+    'manager': 'Менеджер',
+    'phone_main': 'Основной телефон',
+    'phone_additional': 'Доп. телефон',
+    'email': 'Email',
+    'date': 'Дата рождения',
+    'registration': 'Регистрация',
+    'marital_status': 'Семейное положение',
+}
+# Добавляем labels документов
+FIELD_LABELS.update(DOC_LABELS)
+
 # {category: [doc_key, ...]} — для UI и поиска
 CITIZENSHIP_DOC_KEYS: Dict[str, List[str]] = {
     cat: [doc.key for doc in docs]

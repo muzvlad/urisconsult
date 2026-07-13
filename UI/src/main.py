@@ -324,12 +324,13 @@ class DBViewerApp:
         RejectDialog(self.root, worker, lambda w, reasons: self._handle_reject(w, reasons))
 
     def _handle_reject(self, worker: Worker, reasons: List[str]) -> None:
-        """Обработка отклонения с отправкой в Telegram."""
+        """Обработка отклонения — сразу отправляем уведомление клиенту."""
         try:
             if self.db.workers.reject(worker.id, reasons):
                 self.telegram.send_rejection(worker, reasons)
                 show_info(self.root, "Готово",
-                          f"Анкета #{worker.id} отклонена.\nЗамечания отправлены клиенту.")
+                          f"Анкета #{worker.id} отклонена.\n"
+                          f"Уведомление отправлено клиенту в Telegram.")
                 self._refresh_pending_count()
                 self._refresh_current_worker()
                 log_info(f"Worker {worker.id} rejected with reasons: {reasons}")

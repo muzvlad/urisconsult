@@ -17,7 +17,7 @@ from aiogram.fsm.state import default_state
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 from config import DOCS_DIR
-from config.documents import DOC_FLOWS, DOC_LABELS, get_doc_flow
+from config.documents import DOC_FLOWS, DOC_LABELS, FIELD_LABELS, get_doc_flow
 from handlers.registration import WorkerForm
 from services import db
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -112,7 +112,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 reasons = []
 
         reasons_text = '\n'.join(
-            f"  {DOC_LABELS.get(r, r)}" for r in reasons
+            f"  {FIELD_LABELS.get(r, r)}" for r in reasons
         )
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[

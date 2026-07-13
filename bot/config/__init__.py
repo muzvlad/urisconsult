@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 
 from config.documents import (  # noqa: F401 — re-export
-    DOC_FLOWS, DOC_PREFIXES, DOC_LABELS, DOC_PROMPTS,
+    DOC_FLOWS, DOC_PREFIXES, DOC_LABELS, FIELD_LABELS, DOC_PROMPTS,
     CITIZENSHIP_DOC_KEYS, get_doc_flow, get_next_doc, get_doc_by_key,
 )
 
