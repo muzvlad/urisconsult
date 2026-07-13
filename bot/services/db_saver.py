@@ -65,17 +65,10 @@ class DBSaver:
         # Сохраняем работника
         await db.save_worker(save_data)
 
-        # Сохраняем документы (из saved_files или temp_path)
+        # Сохраняем документы (из saved_files — финальные имена файлов)
         doc_files = {}
         if 'saved_files' in data:
             doc_files.update(data['saved_files'])
-
-        # Также собираем temp_path если файлы ещё не перемещены
-        for cat_docs in DOC_FLOWS.values():
-            for doc in cat_docs:
-                temp_key = f'{doc.key}_temp_path'
-                if temp_key in data and data[temp_key]:
-                    doc_files[doc.key] = data[temp_key]
 
         if doc_files:
             await db.save_documents(worker_id, doc_files)

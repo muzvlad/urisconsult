@@ -406,34 +406,6 @@ async def save_worker(data: dict) -> str:
         list(personal.values())
     )
 
-    # Документы — удаляем старые и вставляем новые
-    await db.execute("DELETE FROM worker_documents WHERE worker_id = ?", (worker_id,))
-
-    for cat_docs in DOC_FLOWS.values():
-        for doc in cat_docs:
-            filename = data.get(doc.key, '')
-            if filename:
-                await db.execute(
-                    "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                    (worker_id, doc.key, filename)
-                )
-
-    # Встречи — удаляем старые и вставляем новые
-    await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
-
-    meetings = data.get('meetings', [])
-    if isinstance(meetings, str):
-        try:
-            meetings = json.loads(meetings)
-        except (json.JSONDecodeError, TypeError):
-            meetings = []
-    for m in (meetings or []):
-        if isinstance(m, dict):
-            await db.execute(
-                "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-                (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
-            )
-
     await db.commit()
     return worker_id
 
