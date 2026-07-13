@@ -516,6 +516,7 @@ class DBViewerApp:
         try:
             db_docs = self.db.documents.get_by_worker(worker.id)
             citizenship = worker.citizenship
+            print(f"DOCS DEBUG: worker={worker.id} db_docs={db_docs}")
 
             # Показываем все документы из БД у которых есть файл
             from src.services import DocumentInfo
@@ -525,6 +526,8 @@ class DBViewerApp:
                     continue
                 worker_dir = self.doc_service.paths.docs_dir / worker.id
                 full_path = worker_dir / filename if worker_dir.exists() else None
+                exists = full_path.exists() if full_path else False
+                print(f"  {doc_type}: filename={filename} worker_dir={worker_dir} exists={exists}")
                 if full_path and full_path.exists():
                     label = self.doc_service.get_document_label(doc_type)
                     existing_docs.append(DocumentInfo(
@@ -533,6 +536,7 @@ class DBViewerApp:
                         exists=True, full_path=full_path,
                     ))
 
+            print(f"DOCS DEBUG: existing_docs count={len(existing_docs)}")
             if existing_docs:
                 docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
                 docs_header.pack(fill=tk.X, padx=5, pady=5)
