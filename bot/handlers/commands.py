@@ -24,6 +24,58 @@ from services import db
 logger = logging.getLogger(__name__)
 
 
+# ─── Inline callback для отклонённых анкет ───────────────────────────
+
+async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка inline кнопок из уведомления об отклонении."""
+    await callback.answer()
+
+    data = callback.data
+    worker_id = data.split(":")[1]
+
+    if data.startswith("fix_rejected:"):
+        worker = await db.get_worker(worker_id)
+        if not worker:
+            await callback.message.answer("❌ Анкета не найдена.")
+            return
+
+        reasons = worker.get('rejection_reasons', '[]')
+        if isinstance(reasons, str):
+            try:
+                reasons = json.loads(reasons)
+            except (json.JSONDecodeError, TypeError):
+                reasons = []
+
+        await callback.message.edit_text(
+            "✏️ Начинаем исправление анкеты.\n"
+            "Будет предложено исправить только отклонённые поля.",
+        )
+
+        worker_data = {'id': worker_id}
+        for k in ['name', 'citizenship', 'gender', 'position', 'object',
+                   'object_address', 'manager', 'phone_main', 'phone_additional',
+                   'email', 'date', 'registration']:
+            worker_data[k] = worker.get(k)
+        await state.update_data(**worker_data)
+        await state.update_data(editing_rejected=True, rejection_reasons=reasons)
+
+        if reasons:
+            from handlers.commands import _ask_rejected_field
+            await _ask_rejected_field(callback.message, state, reasons[0], reasons, 0)
+        else:
+            await callback.message.answer("📝 Введите ваше ФИО:")
+            await state.set_state(WorkerForm.name)
+
+    elif data.startswith("new_rejected:"):
+        await db.resubmit_worker(worker_id)
+        await state.clear()
+        await callback.message.edit_text(
+            "📝 Начинаем заполнение новой анкеты.\n"
+            "Введите ваше ФИО полностью:",
+        )
+        await state.set_state(WorkerForm.name)
+
+
 def get_start_keyboard():
     """Клавиатура с кнопкой Start"""
     button = KeyboardButton(text="🚀 Начать регистрацию")
@@ -286,6 +338,12 @@ def register_commands(dp, form_class):
     dp.message.register(cmd_start, Command("start"))
     dp.message.register(cmd_start, lambda message: message.text == "🚀 Начать регистрацию")
     dp.message.register(cmd_cancel, Command("cancel"))
+
+    # Inline кнопки из уведомлений об отклонении
+    dp.callback_query.register(handle_rejected_callback,
+                               F.data.startswith("fix_rejected:"))
+    dp.callback_query.register(handle_rejected_callback,
+                               F.data.startswith("new_rejected:"))
 
     # Обработка выбора исправления
     dp.message.register(process_fix_choice, form_class.fix_choice)

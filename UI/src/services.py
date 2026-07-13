@@ -159,19 +159,26 @@ class TelegramService:
                 callback(False, "У сотрудника нет telegram_id")
             return
 
-        # Формируем сообщение с названиями полей
         doc_labels = get_document_config()[1]
         reasons_text = "\n".join(f"  - {doc_labels.get(r, r)}" for r in reasons)
         text = (
             f"❌ Ваша анкета #{worker.id} отклонена.\n\n"
-            f"Необходимо исправить:\n{reasons_text}\n\n"
-            f"Отправьте исправленные данные через бота /start"
+            f"Необходимо исправить:\n{reasons_text}"
         )
+
+        import json as _json
+        keyboard = _json.dumps({
+            "inline_keyboard": [[
+                {"text": "✏️ Исправить анкету", "callback_data": f"fix_rejected:{worker.id}"},
+                {"text": "📝 Новая анкета", "callback_data": f"new_rejected:{worker.id}"},
+            ]]
+        })
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = urllib.parse.urlencode({
             "chat_id": telegram_id,
             "text": text,
+            "reply_markup": keyboard,
         }).encode()
 
         try:
