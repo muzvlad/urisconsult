@@ -33,7 +33,7 @@ class RejectDialog:
         self.dialog.grab_set()
 
         # Центрирование
-        self._center_window(520, 550)
+        self._center_window(520, 650)
         self._build_ui()
 
     def _center_window(self, w: int, h: int) -> None:
@@ -90,18 +90,21 @@ class RejectDialog:
             ('date', 'Дата рождения'), ('registration', 'Регистрация'),
         ]
 
-        # Добавляем ВСЕ документы из конфига для данной категории
+        # Добавляем документы из конфига для данной категории
         citizenship = self.worker.citizenship
+        docs_found = False
         if citizenship in self.doc_flows:
             for doc in self.doc_flows[citizenship]:
-                fields.append((doc.key, doc.label))
-        else:
-            # Если категория неизвестна — добавляем все документы из всех категорий
+                fields.append((doc.key, f"[Док] {doc.label}"))
+                docs_found = True
+
+        # Если документы не найдены — добавляем ВСЕ из всех категорий
+        if not docs_found:
             seen = set()
             for cat_docs in self.doc_flows.values():
                 for doc in cat_docs:
                     if doc.key not in seen:
-                        fields.append((doc.key, doc.label))
+                        fields.append((doc.key, f"[Док] {doc.label}"))
                         seen.add(doc.key)
 
         for key, label in fields:
