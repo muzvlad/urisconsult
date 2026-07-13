@@ -125,6 +125,8 @@ async def init_db():
     await _migrate_from_old_schema(db)
     # Миграция: JSON-файлы → БД
     await _migrate_from_json(db)
+    # Синхронизация: файлы на диске → БД
+    await _sync_docs_from_disk(db)
 
 
 # ─── Миграция со старой схемы ────────────────────────────────────────
@@ -366,6 +368,54 @@ async def _migrate_from_json(db: aiosqlite.Connection):
             continue
 
     await db.commit()
+
+
+# ─── Синхронизация файлов на диске → БД ──────────────────────────────
+
+async def _sync_docs_from_disk(db: aiosqlite.Connection):
+    """Сканировать users/docs/ и дописать недостающие записи в worker_documents."""
+    from config import DOCS_DIR
+
+    if not os.path.isdir(DOCS_DIR):
+        return
+
+    # Получаем все worker_id из БД
+    cursor = await db.execute("SELECT id FROM workers")
+    worker_ids = {row[0] for row in await cursor.fetchall()}
+
+    # Префиксы → doc_type маппинг
+    prefix_to_doc = {}
+    for cat_docs in DOC_FLOWS.values():
+        for doc in cat_docs:
+            prefix_to_doc[doc.prefix] = doc.key
+
+    added = 0
+    for worker_id in worker_ids:
+        worker_dir = os.path.join(DOCS_DIR, worker_id)
+        if not os.path.isdir(worker_dir):
+            continue
+
+        # Уже существующие записи
+        cursor = await db.execute(
+            "SELECT doc_type FROM worker_documents WHERE worker_id = ?", (worker_id,)
+        )
+        existing = {row[0] for row in await cursor.fetchall()}
+
+        for filename in os.listdir(worker_dir):
+            if filename.startswith('.') or filename.startswith('temp_'):
+                continue
+            prefix = os.path.splitext(filename)[0]
+            doc_type = prefix_to_doc.get(prefix)
+            if doc_type and doc_type not in existing:
+                await db.execute(
+                    "INSERT OR IGNORE INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                    (worker_id, doc_type, filename)
+                )
+                added += 1
+
+    if added:
+        await db.commit()
+        logger.info("Синхронизировано %d документов из файловой системы", added)
 
 
 # ─── CRUD операции ──────────────────────────────────────────────────
