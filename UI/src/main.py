@@ -217,11 +217,25 @@ class DBViewerApp:
         v_scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
 
-        # Скролл мышью
-        self.canvas.bind("<MouseWheel>",
-                         lambda e: self.canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
-        self.canvas.bind("<Shift-MouseWheel>",
-                         lambda e: self.canvas.xview_scroll(int(-1 * (e.delta / 120)), "units"))
+        # Скролл мышью — глобальный bind при наведении на область
+        def _on_mousewheel(event):
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def _on_shift_mousewheel(event):
+            self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def _bind_scroll(event):
+            self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
+
+        def _unbind_scroll(event):
+            self.canvas.unbind_all("<MouseWheel>")
+            self.canvas.unbind_all("<Shift-MouseWheel>")
+
+        self.canvas.bind("<Enter>", _bind_scroll)
+        self.canvas.bind("<Leave>", _unbind_scroll)
+        self.scrollable_frame.bind("<Enter>", _bind_scroll)
+        self.scrollable_frame.bind("<Leave>", _unbind_scroll)
 
     # ─── Обработчики событий ───
 
