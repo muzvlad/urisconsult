@@ -510,17 +510,20 @@ class DBViewerApp:
         # ── Документы ──
         citizenship = worker.citizenship
         if citizenship in self.doc_service._doc_flows:
-            docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
-            docs_header.pack(fill=tk.X, padx=5, pady=5)
-
-            tk.Label(docs_header, text=f"Документы ({citizenship}):",
-                     font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
-
             docs = self.doc_service.get_worker_documents(worker)
-            for doc in docs:
-                DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
-                    fill=tk.X, padx=5, pady=3
-                )
+            existing_docs = [d for d in docs if d.exists and d.full_path]
+
+            if existing_docs:
+                docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
+                docs_header.pack(fill=tk.X, padx=5, pady=5)
+
+                tk.Label(docs_header, text=f"Документы ({citizenship}):",
+                         font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
+
+                for doc in existing_docs:
+                    DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
+                        fill=tk.X, padx=5, pady=3
+                    )
 
         # ── Замечания (если отклонена) ──
         if worker.is_rejected and worker.reasons:

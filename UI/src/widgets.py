@@ -305,41 +305,30 @@ class DocumentViewer(tk.Frame):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        header = tk.Frame(self, bg='white')
-        header.pack(fill=tk.X, padx=10, pady=5)
+        main = tk.Frame(self, bg='white')
+        main.pack(fill=tk.X, padx=8, pady=5)
 
-        tk.Label(header, text=f"{self.doc_info.label}:",
-                 font=('Arial', 11, 'bold'), bg='white').pack(side=tk.LEFT)
+        # Название документа слева
+        tk.Label(main, text=self.doc_info.label,
+                 font=('Arial', 10, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
 
-        if not self.doc_info.filename:
-            tk.Label(self, text="Не загружено",
-                     font=('Arial', 9), bg='white', fg='#999').pack(pady=3)
-            return
+        # Миниатюра справа (кликабельная)
+        if self.doc_info.exists and self.doc_info.full_path:
+            try:
+                image = Image.open(self.doc_info.full_path)
+                display_image = image.copy()
+                thumb_size = self.config.small_thumbnail_size
+                display_image.thumbnail(thumb_size, Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(display_image)
 
-        if not self.doc_info.exists or not self.doc_info.full_path:
-            tk.Label(self, text=f"Файл не найден ({self.doc_info.filename or 'не загружен'})",
-                     font=('Arial', 9), bg='white', fg='orange').pack(pady=3)
-            return
-
-        try:
-            image = Image.open(self.doc_info.full_path)
-            display_image = image.copy()
-            display_image.thumbnail(self.config.thumbnail_size, Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(display_image)
-
-            img_frame = tk.Frame(self, bg='white')
-            img_frame.pack(pady=5)
-
-            img_label = tk.Label(img_frame, image=photo, bg='white', cursor='hand2')
-            img_label.image = photo
-            img_label.pack()
-            img_label.bind('<Button-1>', lambda e: self._on_click())
-
-            tk.Label(self, text=os.path.basename(self.doc_info.full_path),
-                     font=('Arial', 9), bg='white', fg='#666').pack()
-        except Exception as e:
-            tk.Label(self, text=f"Ошибка загрузки: {e}",
-                     font=('Arial', 9), bg='white', fg='red').pack(pady=3)
+                img_label = tk.Label(main, image=photo, bg='white', cursor='hand2',
+                                     relief=tk.SOLID, bd=1)
+                img_label.image = photo
+                img_label.pack(side=tk.RIGHT, padx=(10, 0))
+                img_label.bind('<Button-1>', lambda e: self._on_click())
+            except Exception:
+                tk.Label(main, text="Ошибка загрузки",
+                         font=('Arial', 9), bg='white', fg='red').pack(side=tk.RIGHT)
 
     def _on_click(self) -> None:
         if self.on_open and self.doc_info.full_path:
