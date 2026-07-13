@@ -186,9 +186,13 @@ class TelegramService:
         }).encode()
 
         try:
+            import ssl
             log_info(f"Sending rejection to chat_id={telegram_id}, worker={worker.id}")
             req = urllib.request.Request(url, data=data, method="POST")
-            with urllib.request.urlopen(req, timeout=self.config.telegram_timeout) as resp:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=self.config.telegram_timeout, context=ctx) as resp:
                 result = resp.read().decode()
                 log_info(f"Telegram API response: {resp.status} - {result}")
                 if callback:
