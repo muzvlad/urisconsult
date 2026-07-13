@@ -516,7 +516,10 @@ class DBViewerApp:
         try:
             db_docs = self.db.documents.get_by_worker(worker.id)
             citizenship = worker.citizenship
-            print(f"DOCS DEBUG: worker={worker.id} db_docs={db_docs}")
+            
+            # debug — покажем прямой SQL тоже
+            direct = self.db.db.fetchall("SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?", (worker.id,))
+            print(f"DOCS DEBUG: worker={worker.id} repository={db_docs} direct_sql={len(direct)} rows db_path={self.db.db.db_path}")
 
             # Показываем все документы из БД у которых есть файл
             from src.services import DocumentInfo
