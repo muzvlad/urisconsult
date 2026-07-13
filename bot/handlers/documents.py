@@ -136,7 +136,6 @@ async def skip_document(message: types.Message, state: FSMContext, doc_key: str)
 
 def register_document_handlers(dp, form_class):
     """Регистрация обработчиков для ВСЕХ документов из конфига."""
-    # Общие документы + все категории
     all_doc_keys = set()
     for cat_docs in DOC_FLOWS.values():
         for doc in cat_docs:
@@ -145,19 +144,19 @@ def register_document_handlers(dp, form_class):
     for doc_key in all_doc_keys:
         state = getattr(form_class, doc_key)
 
-        # Обработчик загрузки файла (фото или документ)
-        dp.message.register(
-            lambda m, s, b, dk=doc_key: process_document(m, s, b, dk),
-            state, F.photo | F.document
-        )
+        def make_doc_handler(dk):
+            async def handler(message: types.Message, state: FSMContext, bot: Bot):
+                await process_document(message, state, bot, dk)
+            return handler
 
-        # Обработчик пропуска
-        dp.message.register(
-            lambda m, s, dk=doc_key: skip_document(m, s, dk),
-            state, F.text == "⏭ Пропустить"
-        )
+        def make_skip_handler(dk):
+            async def handler(message: types.Message, state: FSMContext):
+                await skip_document(message, state, dk)
+            return handler
 
-        # Обработка текста вместо файла (ошибка)
-        async def _reject_text(m: types.Message):
-            await m.answer("❌ Отправьте изображение или нажмите 'Пропустить'")
-        dp.message.register(_reject_text, state, F.text)
+        async def reject_text(message: types.Message):
+            await message.answer("❌ Отправьте изображение или нажмите 'Пропустить'")
+
+        dp.message.register(make_doc_handler(doc_key), state, F.photo | F.document)
+        dp.message.register(make_skip_handler(doc_key), state, F.text == "⏭ Пропустить")
+        dp.message.register(reject_text, state, F.text)
