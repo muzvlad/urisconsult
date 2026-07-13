@@ -510,26 +510,20 @@ class DBViewerApp:
         # ── Документы ──
         db_docs = self.db.documents.get_by_worker(worker.id)
         citizenship = worker.citizenship
-        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
-        normalized_citizenship = citizenship_map.get(citizenship, citizenship)
 
-        # Получаем labels из конфига (если доступен)
-        doc_labels = self.doc_service._doc_labels if self.doc_service._doc_labels else {}
-        doc_prefixes = self.doc_service._doc_prefixes if self.doc_service._doc_prefixes else {}
-
-        # Собираем документы из БД + файлов
+        # Показываем все документы из БД у которых есть файл
+        from src.services import DocumentInfo
         existing_docs = []
         for doc_type, filename in db_docs.items():
             if not filename:
                 continue
-            prefix = doc_prefixes.get(doc_type, '')
-            label = doc_labels.get(doc_type, doc_type)
-            full_path = self.doc_service._find_document_file(worker.id, prefix)
-            if full_path:
-                from src.services import DocumentInfo
+            worker_dir = self.doc_service.paths.docs_dir / worker.id
+            full_path = worker_dir / filename if worker_dir.exists() else None
+            if full_path and full_path.exists():
+                label = self.doc_service.get_document_label(doc_type)
                 existing_docs.append(DocumentInfo(
                     doc_type=doc_type, label=label,
-                    prefix=prefix, filename=filename,
+                    prefix='', filename=filename,
                     exists=True, full_path=full_path,
                 ))
 
