@@ -371,18 +371,17 @@ async def _migrate_from_json(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID (атомарная операция)."""
+    """Получить следующий доступный ID."""
     db = await get_db()
-    async with db.execute("BEGIN IMMEDIATE"):
-        cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
-        row = await cursor.fetchone()
-        if not row:
-            return "00001"
-        try:
-            next_id = int(row[0]) + 1
-        except (ValueError, TypeError):
-            next_id = 1
-        return str(next_id).zfill(5)
+    cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
+    row = await cursor.fetchone()
+    if not row:
+        return "00001"
+    try:
+        next_id = int(row[0]) + 1
+    except (ValueError, TypeError):
+        next_id = 1
+    return str(next_id).zfill(5)
 
 
 async def save_worker(data: dict) -> str:
