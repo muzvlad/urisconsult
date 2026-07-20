@@ -40,7 +40,7 @@ logging.basicConfig(
 )
 # В консоль — только ошибки и важные события
 _console = logging.StreamHandler()
-_console.setLevel(logging.INFO)
+_console.setLevel(logging.WARNING)  # Только WARNING и выше
 _console.setFormatter(logging.Formatter('%(message)s'))
 logging.getLogger().addHandler(_console)
 
