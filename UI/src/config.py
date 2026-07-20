@@ -88,6 +88,10 @@ class AppConfig:
     app_title: str = "URIS Consult — Просмотр карточек"
 
 
+# ─── Сетевой адрес сервера ───
+NETWORK_SERVER = Path(r"\\144.76.70.246\urisconsult")
+
+
 # ─── Определение путей ───
 
 def _get_base_path() -> Path:
@@ -118,8 +122,20 @@ def _get_project_root() -> Path:
 @lru_cache(maxsize=1)
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
-    root = _get_project_root()
+    # Проверяем сетевой сервер
+    if NETWORK_SERVER.exists():
+        db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
+        docs_dir = NETWORK_SERVER / "users" / "docs"
+        bot_dir = NETWORK_SERVER / "bot"
+        return AppPaths(
+            project_root=NETWORK_SERVER,
+            db_path=db_path,
+            docs_dir=docs_dir,
+            bot_dir=bot_dir,
+        )
 
+    # Локальный режим
+    root = _get_project_root()
     return AppPaths(
         project_root=root,
         db_path=root / "bot" / "Users" / "users.db",

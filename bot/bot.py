@@ -5,13 +5,14 @@ import asyncio
 import glob
 import json
 import os
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault, InlineKeyboardButton, InlineKeyboardMarkup
 
-from config import BOT_TOKEN, DOCS_DIR, ensure_dirs
+from config import BOT_TOKEN, DOCS_DIR, DB_PATH, ensure_dirs
 from config.documents import FIELD_LABELS
 from handlers.commands import register_commands, get_start_keyboard
 from handlers.registration import register_registration_handlers, WorkerForm
@@ -36,10 +37,10 @@ logging.basicConfig(
         ),
     ]
 )
-# В консоль — только ошибки
+# В консоль — только ошибки и важные события
 _console = logging.StreamHandler()
-_console.setLevel(logging.ERROR)
-_console.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+_console.setLevel(logging.INFO)
+_console.setFormatter(logging.Formatter('%(message)s'))
 logging.getLogger().addHandler(_console)
 
 logging.getLogger('aiogram').setLevel(logging.WARNING)
@@ -47,6 +48,19 @@ logging.getLogger('aiohttp').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+# ─── Консольный вывод ──────────────────────────────────────────────
+
+def clear_console():
+    """Очистка терминала."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def console_print(msg, color='white'):
+    """Цветной вывод в консоль."""
+    colors = {'green': '\033[92m', 'red': '\033[91m', 'yellow': '\033[93m', 'white': ''}
+    reset = '\033[0m'
+    c = colors.get(color, '')
+    print(f"{c}{msg}{reset}", flush=True)
 
 
 async def set_commands(bot: Bot):
@@ -72,10 +86,16 @@ async def on_startup(bot: Bot):
             temp_count += 1
         except OSError:
             pass
-    if temp_count:
-        logger.info("Очищено %d временных файлов", temp_count)
 
-    logger.info("Bot started successfully")
+    clear_console()
+    console_print("=" * 50, 'green')
+    console_print("  URIS CONSULT BOT — РАБОТАЕТ", 'green')
+    console_print("=" * 50, 'green')
+    console_print(f"  БД: {DB_PATH}")
+    console_print(f"  Документы: {DOCS_DIR}")
+    if temp_count:
+        console_print(f"  Очищено {temp_count} temp-файлов")
+    console_print("=" * 50, 'green')
 
 
 async def check_rejected_workers(bot: Bot):
@@ -135,8 +155,6 @@ async def check_rejected_workers(bot: Bot):
 
 async def main():
     """Главная функция запуска бота"""
-    logger.info("Starting bot...")
-
     bot = Bot(token=BOT_TOKEN)
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
@@ -164,7 +182,7 @@ async def main():
     finally:
         await db.close_db()
         await bot.session.close()
-        logger.info("Bot stopped")
+        console_print("\nБот остановлен.", 'yellow')
 
 
 if __name__ == "__main__":
