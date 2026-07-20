@@ -30,10 +30,18 @@ class _Conn:
         self._conn = None
 
     def _connect(self):
-        self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
-        self._conn.row_factory = sqlite3.Row
-        # Не меняем journal_mode — бот уже установил WAL
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        for attempt in range(_MAX_RETRIES):
+            try:
+                self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
+                self._conn.row_factory = sqlite3.Row
+                self._conn.execute("PRAGMA busy_timeout=5000")
+                return
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e).lower() and attempt < _MAX_RETRIES - 1:
+                    logger.warning("DB locked on connect, retry %d/%d...", attempt + 1, _MAX_RETRIES)
+                    time.sleep(_RETRY_DELAY * (attempt + 1))
+                else:
+                    raise
 
     def __enter__(self):
         self._connect()
@@ -79,6 +87,10 @@ class DatabaseConnection:
     def _init_db(self) -> None:
         """Инициализация БД и миграции."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        _retry_on_locked(self._do_init_db)
+
+    def _do_init_db(self) -> None:
+        """Выполнение инициализации (с вызовом через _retry_on_locked)."""
         with self.get_connection() as conn:
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute(WORKER_SCHEMA)
@@ -91,8 +103,6 @@ class DatabaseConnection:
                     conn.execute(f"ALTER TABLE {WORKERS_TABLE} ADD COLUMN {col_name} {col_def}")
                 except sqlite3.OperationalError:
                     pass  # Колонка уже существует
-
-            conn.commit()
 
         # Синхронизация файлов на диске → БД (отдельная транзакция)
         _retry_on_locked(self._sync_docs_from_disk)
