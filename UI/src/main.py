@@ -686,34 +686,17 @@ class DBViewerApp:
 
 def main() -> None:
     """Точка входа приложения."""
-    import sys, os
-    def _log(msg):
-        try:
-            p = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log')
-            with open(p, 'a', encoding='utf-8') as f:
-                f.write(msg + '\n')
-        except Exception:
-            pass
-
-    _log("main() called")
     setup_logging(level=logging.INFO)
-    _log("logging setup done")
 
     try:
-        _log("creating tk.Tk...")
         root = tk.Tk()
-        _log("tk.Tk created")
         app = DBViewerApp(root)
-        _log("DBViewerApp created")
         root.deiconify()
         root.lift()
         root.focus_force()
-        _log("window lifted, starting mainloop")
         root.mainloop()
-        _log("mainloop ended")
 
     except Exception as e:
-        _log(f"ERROR: {e}")
         log_exception("Application crashed")
         msg = f"Ошибка запуска:\n{e}"
         try:
