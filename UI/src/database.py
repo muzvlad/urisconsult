@@ -146,7 +146,7 @@ class DatabaseConnection:
             added = 0
             for worker_id in worker_ids:
                 worker_dir = docs_dir / worker_id
-                if not worker_dir.exists():
+                if not worker_dir.exists() or not worker_dir.is_dir():
                     continue
 
                 existing = {
@@ -156,17 +156,22 @@ class DatabaseConnection:
                     ).fetchall()
                 }
 
-            for filename in worker_dir.iterdir():
-                if filename.name.startswith('.') or filename.name.startswith('temp_'):
+                try:
+                    for filename in worker_dir.iterdir():
+                        if filename.name.startswith('.') or filename.name.startswith('temp_'):
+                            continue
+                        if not filename.is_file():
+                            continue
+                        prefix = filename.stem
+                        doc_type = prefix_to_doc.get(prefix)
+                        if doc_type and doc_type not in existing:
+                            conn.execute(
+                                f"INSERT OR IGNORE INTO {WORKER_DOCUMENTS_TABLE} (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                                (worker_id, doc_type, filename.name)
+                            )
+                            added += 1
+                except OSError:
                     continue
-                prefix = filename.stem
-                doc_type = prefix_to_doc.get(prefix)
-                if doc_type and doc_type not in existing:
-                    conn.execute(
-                        f"INSERT OR IGNORE INTO {WORKER_DOCUMENTS_TABLE} (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                        (worker_id, doc_type, filename.name)
-                    )
-                    added += 1
 
         if added:
             conn.commit()
