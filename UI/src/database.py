@@ -18,7 +18,7 @@ from src.models import Worker, WorkerDocument, WorkerMeeting
 class DatabaseConnection:
     """Управление соединениями с БД."""
 
-    def __init__(self, db_path: Optional[Path] = None, timeout: float = 30.0):
+    def __init__(self, db_path: Optional[Path] = None, timeout: float = 60.0):
         self.db_path = db_path or get_paths().db_path
         self.timeout = timeout
         self._init_db()
@@ -120,17 +120,30 @@ class DatabaseConnection:
 
     @contextmanager
     def get_connection(self) -> Iterator[sqlite3.Connection]:
-        """Контекстный менеджер для соединения."""
-        conn = sqlite3.connect(self.db_path, timeout=self.timeout)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        """Контекстный менеджер для соединения с retry."""
+        import time
+        last_error = None
+        for attempt in range(3):
+            conn = sqlite3.connect(self.db_path, timeout=self.timeout)
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+                conn.commit()
+                return
+            except sqlite3.OperationalError as e:
+                last_error = e
+                if "locked" in str(e) and attempt < 2:
+                    conn.close()
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                conn.rollback()
+                raise
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+        raise last_error
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Выполнить запрос и вернуть курсор."""
