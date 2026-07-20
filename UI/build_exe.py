@@ -57,7 +57,7 @@ def create_executable() -> bool:
 
         # Команда для создания exe
         cmd = [
-            'pyinstaller',
+            sys.executable, '-m', 'PyInstaller',
             '--onefile',              # Один exe файл
             '--windowed',             # Без консоли (GUI приложение)
             '--name=[Search]Driver',  # Имя exe файла
