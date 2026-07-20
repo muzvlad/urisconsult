@@ -13,6 +13,49 @@ from src.services import get_telegram_service
 from src.database import get_db_service
 from src.logging_config import get_logger, log_error, log_exception
 
+# Hardcoded fallback для документов (если конфиг не загрузился)
+_DOC_FALLBACK = {
+    'Патент': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('patent_snils', 'СНИЛС'), ('patent_registration', 'Регистрация'),
+        ('patent_migration_card', 'Миграционная карта'), ('patent_dms', 'ДМС'),
+        ('patent_patent', 'Патент'), ('patent_inn', 'ИНН'),
+        ('patent_receipt', 'Чек по патенту'), ('patent_language_cert', 'Сертификат языка'),
+        ('patent_bank_details', 'Реквизиты карты'), ('patent_fingerprint_card', 'Дактилоскопическая карта'),
+    ],
+    'Студент': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('student_snils', 'СНИЛС'), ('student_registration', 'Регистрация'),
+        ('student_migration_card', 'Миграционная карта'), ('student_dms', 'ДМС'),
+        ('student_inn', 'ИНН'), ('student_fingerprint_card', 'Дактилоскопическая карта'),
+        ('student_university_cert', 'Справка из ВУЗа'), ('student_bank_details', 'Реквизиты карты'),
+    ],
+    'ЕАЭС': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('eaeas_registration', 'Регистрация'), ('eaeas_migration_card', 'Миграционная карта'),
+        ('eaeas_dms', 'ДМС'), ('eaeas_inn', 'ИНН'), ('eaeas_snils', 'СНИЛС'),
+        ('eaeas_fingerprint_card', 'Дактилоскопическая карта'), ('eaeas_bank_details', 'Реквизиты карты'),
+    ],
+    'РВП': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('rvp_migration_card', 'Миграционная карта'), ('rvp_dms_oms', 'ДМС/ОМС'),
+        ('rvp_inn', 'ИНН'), ('rvp_snils', 'СНИЛС'), ('rvp_bank_details', 'Реквизиты карты'),
+    ],
+    'ВНЖ': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('vnzh_migration_card', 'Миграционная карта'), ('vnzh_vnzh', 'ВНЖ'),
+        ('vnzh_dms_oms', 'ДМС/ОМС'), ('vnzh_inn', 'ИНН'), ('vnzh_snils', 'СНИЛС'),
+        ('vnzh_work_book', 'Трудовая книжка/ЭТК'), ('vnzh_bank_details', 'Реквизиты карты'),
+    ],
+    'Россия': [
+        ('photo', 'Фото'), ('passport', 'Паспорт'),
+        ('russia_passport_propiska', 'Паспорт прописка'), ('russia_propiska', 'Прописка'),
+        ('russia_inn', 'ИНН'), ('russia_snils', 'СНИЛС'),
+        ('russia_education_doc', 'Документ об образовании'),
+        ('russia_work_book', 'Трудовая книжка/ЭТК'), ('russia_military_doc', 'Военный билет'),
+    ],
+}
+
 
 # ─── Диалог отклонения анкеты ───
 
@@ -32,8 +75,8 @@ class RejectDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
-        # Центрирование
-        self._center_window(520, 650)
+        # Откладываем центрирование чтобы окно не моргало
+        self.dialog.after(10, lambda: self._center_window(520, 650))
         self._build_ui()
 
     def _center_window(self, w: int, h: int) -> None:
@@ -94,20 +137,28 @@ class RejectDialog:
         citizenship = self.worker.citizenship
         citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
         normalized = citizenship_map.get(citizenship, citizenship)
+
+        # Способ 1: из конфига
         docs_found = False
         if normalized in self.doc_flows:
             for doc in self.doc_flows[normalized]:
                 fields.append((doc.key, f"[Док] {doc.label}"))
                 docs_found = True
 
-        # Если документы не найдены — добавляем ВСЕ из всех категорий
+        # Способ 2: hardcoded fallback
+        if not docs_found and normalized in _DOC_FALLBACK:
+            for key, label in _DOC_FALLBACK[normalized]:
+                fields.append((key, f"[Док] {label}"))
+                docs_found = True
+
+        # Способ 3: ВСЕ документы из всех категорий
         if not docs_found:
             seen = set()
-            for cat_docs in self.doc_flows.values():
-                for doc in cat_docs:
-                    if doc.key not in seen:
-                        fields.append((doc.key, f"[Док] {doc.label}"))
-                        seen.add(doc.key)
+            for cat_docs in _DOC_FALLBACK.values():
+                for key, label in cat_docs:
+                    if key not in seen:
+                        fields.append((key, f"[Док] {label}"))
+                        seen.add(key)
 
         for key, label in fields:
             var = tk.BooleanVar()
@@ -164,7 +215,8 @@ class NotificationsWindow:
         self.window.transient(parent)
         self.window.grab_set()
 
-        self._center_window(900, 600)
+        # Откладываем центрирование чтобы окно не моргало
+        self.window.after(10, lambda: self._center_window(900, 600))
         self._build_ui()
         self._load_data()
 
