@@ -706,8 +706,6 @@ def main() -> None:
             root.destroy()
         except Exception:
             pass
-        if not sys.flags.interactive:
-            input("\nНажмите Enter для выхода...")
 
 
 if __name__ == "__main__":

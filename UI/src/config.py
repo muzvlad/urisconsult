@@ -123,16 +123,20 @@ def _get_project_root() -> Path:
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
     # Проверяем сетевой сервер
-    if NETWORK_SERVER.exists():
-        db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
-        docs_dir = NETWORK_SERVER / "users" / "docs"
-        bot_dir = NETWORK_SERVER / "bot"
-        return AppPaths(
-            project_root=NETWORK_SERVER,
-            db_path=db_path,
-            docs_dir=docs_dir,
-            bot_dir=bot_dir,
-        )
+    try:
+        if NETWORK_SERVER.exists():
+            db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
+            docs_dir = NETWORK_SERVER / "users" / "docs"
+            bot_dir = NETWORK_SERVER / "bot"
+            if db_path.parent.exists() or docs_dir.exists():
+                return AppPaths(
+                    project_root=NETWORK_SERVER,
+                    db_path=db_path,
+                    docs_dir=docs_dir,
+                    bot_dir=bot_dir,
+                )
+    except (OSError, PermissionError):
+        pass
 
     # Локальный режим
     root = _get_project_root()

@@ -26,11 +26,14 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Пути к папкам — приоритет сетевому серверу
-if os.path.isdir(NETWORK_SERVER):
-    USERS_DIR = os.path.join(NETWORK_SERVER, "bot", "Users")
-    DB_PATH = os.path.join(USERS_DIR, "users.db")
-    DOCS_DIR = os.path.join(NETWORK_SERVER, "users", "docs")
-else:
+try:
+    if os.path.isdir(NETWORK_SERVER):
+        USERS_DIR = os.path.join(NETWORK_SERVER, "bot", "Users")
+        DB_PATH = os.path.join(USERS_DIR, "users.db")
+        DOCS_DIR = os.path.join(NETWORK_SERVER, "users", "docs")
+    else:
+        raise OSError("Network server not available")
+except (OSError, PermissionError):
     USERS_DIR = os.path.join(BASE_DIR, "Users")
     DB_PATH = os.path.join(USERS_DIR, "users.db")
     DOCS_DIR = os.path.join(PROJECT_ROOT, "users", "docs")

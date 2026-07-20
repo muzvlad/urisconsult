@@ -19,9 +19,7 @@ def main():
         from src.main import main as new_main
         new_main()
     except Exception:
-        # Логирование уже настроено в src.main
-        if not sys.flags.interactive:
-            input("\nНажмите Enter для выхода...")
+        pass
 
 
 if __name__ == "__main__":
