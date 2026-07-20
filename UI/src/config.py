@@ -92,6 +92,25 @@ class AppConfig:
 NETWORK_SERVER = Path(r"\\144.76.70.246\urisconsult")
 
 
+def _log_config(msg):
+    """Лог конфигурации в файл."""
+    import sys
+    try:
+        paths = [
+            os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
+            os.path.join(os.path.expanduser('~'), 'ui_error.log'),
+        ]
+        for p in paths:
+            try:
+                with open(p, 'a', encoding='utf-8') as f:
+                    f.write(f"[config] {msg}\n")
+            except Exception:
+                continue
+            break
+    except Exception:
+        pass
+
+
 # ─── Определение путей ───
 
 def _get_base_path() -> Path:
@@ -148,10 +167,12 @@ def get_paths() -> AppPaths:
     t.join(timeout=3)
 
     if result[0] is not None:
+        _log_config(f"Сервер доступен: {NETWORK_SERVER}")
         return result[0]
 
     # Локальный режим
     root = _get_project_root()
+    _log_config(f"Сервер недоступен! Fallback на локальную БД: {root}")
     return AppPaths(
         project_root=root,
         db_path=root / "bot" / "Users" / "users.db",
