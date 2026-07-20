@@ -22,10 +22,11 @@ def _log_error(msg):
 
 _log_error(f"=== START {sys.executable} ===")
 
-# Добавляем папку src в путь для импортов
-src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
-sys.path.insert(0, src_dir)
-_log_error(f"src_dir={src_dir} exists={os.path.exists(src_dir)}")
+# Добавляем папку src в путь для импортов (только в dev режиме)
+if not getattr(sys, "frozen", False):
+    src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
+    sys.path.insert(0, src_dir)
+    _log_error(f"src_dir={src_dir} exists={os.path.exists(src_dir)}")
 
 
 def main():
