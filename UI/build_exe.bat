@@ -15,7 +15,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo Установка зависимостей...
-".venv\Scripts\pip.exe" install -r requirements.txt pyinstaller
+".venv\Scripts\pip.exe" install -r requirements.txt pyinstaller --timeout 60 --retries 3 -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 
 echo Сборка EXE...
 rmdir /s /q dist 2>nul
