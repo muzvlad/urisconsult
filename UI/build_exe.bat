@@ -5,18 +5,18 @@ REM Создание venv если нет
 if not exist ".venv\Scripts\python.exe" (
     echo Создание виртуального окружения...
     python -m venv .venv
-    if errorlevel 1 (
-        echo ОШИБКА: Не удалось создать venv
-        pause
-        exit /b 1
-    )
-    echo Установка зависимостей...
-    ".venv\Scripts\pip.exe" install -r requirements.txt pyinstaller
-    if errorlevel 1 (
-        echo ОШИБКА: Не удалось установить зависимости
-        pause
-        exit /b 1
-    )
+)
+
+REM Установка зависимостей всегда
+echo Установка зависимостей...
+".venv\Scripts\pip.exe" install -r requirements.txt pyinstaller --quiet
+
+REM Проверка PyInstaller
+".venv\Scripts\python.exe" -m PyInstaller --version >nul 2>&1
+if errorlevel 1 (
+    echo ОШИБКА: PyInstaller не установлен!
+    pause
+    exit /b 1
 )
 
 echo Сборка EXE...
