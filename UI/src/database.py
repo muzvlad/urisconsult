@@ -17,8 +17,8 @@ from src.models import Worker, WorkerDocument, WorkerMeeting
 logger = logging.getLogger(__name__)
 
 # Максимальное количество повторов при "database is locked"
-_MAX_RETRIES = 5
-_RETRY_DELAY = 0.5  # секунд
+_MAX_RETRIES = 10
+_RETRY_DELAY = 1.0  # секунд
 
 
 class _Conn:
@@ -93,9 +93,24 @@ class DatabaseConnection:
         """Выполнение инициализации (с вызовом через _retry_on_locked)."""
         with self.get_connection() as conn:
             conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute(WORKER_SCHEMA)
-            conn.execute(WORKER_DOCUMENTS_SCHEMA)
-            conn.execute(WORKER_MEETINGS_SCHEMA)
+
+            # Проверяем какие таблицы уже есть (read-only запрос)
+            existing_tables = {
+                row[0] for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+
+            # Создаём ТОЛЬКО отсутствующие таблицы
+            if WORKERS_TABLE not in existing_tables:
+                conn.execute(WORKER_SCHEMA)
+                logger.info("Created table: %s", WORKERS_TABLE)
+            if WORKER_DOCUMENTS_TABLE not in existing_tables:
+                conn.execute(WORKER_DOCUMENTS_SCHEMA)
+                logger.info("Created table: %s", WORKER_DOCUMENTS_TABLE)
+            if WORKER_MEETINGS_TABLE not in existing_tables:
+                conn.execute(WORKER_MEETINGS_SCHEMA)
+                logger.info("Created table: %s", WORKER_MEETINGS_TABLE)
 
             # Миграции - добавление колонок если их нет
             for col_name, col_def in MIGRATIONS:
