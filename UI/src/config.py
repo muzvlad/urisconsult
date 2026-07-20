@@ -122,21 +122,33 @@ def _get_project_root() -> Path:
 @lru_cache(maxsize=1)
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
-    # Проверяем сетевой сервер
-    try:
-        if NETWORK_SERVER.exists():
-            db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
-            docs_dir = NETWORK_SERVER / "users" / "docs"
-            bot_dir = NETWORK_SERVER / "bot"
-            if db_path.parent.exists() or docs_dir.exists():
-                return AppPaths(
-                    project_root=NETWORK_SERVER,
-                    db_path=db_path,
-                    docs_dir=docs_dir,
-                    bot_dir=bot_dir,
-                )
-    except (OSError, PermissionError):
-        pass
+    import threading
+
+    result = [None]
+
+    def _try_network():
+        try:
+            if NETWORK_SERVER.exists():
+                db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
+                docs_dir = NETWORK_SERVER / "users" / "docs"
+                bot_dir = NETWORK_SERVER / "bot"
+                if db_path.parent.exists() or docs_dir.exists():
+                    result[0] = AppPaths(
+                        project_root=NETWORK_SERVER,
+                        db_path=db_path,
+                        docs_dir=docs_dir,
+                        bot_dir=bot_dir,
+                    )
+        except (OSError, PermissionError):
+            pass
+
+    # Проверка сети с таймаутом 3 секунды
+    t = threading.Thread(target=_try_network, daemon=True)
+    t.start()
+    t.join(timeout=3)
+
+    if result[0] is not None:
+        return result[0]
 
     # Локальный режим
     root = _get_project_root()
