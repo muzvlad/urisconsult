@@ -32,7 +32,7 @@ class _Conn:
     def _connect(self):
         self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        # Не меняем journal_mode — бот уже установил WAL
         self._conn.execute("PRAGMA busy_timeout=5000")
 
     def __enter__(self):
