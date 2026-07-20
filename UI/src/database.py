@@ -4,13 +4,29 @@
 from __future__ import annotations
 import sqlite3
 import json
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Iterator
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 
 from src.config import get_paths, get_config, WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA, MIGRATIONS, WORKERS_TABLE, WORKER_DOCUMENTS_TABLE, WORKER_MEETINGS_TABLE
 from src.models import Worker, WorkerDocument, WorkerMeeting
+
+
+class _Conn:
+    def __init__(self, db_path, timeout):
+        self._conn = sqlite3.connect(str(db_path), timeout=timeout)
+        self._conn.row_factory = sqlite3.Row
+    def __enter__(self):
+        return self._conn
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type:
+                self._conn.rollback()
+            else:
+                self._conn.commit()
+        finally:
+            self._conn.close()
+        return False
 
 
 # ─── Управление соединениями ───
@@ -118,19 +134,8 @@ class DatabaseConnection:
         if added:
             conn.commit()
 
-    @contextmanager
-    def get_connection(self) -> Iterator[sqlite3.Connection]:
-        """Контекстный менеджер для соединения."""
-        conn = sqlite3.connect(self.db_path, timeout=self.timeout)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+    def get_connection(self):
+        return _Conn(self.db_path, self.timeout)
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Выполнить запрос и вернуть курсор."""
