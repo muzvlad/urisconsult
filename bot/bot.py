@@ -38,9 +38,29 @@ logging.basicConfig(
         ),
     ]
 )
-# В консоль — только ошибки и важные события
-_console = logging.StreamHandler()
-_console.setLevel(logging.WARNING)  # Только WARNING и выше
+# В консоль — INFO и выше, с автоочисткой
+class AutoClearConsoleHandler(logging.StreamHandler):
+    """Handler который очищает консоль каждые N сообщений."""
+    def __init__(self, stream=None, clear_after=100):
+        super().__init__(stream)
+        self.clear_after = clear_after
+        self.msg_count = 0
+
+    def emit(self, record):
+        self.msg_count += 1
+        if self.msg_count >= self.clear_after:
+            self.msg_count = 0
+            clear_console()
+            console_print("=" * 50, 'green')
+            console_print("  URIS CONSULT BOT — РАБОТАЕТ", 'green')
+            console_print("=" * 50, 'green')
+            console_print(f"  БД: {DB_PATH}")
+            console_print(f"  Документы: {DOCS_DIR}")
+            console_print("=" * 50, 'green')
+        super().emit(record)
+
+_console = AutoClearConsoleHandler(clear_after=100)
+_console.setLevel(logging.INFO)
 _console.setFormatter(logging.Formatter('%(message)s'))
 logging.getLogger().addHandler(_console)
 
