@@ -32,41 +32,6 @@ def _log(msg):
 
 _log(f"=== ЗАПУСК {sys.executable} ===")
 
-
-def _kill_previous_instances():
-    """Убить предыдущие экземпляры этого же приложения."""
-    import subprocess
-    import signal
-
-    current_pid = os.getpid()
-    current_exe = os.path.basename(sys.executable)
-
-    try:
-        # Ищем все процессы с таким же именем
-        result = subprocess.run(
-            ['tasklist', '/FI', f'IMAGENAME eq {current_exe}', '/FO', 'CSV', '/NH'],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split('\n'):
-            if not line.strip():
-                continue
-            # CSV формат: "имя","PID","Session","Session#","Mem"
-            parts = line.replace('"', '').split(',')
-            if len(parts) >= 2:
-                try:
-                    pid = int(parts[1])
-                    if pid != current_pid:
-                        _log(f"Убиваю предыдущий процесс PID={pid}")
-                        os.kill(pid, signal.SIGTERM)
-                        time.sleep(0.5)
-                except (ValueError, ProcessLookupError, PermissionError):
-                    pass
-    except Exception as e:
-        _log(f"Не удалось убить предыдущие процессы: {e}")
-
-
-_kill_previous_instances()
-
 # Добавляем папку src в путь для импортов (только в dev режиме)
 if not getattr(sys, "frozen", False):
     src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
