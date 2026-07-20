@@ -41,17 +41,17 @@ else:
     _log("Режим EXE: src упакован в бандл")
 
 
-# ─── Splash screen (до загрузки main.py) ────────────────────────────
+# ─── Splash screen ──────────────────────────────────────────────────
 
-def _show_splash():
-    """Показать splash screen и вернуть (root,关闭_функцию)."""
+def _create_splash():
+    """Создать splash screen. Возвращает (root, status_label)."""
     import tkinter as tk
+    from tkinter import ttk
 
     root = tk.Tk()
     root.overrideredirect(True)
     root.attributes('-topmost', True)
 
-    # Центрируем
     w, h = 400, 180
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
@@ -59,7 +59,6 @@ def _show_splash():
     y = (sh - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
 
-    # Фон
     frame = tk.Frame(root, bg='#2c3e50', relief=tk.RAISED, borderwidth=2)
     frame.pack(fill=tk.BOTH, expand=True)
 
@@ -71,8 +70,6 @@ def _show_splash():
              font=('Arial', 10), bg='#2c3e50', fg='#aaa'
              ).pack(pady=(0, 15))
 
-    # Прогресс-бар
-    from tkinter import ttk
     progress = ttk.Progressbar(frame, mode='indeterminate', length=300)
     progress.pack(pady=5)
     progress.start(15)
@@ -82,16 +79,20 @@ def _show_splash():
     status_label.pack(pady=(0, 15))
 
     root.update()
+    return root, status_label
 
-    def close():
-        progress.stop()
-        root.destroy()
 
-    return root, close, status_label
+def _destroy_splash(root):
+    """Безопасно уничтожить splash."""
+    try:
+        if root and root.winfo_exists():
+            root.destroy()
+    except Exception:
+        pass
 
 
 def _try_run():
-    """Попытка запустить приложение. Возвращает True при успехе."""
+    """Попытка запустить приложение."""
     _log("Импорт src.main...")
     from src.main import main as new_main
     _log("Импорт завершён, запуск main()...")
@@ -103,15 +104,14 @@ def _try_run():
 def main():
     """Запуск приложения с splash screen и retry."""
     splash_root = None
-    close_splash = None
 
     try:
-        # Показываем splash ДО загрузки
+        # Показываем splash
         _log("Показ splash screen...")
-        splash_root, close_splash, status_label = _show_splash()
+        splash_root, status_label = _create_splash()
 
         last_error = None
-        for attempt in range(1, MAX_RETRIES + 2):  # 1, 2, 3 попытки
+        for attempt in range(1, MAX_RETRIES + 2):
             try:
                 if attempt > 1:
                     _log(f"Попытка {attempt}/{MAX_RETRIES + 1}...")
@@ -119,44 +119,35 @@ def main():
                         status_label.config(text=f"Повторная попытка {attempt}...")
                         splash_root.update()
 
-                # Закрываем splash ПЕРЕД запуском main (main создаст своё окно)
-                _log("Закрытие splash, запуск main()...")
-                if close_splash:
-                    close_splash()
-                    close_splash = None
+                # Закрываем splash перед main
+                _destroy_splash(splash_root)
+                splash_root = None
 
                 _try_run()
-                return  # Успех — выходим
+                return
 
             except Exception as e:
                 last_error = e
                 _log(f"Попытка {attempt} не удалась: {e}")
                 if attempt <= MAX_RETRIES:
-                    _log(f"Повтор через 2 сек...")
-                    # Пересоздаём splash для следующей попытки
-                    if splash_root:
-                        try:
-                            splash_root.destroy()
-                        except Exception:
-                            pass
+                    _log("Повтор через 2 сек...")
                     time.sleep(2)
-                    splash_root, close_splash, status_label = _show_splash()
+                    # Пересоздаём splash для следующей попытки
+                    splash_root, status_label = _create_splash()
 
         # Все попытки исчерпаны
-        _log(f"Все попытки исчерпаны. Последняя ошибка: {last_error}")
-        if close_splash:
-            close_splash()
+        _log(f"Все попытки исчерпаны: {last_error}")
+        _destroy_splash(splash_root)
         _show_error(f"Не удалось запустить приложение:\n{last_error}")
 
     except Exception as e:
         _log(f"Критическая ошибка: {e}\n{traceback.format_exc()}")
-        if close_splash:
-            close_splash()
+        _destroy_splash(splash_root)
         _show_error(f"Критическая ошибка:\n{e}")
 
 
 def _show_error(msg):
-    """Показать диалог ошибки."""
+    """Диалог ошибки."""
     import tkinter as tk
     from tkinter import messagebox
     try:
