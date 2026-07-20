@@ -59,7 +59,7 @@ class AutoClearConsoleHandler(logging.StreamHandler):
             console_print("=" * 50, 'green')
         super().emit(record)
 
-_console = AutoClearConsoleHandler(clear_after=100)
+_console = AutoClearConsoleHandler(clear_after=20)
 _console.setLevel(logging.INFO)
 _console.setFormatter(logging.Formatter('%(message)s'))
 logging.getLogger().addHandler(_console)
