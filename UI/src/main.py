@@ -71,13 +71,27 @@ class DBViewerApp:
     """Главное приложение просмотра карточек сотрудников."""
 
     def __init__(self, root: tk.Tk):
+        import sys, os
+        def _log(msg):
+            try:
+                p = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log')
+                with open(p, 'a', encoding='utf-8') as f:
+                    f.write(f"[app] {msg}\n")
+            except: pass
+
         self.root = root
+        _log("Получение конфигурации...")
         self.config = get_config()
         self.paths = get_paths()
+        _log(f"БД: {self.paths.db_path}")
+        _log(f"Документы: {self.paths.docs_dir}")
+        _log("Инициализация сервисов...")
         self.doc_service = get_document_service()
         self.telegram = get_telegram_service()
         self.pdf_service = get_pdf_service()
+        _log("Подключение к БД...")
         self.db = get_db_service()
+        _log("БД подключена")
 
         # Состояние
         self.search_results: List[Worker] = []
@@ -90,10 +104,14 @@ class DBViewerApp:
         self.status_bar: Optional[tk.Label] = None
         self.bell: Optional[NotificationBell] = None
 
+        _log("Инициализация БД (таблицы, миграции)...")
         self._init_db()
+        _log("Настройка интерфейса...")
         self._setup_ui()
+        _log("Обновление колокольчика...")
         self._refresh_pending_count()
         center_window(self.root, self.config.window_width, self.config.window_height)
+        _log("Приложение готово!")
 
     def _init_db(self) -> None:
         """Инициализация БД."""
