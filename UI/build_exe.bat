@@ -1,5 +1,18 @@
 @echo off
 cd /d "%~dp0"
+
+REM Установка PyInstaller если нет
+pyinstaller --version >nul 2>&1
+if errorlevel 1 (
+    echo Установка PyInstaller...
+    pip install pyinstaller
+    if errorlevel 1 (
+        echo ОШИБКА: Не удалось установить PyInstaller
+        pause
+        exit /b 1
+    )
+)
+
 rmdir /s /q dist 2>nul
 rmdir /s /q build 2>nul
 del "[Search]Driver.spec" 2>nul

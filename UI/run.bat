@@ -12,12 +12,9 @@ if errorlevel 1 (
     cd /d "%SCRIPT_DIR%"
 )
 
-REM Активация venv если есть
+REM Запуск
 if exist "%SCRIPT_DIR%.venv\Scripts\python.exe" (
-    start "" "%SCRIPT_DIR%.venv\Scripts\pythonw.exe" db_viewer.py
-) else if exist "%SCRIPT_DIR%.venv\Scripts\activate.bat" (
-    call "%SCRIPT_DIR%.venv\Scripts\activate.bat"
-    start "" pythonw db_viewer.py
+    "%SCRIPT_DIR%.venv\Scripts\python.exe" db_viewer.py
 ) else (
-    start "" pythonw db_viewer.py
+    python db_viewer.py
 )
