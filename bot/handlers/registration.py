@@ -42,10 +42,25 @@ def _build_worker_form() -> type:
 
     # Создаём класс динамически
     state_attrs = {s: State() for s in states}
-    return type('WorkerForm', (StatesGroup,), state_attrs)
+    return type('get_worker_form()', (StatesGroup,), state_attrs)
 
 
-WorkerForm = _build_worker_form()
+_worker_form: type[StatesGroup] | None = None
+
+
+def get_worker_form() -> type[StatesGroup]:
+    """Получить get_worker_form() (ленивая инициализация)."""
+    global _worker_form
+    if _worker_form is None:
+        _worker_form = _build_worker_form()
+    return _worker_form
+
+
+# Обратная совместимость: get_worker_form() = get_worker_form() при первом обращении
+def __getattr__(name):
+    if name == 'get_worker_form()':
+        return get_worker_form()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ─── Валидаторы ─────────────────────────────────────────────────────
@@ -91,7 +106,7 @@ async def process_name(message: types.Message, state: FSMContext):
         "🌍 Выберите категорию:",
         reply_markup=get_citizenship_keyboard()
     )
-    await state.set_state(WorkerForm.citizenship)
+    await state.set_state(get_worker_form().citizenship)
 
 
 async def process_citizenship_callback(callback: types.CallbackQuery, state: FSMContext):
@@ -99,7 +114,7 @@ async def process_citizenship_callback(callback: types.CallbackQuery, state: FSM
     await state.update_data(citizenship=citizenship)
     await callback.message.edit_text(f"🌍 **Категория:** {citizenship}")
     await callback.message.answer("⚥ Выберите ваш пол:", reply_markup=get_gender_keyboard())
-    await state.set_state(WorkerForm.gender)
+    await state.set_state(get_worker_form().gender)
     await callback.answer()
 
 
@@ -110,25 +125,25 @@ async def process_gender(message: types.Message, state: FSMContext):
         return
     await state.update_data(gender=gender)
     await message.answer("💼 Введите вашу должность:", reply_markup=ReplyKeyboardRemove())
-    await state.set_state(WorkerForm.position)
+    await state.set_state(get_worker_form().position)
 
 
 async def process_position(message: types.Message, state: FSMContext):
     await state.update_data(position=message.text.strip())
     await message.answer("🏢 Введите название объекта/компании:")
-    await state.set_state(WorkerForm.object)
+    await state.set_state(get_worker_form().object)
 
 
 async def process_object(message: types.Message, state: FSMContext):
     await state.update_data(object=message.text.strip())
     await message.answer("📍 Введите адрес объекта:")
-    await state.set_state(WorkerForm.object_address)
+    await state.set_state(get_worker_form().object_address)
 
 
 async def process_object_address(message: types.Message, state: FSMContext):
     await state.update_data(object_address=message.text.strip())
     await message.answer("👤 Введите ФИО вашего менеджера/руководителя:")
-    await state.set_state(WorkerForm.manager)
+    await state.set_state(get_worker_form().manager)
 
 
 async def process_manager(message: types.Message, state: FSMContext):
@@ -137,7 +152,7 @@ async def process_manager(message: types.Message, state: FSMContext):
         "📞 Введите основной номер телефона (в формате +79999999999):",
         reply_markup=get_cancel_keyboard()
     )
-    await state.set_state(WorkerForm.phone_main)
+    await state.set_state(get_worker_form().phone_main)
 
 
 async def process_phone_main(message: types.Message, state: FSMContext):
@@ -154,7 +169,7 @@ async def process_phone_main(message: types.Message, state: FSMContext):
         "📞 Введите дополнительный номер телефона (или отправьте 'пропустить'):",
         reply_markup=get_skip_keyboard()
     )
-    await state.set_state(WorkerForm.phone_additional)
+    await state.set_state(get_worker_form().phone_additional)
 
 
 async def process_phone_additional(message: types.Message, state: FSMContext):
@@ -170,7 +185,7 @@ async def process_phone_additional(message: types.Message, state: FSMContext):
         return
     await state.update_data(phone_additional=phone)
     await message.answer("📧 Введите ваш email:", reply_markup=ReplyKeyboardRemove())
-    await state.set_state(WorkerForm.email)
+    await state.set_state(get_worker_form().email)
 
 
 async def process_email(message: types.Message, state: FSMContext):
@@ -180,7 +195,7 @@ async def process_email(message: types.Message, state: FSMContext):
         return
     await state.update_data(email=email)
     await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
-    await state.set_state(WorkerForm.date)
+    await state.set_state(get_worker_form().date)
 
 
 async def process_date(message: types.Message, state: FSMContext):
@@ -192,8 +207,18 @@ async def process_date(message: types.Message, state: FSMContext):
 
     # Переходим к первому документу из потока
     data = await state.get_data()
-    citizenship = data.get('citizenship', 'Патент')
+    citizenship = data.get('citizenship')
+    if not citizenship:
+        await message.answer("❌ Ошибка: категория не выбрана. Начните заново.")
+        await state.clear()
+        return
+
     flow = get_doc_flow(citizenship)
+    if not flow:
+        await message.answer("❌ Ошибка: неизвестная категория. Начните заново.")
+        await state.clear()
+        return
+
     first_doc = flow[0]  # Первый документ (обычно photo)
 
     from config.documents import DOC_PROMPTS
@@ -202,7 +227,7 @@ async def process_date(message: types.Message, state: FSMContext):
         DOC_PROMPTS.get(first_doc.key, f"Отправьте {first_doc.label}:") + skip_text,
         reply_markup=get_skip_keyboard()
     )
-    await state.set_state(getattr(WorkerForm, first_doc.key))
+    await state.set_state(getattr(get_worker_form(), first_doc.key))
 
 
 # ─── Дополнительные поля для России ─────────────────────────────────
@@ -222,7 +247,7 @@ async def process_russia_marital_status(message: types.Message, state: FSMContex
         "Или нажмите 'Готово' если родственников добавлять не нужно:",
         reply_markup=get_add_relative_keyboard()
     )
-    await state.set_state(WorkerForm.russia_relatives)
+    await state.set_state(get_worker_form().russia_relatives)
 
 
 async def process_russia_relatives(message: types.Message, state: FSMContext):

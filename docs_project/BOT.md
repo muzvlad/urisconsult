@@ -52,8 +52,8 @@ python bot.py
 **ВНЖ (9 документов):**
 Фото → Паспорт → Миграционная карта → ВНЖ → ДМС/ОМС → ИНН → СНИЛС → Трудовая книжка → Реквизиты карты
 
-**Россия (9 документов):**
-Фото → Паспорт → Паспорт прописка → Прописка → ИНН → СНИЛС → Документ об образовании → Трудовая книжка → Военный билет
+**Россия (8 документов):**
+Фото → Паспорт → Паспорт прописка → ИНН → СНИЛС → Документ об образовании → Трудовая книжка → Военный билет
 
 Каждый документ можно пропустить (кнопка «Пропустить»).
 
@@ -61,14 +61,21 @@ python bot.py
 
 Экран с полной сводкой данных. Кнопки:
 - **Подтвердить** — сохранение в БД
-- **Редактировать** — выбор поля для исправления
-- **Отмена** — начало заново
+- **Редактировать** — выбор поля для исправления (из конфига)
+- **Заполнить заново** — начало заново
+
+### 4. Обработка анкет
+
+Администратор в UI может:
+- **Принять** → статус `accepted`
+- **Отклонить** → выбор полей → уведомление клиенту в Telegram
+- Клиент исправляет через `/start` → статус возвращается в `pending`
 
 ## Хранение данных
 
 ### База данных
 
-Путь: `Users/users.db` (SQLite)
+Путь: `bot/Users/users.db` (SQLite, WAL mode)
 
 Таблица `workers`:
 
@@ -78,7 +85,7 @@ python bot.py
 | Контакты | phone_main, phone_additional, email, date |
 | Семья | marital_status, relatives_json |
 | Мета | registration, telegram_id, telegram_username, created_at |
-| Статус | status (pending/accepted/rejected), rejection_reasons |
+| Статус | status (pending/accepted/rejected), rejection_reasons, notified_at |
 
 Таблица `worker_documents` (UNIQUE по worker_id + doc_type):
 
@@ -86,7 +93,7 @@ python bot.py
 |---|---|
 | worker_id | FK → workers.id |
 | doc_type | Ключ документа из DOC_FLOWS |
-| filename | Имя файла в users/docs/ |
+| filename | Имя файла в bot/Users/docs/ |
 
 Таблица `worker_meetings`:
 
@@ -96,13 +103,25 @@ python bot.py
 | date | Дата встречи |
 | note | Заметка |
 
+### Версионирование схемы
+
+БД использует `PRAGMA user_version` для отслеживания версии. Миграции выполняются **один раз** при обновлении версии.
+
+Текущая версия: **2**
+
+| Версия | Описание |
+|---|---|
+| 0 | Старая схема (колонки документов в workers) |
+| 1 | Нормализованная схема (worker_documents) |
+| 2 | Добавлены status, rejection_reasons, notified_at |
+
 ### Файлы документов
 
-Папка: `users/docs/`
+Папка: `bot/Users/docs/`
 
-Именование: `{prefix}_{worker_id}.{ext}`
+Структура: `bot/Users/docs/{worker_id}/{prefix}.{ext}`
 
-Префиксы определены в `config.py` → `DOC_PREFIXES`.
+Префиксы определены в `config/documents.py` → `DOC_PREFIXES`.
 
 ## Валидация
 
@@ -111,12 +130,34 @@ python bot.py
 | ФИО | Минимум 2 слова, только буквы, пробелы, дефис |
 | Телефон | Минимум 10 цифр (любые символы автоматически фильтруются) |
 | Email | Формат name@domain.com |
-| Дата рождения | Формат ДД.ММ.ГГГГ, диапазон 1900-2100 |
+| Дата рождения | Формат ДД.ММ.ГГГГ, реальная проверка через datetime |
+
+## Архитектура
+
+### Динамический FSM
+
+Состояния FSM генерируются автоматически из `config/documents.py`:
+- Добавление нового типа документа требует правки **только** в `documents.py`
+- FSM создаётся лениво через `get_worker_form()`
+
+### Утилиты (`utils.py`)
+
+- `get_document_state(doc_key)` — получение FSM-состояния для документа
+- `build_edit_keyboard(citizenship)` — генерация клавиатуры редактирования из конфига
+- `get_all_doc_keys()` — все ключи документов
+- `get_field_prompt(field)` — текст запроса для поля
+- `validate_file_extension(file_path)` — единая валидация расширений
+
+### Логирование
+
+- Context vars: `worker_id`, `user_id` в каждом лог-записи
+- Формат: `%(asctime)s [%(levelname)s] %(name)s [uid=%(user_id)s w=%(worker_id)s]: %(message)s`
 
 ## Технические детали
 
-- **FSM**: aiogram 3.0 MemoryStorage
-- **БД**: aiosqlite (async)
-- **Клавиатуры**: Reply (действия) + Inline (гражданство)
+- **FSM**: aiogram 3.x MemoryStorage (ленивая инициализация)
+- **БД**: aiosqlite (async), версионирование через PRAGMA user_version
+- **Клавиатуры**: Reply (действия) + Inline (гражданство, редактирование)
 - **Токен**: файл `.env` → `BOT_TOKEN`
-- **Логирование**: только ошибки бота
+- **Rate limiting**: 5 сообщений / 10 сек, фоновая очистка
+- **Тесты**: 62 теста (config, db, handlers)

@@ -4,6 +4,9 @@
 from __future__ import annotations
 import sqlite3
 import json
+import time
+import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -11,13 +14,31 @@ from dataclasses import dataclass
 from src.config import get_paths, get_config, WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA, MIGRATIONS, WORKERS_TABLE, WORKER_DOCUMENTS_TABLE, WORKER_MEETINGS_TABLE
 from src.models import Worker, WorkerDocument, WorkerMeeting
 
+logger = logging.getLogger(__name__)
+
+# Максимальное количество повторов при "database is locked"
+_MAX_RETRIES = 5
+_RETRY_DELAY = 0.5  # секунд
+
 
 class _Conn:
+    """Контекстный менеджер для соединения с SQLite с retry при lock."""
+
     def __init__(self, db_path, timeout):
-        self._conn = sqlite3.connect(str(db_path), timeout=timeout)
+        self._db_path = db_path
+        self._timeout = timeout
+        self._conn = None
+
+    def _connect(self):
+        self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
+
     def __enter__(self):
+        self._connect()
         return self._conn
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
@@ -27,6 +48,22 @@ class _Conn:
         finally:
             self._conn.close()
         return False
+
+
+def _retry_on_locked(func, *args, **kwargs):
+    """Выполнить функцию с повтором при 'database is locked'."""
+    last_error = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower():
+                last_error = e
+                logger.warning("Database locked, retry %d/%d...", attempt + 1, _MAX_RETRIES)
+                time.sleep(_RETRY_DELAY * (attempt + 1))
+            else:
+                raise
+    raise last_error
 
 
 # ─── Управление соединениями ───
@@ -43,7 +80,6 @@ class DatabaseConnection:
         """Инициализация БД и миграции."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self.get_connection() as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute(WORKER_SCHEMA)
             conn.execute(WORKER_DOCUMENTS_SCHEMA)
@@ -58,10 +94,10 @@ class DatabaseConnection:
 
             conn.commit()
 
-            # Синхронизация файлов на диске → БД
-            self._sync_docs_from_disk(conn)
+        # Синхронизация файлов на диске → БД (отдельная транзакция)
+        _retry_on_locked(self._sync_docs_from_disk)
 
-    def _sync_docs_from_disk(self, conn: sqlite3.Connection) -> None:
+    def _sync_docs_from_disk(self) -> None:
         """Сканировать docs_dir и дописать недостающие записи в worker_documents."""
         from src.config import get_paths
         paths = get_paths()
@@ -103,21 +139,22 @@ class DatabaseConnection:
                 'vnzh': 'vnzh_vnzh',
             }
 
-        # Все worker_id из БД
-        worker_ids = {row[0] for row in conn.execute(f"SELECT id FROM {WORKERS_TABLE}").fetchall()}
+        with self.get_connection() as conn:
+            # Все worker_id из БД
+            worker_ids = {row[0] for row in conn.execute(f"SELECT id FROM {WORKERS_TABLE}").fetchall()}
 
-        added = 0
-        for worker_id in worker_ids:
-            worker_dir = docs_dir / worker_id
-            if not worker_dir.exists():
-                continue
+            added = 0
+            for worker_id in worker_ids:
+                worker_dir = docs_dir / worker_id
+                if not worker_dir.exists():
+                    continue
 
-            existing = {
-                row[0] for row in conn.execute(
-                    f"SELECT doc_type FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?",
-                    (worker_id,)
-                ).fetchall()
-            }
+                existing = {
+                    row[0] for row in conn.execute(
+                        f"SELECT doc_type FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?",
+                        (worker_id,)
+                    ).fetchall()
+                }
 
             for filename in worker_dir.iterdir():
                 if filename.name.startswith('.') or filename.name.startswith('temp_'):
@@ -138,17 +175,23 @@ class DatabaseConnection:
         return _Conn(self.db_path, self.timeout)
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
-        """Выполнить запрос и вернуть курсор."""
-        with self.get_connection() as conn:
-            return conn.execute(sql, params)
+        """Выполнить запрос и вернуть курсор (с retry при lock)."""
+        def _do():
+            with self.get_connection() as conn:
+                return conn.execute(sql, params)
+        return _retry_on_locked(_do)
 
     def fetchone(self, sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
-        with self.get_connection() as conn:
-            return conn.execute(sql, params).fetchone()
+        def _do():
+            with self.get_connection() as conn:
+                return conn.execute(sql, params).fetchone()
+        return _retry_on_locked(_do)
 
     def fetchall(self, sql: str, params: tuple = ()) -> List[sqlite3.Row]:
-        with self.get_connection() as conn:
-            return conn.execute(sql, params).fetchall()
+        def _do():
+            with self.get_connection() as conn:
+                return conn.execute(sql, params).fetchall()
+        return _retry_on_locked(_do)
 
 
 # ─── Репозитории ───
@@ -384,7 +427,3 @@ def get_db_service() -> DatabaseService:
 def init_db(db_path: Optional[Path] = None) -> None:
     """Инициализация БД (создание таблиц и миграции)."""
     DatabaseConnection(db_path)
-
-
-# Импорт datetime в конце для избежания циклических импортов
-from datetime import datetime

@@ -6,7 +6,7 @@
 import os
 import shutil
 import logging
-from config import DOCS_DIR, MAX_FILE_SIZE, ALLOWED_MIME_TYPES
+from config import DOCS_DIR, MAX_FILE_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
 from config.documents import DOC_PREFIXES
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class FileSaver:
     @staticmethod
     def validate_file(file_path: str, file_size: int = 0) -> tuple[bool, str]:
         """
-        Валидация файла по размеру и MIME-типу.
+        Валидация файла по размеру и расширению.
 
         Args:
             file_path: путь к файлу
@@ -33,9 +33,13 @@ class FileSaver:
             max_mb = MAX_FILE_SIZE / (1024 * 1024)
             return False, f"Файл слишком большой ({size_mb:.1f}MB). Максимум: {max_mb}MB"
 
-        # Проверка расширения
+        # Проверка расширения — единый список из config
         ext = os.path.splitext(file_path)[1].lower()
-        allowed_by_ext = {
+        if ext not in ALLOWED_EXTENSIONS:
+            return False, f"Недопустимый формат: {ext}. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}"
+
+        # Проверка MIME-типа (для изображений)
+        _ext_to_mime = {
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.png': 'image/png',
@@ -43,12 +47,8 @@ class FileSaver:
             '.gif': 'image/gif',
             '.pdf': 'application/pdf',
         }
-
-        if ext not in allowed_by_ext:
-            return False, f"Недопустимый формат: {ext}. Разрешены: {', '.join(allowed_by_ext.keys())}"
-
-        mime = allowed_by_ext[ext]
-        if mime not in ALLOWED_MIME_TYPES:
+        mime = _ext_to_mime.get(ext)
+        if mime and mime not in ALLOWED_MIME_TYPES:
             return False, f"Недопустимый MIME-тип: {mime}"
 
         return True, ""

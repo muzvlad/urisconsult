@@ -149,7 +149,7 @@ def get_paths() -> AppPaths:
         try:
             if NETWORK_SERVER.exists():
                 db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
-                docs_dir = NETWORK_SERVER / "users" / "docs"
+                docs_dir = NETWORK_SERVER / "bot" / "Users" / "docs"
                 bot_dir = NETWORK_SERVER / "bot"
                 if db_path.parent.exists() or docs_dir.exists():
                     result[0] = AppPaths(
@@ -176,7 +176,7 @@ def get_paths() -> AppPaths:
     return AppPaths(
         project_root=root,
         db_path=root / "bot" / "Users" / "users.db",
-        docs_dir=root / "users" / "docs",
+        docs_dir=root / "bot" / "Users" / "docs",
         bot_dir=root / "bot",
     )
 

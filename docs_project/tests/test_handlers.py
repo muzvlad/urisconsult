@@ -12,7 +12,7 @@ BOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 sys.path.insert(0, BOT_DIR)
 
 from handlers.registration import (
-    validate_phone, validate_email, validate_date, WorkerForm,
+    validate_phone, validate_email, validate_date, get_worker_form,
 )
 
 
@@ -89,6 +89,7 @@ class TestValidateDate:
 
 class TestWorkerForm:
     def test_has_basic_states(self):
+        WorkerForm = get_worker_form()
         basic_states = [
             'name', 'citizenship', 'gender', 'position', 'object',
             'object_address', 'manager', 'phone_main', 'phone_additional',
@@ -99,6 +100,7 @@ class TestWorkerForm:
                 f"WorkerForm не имеет состояние '{state_name}'"
 
     def test_has_document_states(self):
+        WorkerForm = get_worker_form()
         from config.documents import DOC_FLOWS
         for cat, docs in DOC_FLOWS.items():
             for doc in docs:
@@ -106,12 +108,14 @@ class TestWorkerForm:
                     f"WorkerForm не имеет состояние для '{doc.key}' ({cat})"
 
     def test_has_russia_extra_states(self):
+        WorkerForm = get_worker_form()
         extra = ['russia_marital_status', 'russia_relatives', 'russia_relatives_phone']
         for state_name in extra:
             assert hasattr(WorkerForm, state_name), \
                 f"WorkerForm не имеет состояние '{state_name}'"
 
     def test_has_control_states(self):
+        WorkerForm = get_worker_form()
         control = ['confirmation', 'edit']
         for state_name in control:
             assert hasattr(WorkerForm, state_name), \
@@ -119,9 +123,9 @@ class TestWorkerForm:
 
     def test_category_specific_states_are_unique(self):
         """Категорийные состояния уникальны (не считая photo/passport)."""
+        WorkerForm = get_worker_form()
         from config.documents import DOC_FLOWS
         seen = {}
-        # Пропускаем photo и passport — они общие
         shared = {'photo', 'passport'}
         for cat, docs in DOC_FLOWS.items():
             for doc in docs:

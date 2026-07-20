@@ -10,11 +10,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove
 
 from config.documents import DOC_FLOWS, get_doc_by_key, DOC_LABELS
-from keyboards.reply_kb import get_confirmation_keyboard, get_edit_keyboard
+from keyboards.reply_kb import get_confirmation_keyboard
 from services.file_saver import FileSaver
 from services.db_saver import DBSaver
 from handlers.commands import cleanup_user_temp_files
-from handlers.registration import WorkerForm
+from handlers.registration import get_worker_form
+from utils import build_edit_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     text += "\nВсе верно?"
 
     await message.answer(text, parse_mode="Markdown", reply_markup=get_confirmation_keyboard())
-    await state.set_state(WorkerForm.confirmation)
+    await state.set_state(get_worker_form().confirmation)
 
 
 async def process_confirmation(callback: types.CallbackQuery, state: FSMContext):
@@ -87,28 +88,29 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
         data = await state.get_data()
         user = callback.from_user
         citizenship = data.get('citizenship', '')
-
-        # Генерируем ID заранее, чтобы документы сохранились с правильным именем
-        worker_id = data.get('id', '') or await DBSaver.get_next_id()
-        data['id'] = worker_id
-
-        # Сохраняем документы
-        saved_files = {}
-        if citizenship in DOC_FLOWS:
-            for doc in DOC_FLOWS[citizenship]:
-                temp_path = data.get(f'{doc.key}_temp_path')
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        saved_filename = FileSaver.save_document(
-                            temp_path, worker_id, doc.key
-                        )
-                        saved_files[doc.key] = saved_filename
-                    except Exception as e:
-                        logger.error("Ошибка сохранения %s: %s", doc.key, e)
-
-        data['saved_files'] = saved_files
+        temp_files = data.get('temp_files', [])
 
         try:
+            # Генерируем ID заранее, чтобы документы сохранились с правильным именем
+            worker_id = data.get('id', '') or await DBSaver.get_next_id()
+            data['id'] = worker_id
+
+            # Сохраняем документы
+            saved_files = {}
+            if citizenship in DOC_FLOWS:
+                for doc in DOC_FLOWS[citizenship]:
+                    temp_path = data.get(f'{doc.key}_temp_path')
+                    if temp_path and os.path.exists(temp_path):
+                        try:
+                            saved_filename = FileSaver.save_document(
+                                temp_path, worker_id, doc.key
+                            )
+                            saved_files[doc.key] = saved_filename
+                        except Exception as e:
+                            logger.error("Ошибка сохранения %s: %s", doc.key, e)
+
+            data['saved_files'] = saved_files
+
             worker_id, _ = await DBSaver.save_worker_data(
                 user_id=user.id,
                 data=data,
@@ -129,11 +131,10 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
             await callback.message.edit_text(
                 "❌ Произошла ошибка при сохранении данных. Попробуйте позже."
             )
-
-        await state.clear()
-
-        temp_files = data.get('temp_files', [])
-        FileSaver.cleanup_temp_files(temp_files)
+        finally:
+            # Всегда очищаем temp файлы
+            await state.clear()
+            FileSaver.cleanup_temp_files(temp_files)
 
     elif callback.data == "restart":
         await state.clear()
@@ -142,14 +143,16 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
             "🔄 Начинаем заполнение заново.\n"
             "Введите ваше ФИО:"
         )
-        await state.set_state(WorkerForm.name)
+        await state.set_state(get_worker_form().name)
 
     elif callback.data == "edit":
+        data = await state.get_data()
+        citizenship = data.get('citizenship', '')
         await callback.message.edit_text(
             "✏️ Выберите поле, которое хотите исправить:",
-            reply_markup=get_edit_keyboard()
+            reply_markup=build_edit_keyboard(citizenship)
         )
-        await state.set_state(WorkerForm.edit)
+        await state.set_state(get_worker_form().edit)
 
 
 async def process_edit(callback: types.CallbackQuery, state: FSMContext):
@@ -184,7 +187,7 @@ async def process_edit(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"✏️ Введите новое значение для поля {field_name}:"
     )
-    await state.set_state(WorkerForm.edit)
+    await state.set_state(get_worker_form().edit)
 
 
 async def process_edit_value(message: types.Message, state: FSMContext):

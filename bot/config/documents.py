@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class DocumentType:
     """Описание одного типа документа."""
     key: str              # Уникальный ключ (BN поле в БД)
@@ -124,7 +124,7 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
 # Автозаполняем category в каждом DocumentType
 for _cat_name, _cat_docs in DOC_FLOWS.items():
     for _doc in _cat_docs:
-        _doc.category = _cat_name
+        object.__setattr__(_doc, 'category', _cat_name)
 
 
 # ─── Производные маппинги (авто-генерация из DOC_FLOWS) ──────────────

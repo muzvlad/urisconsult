@@ -5,6 +5,8 @@
   workers            — личная информация
   worker_documents   — документы (фото, паспорта и т.д.)
   worker_meetings    — встречи
+
+Версионирование: миграции выполняются ОДИН раз через PRAGMA user_version.
 """
 import os
 import json
@@ -16,13 +18,15 @@ from config.documents import DOC_FLOWS, DOC_PREFIXES
 
 logger = logging.getLogger(__name__)
 
-_db: aiosqlite.Connection | None = None
+# ─── Текущая версия схемы ──────────────────────────────────────────
+# Увеличивать при каждом изменении схемы БД
+CURRENT_SCHEMA_VERSION = 2
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
 
 async def get_db() -> aiosqlite.Connection:
-    """Получить соединение с БД (синглтон)."""
+    """Получить соединение с БД (синглтон с проверкой здоровья)."""
     global _db
     if _db is not None:
         try:
@@ -42,6 +46,9 @@ async def get_db() -> aiosqlite.Connection:
     return _db
 
 
+_db: aiosqlite.Connection | None = None
+
+
 async def close_db():
     """Закрыть соединение с БД."""
     global _db
@@ -53,7 +60,7 @@ async def close_db():
 # ─── Инициализация ──────────────────────────────────────────────────
 
 async def init_db():
-    """Инициализация БД: создание таблиц и миграция из JSON/старой схемы."""
+    """Инициализация БД: создание таблиц и миграция по версиям."""
     db = await get_db()
 
     # Таблица работников (только личная информация)
@@ -78,7 +85,8 @@ async def init_db():
             telegram_username TEXT,
             created_at TEXT,
             status TEXT DEFAULT 'pending',
-            rejection_reasons TEXT DEFAULT '[]'
+            rejection_reasons TEXT DEFAULT '[]',
+            notified_at TEXT
         )
     """)
 
@@ -113,37 +121,46 @@ async def init_db():
     await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
     await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
 
-    # Миграция: добавить notified_at если нет
-    try:
-        await db.execute("ALTER TABLE workers ADD COLUMN notified_at TEXT")
-    except Exception:
-        pass  # колонка уже существует
-
     await db.commit()
 
-    # Миграция: старая схема → новая
-    await _migrate_from_old_schema(db)
-    # Миграция: JSON-файлы → БД
-    await _migrate_from_json(db)
-    # Синхронизация: файлы на диске → БД
-    await _sync_docs_from_disk(db)
+    # Версионированные миграции
+    cursor = await db.execute("PRAGMA user_version")
+    row = await cursor.fetchone()
+    current_version = row[0]
+
+    if current_version < CURRENT_SCHEMA_VERSION:
+        logger.info("Миграция БД: версия %d → %d", current_version, CURRENT_SCHEMA_VERSION)
+        await _run_migrations(db, current_version)
+        await db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+        await db.commit()
+        logger.info("Миграция БД завершена. Текущая версия: %d", CURRENT_SCHEMA_VERSION)
 
 
-# ─── Миграция со старой схемы ────────────────────────────────────────
+async def _run_migrations(db: aiosqlite.Connection, from_version: int):
+    """Запустить миграции от from_version до CURRENT_SCHEMA_VERSION."""
+    if from_version < 1:
+        await _migrate_v0_to_v1(db)
+    if from_version < 2:
+        await _migrate_v1_to_v2(db)
+    # Здесь добавляются новые миграции:
+    # if from_version < 3:
+    #     await _migrate_v2_to_v3(db)
 
-async def _migrate_from_old_schema(db: aiosqlite.Connection):
-    """Если есть старая таблица workers с колонками документов — мигрировать в новую схему."""
+
+# ─── Миграция v0 → v1: старая схема с колонками документов ──────────
+
+async def _migrate_v0_to_v1(db: aiosqlite.Connection):
+    """Если есть старая таблица workers с колонками документов — мигрировать."""
     cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='workers'")
     row = await cursor.fetchone()
     if row is None:
         return
 
     create_sql = row[0]
-    # Если в CREATE TABLE есть колонка 'patent_snils' — это старая схема
     if 'patent_snils' not in create_sql:
         return
 
-    logger.info("Обнаружена старая схема БД. Миграция в нормализованную...")
+    logger.info("Миграция v0→v1: старая схема с колонками документов")
 
     # Читаем все данные из старой таблицы
     cursor = await db.execute("SELECT * FROM workers")
@@ -274,7 +291,37 @@ async def _migrate_from_old_schema(db: aiosqlite.Connection):
     # Удаляем старую таблицу
     await db.execute("DROP TABLE IF EXISTS workers_old_v1")
     await db.commit()
-    logger.info("Миграция в нормализованную схему завершена.")
+    logger.info("Миграция v0→v1 завершена.")
+
+
+# ─── Миграция v1 → v2: добавление колонок + JSON миграция + sync ────
+
+async def _migrate_v1_to_v2(db: aiosqlite.Connection):
+    """Миграция v1→v2: добавление notified_at, миграция JSON, синхронизация файлов."""
+    # Добавить notified_at если нет
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN notified_at TEXT")
+    except Exception:
+        pass
+
+    # Добавить status и rejection_reasons если нет
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN status TEXT DEFAULT 'pending'")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN rejection_reasons TEXT DEFAULT '[]'")
+    except Exception:
+        pass
+
+    await db.commit()
+
+    # Миграция: JSON-файлы → БД
+    await _migrate_from_json(db)
+    # Синхронизация: файлы на диске → БД
+    await _sync_docs_from_disk(db)
+
+    logger.info("Миграция v1→v2 завершена.")
 
 
 # ─── Миграция из JSON ────────────────────────────────────────────────
@@ -334,7 +381,6 @@ async def _migrate_from_json(db: aiosqlite.Connection):
             # Документы — все ключи из DOC_FLOWS
             for cat_docs in DOC_FLOWS.values():
                 for doc in cat_docs:
-                    # Старый JSON мог хранить под русскими названиями
                     value = data.get(doc.key, '')
                     if not value and doc.key == 'passport':
                         value = data.get('Паспорт', '')
@@ -455,6 +501,21 @@ async def save_worker(data: dict) -> str:
         f"INSERT OR REPLACE INTO workers ({cols}) VALUES ({placeholders})",
         list(personal.values())
     )
+
+    # Сохраняем встречи если есть
+    meetings = data.get('meetings', [])
+    if isinstance(meetings, str):
+        try:
+            meetings = json.loads(meetings)
+        except (json.JSONDecodeError, TypeError):
+            meetings = []
+    if meetings:
+        for m in (meetings or []):
+            if isinstance(m, dict):
+                await db.execute(
+                    "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                    (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+                )
 
     await db.commit()
     return worker_id

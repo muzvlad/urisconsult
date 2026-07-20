@@ -15,11 +15,12 @@ from aiogram.types import BotCommand, BotCommandScopeDefault, InlineKeyboardButt
 from config import BOT_TOKEN, DOCS_DIR, DB_PATH, ensure_dirs
 from config.documents import FIELD_LABELS
 from handlers.commands import register_commands, get_start_keyboard
-from handlers.registration import register_registration_handlers, WorkerForm
+from handlers.registration import register_registration_handlers, get_worker_form
 from handlers.documents import register_document_handlers
 from handlers.confirmation import register_confirmation_handlers
 from middleware import ThrottlingMiddleware
 from services import db
+from log_context import setup_logging_filters
 
 # ─── Настройка логирования ──────────────────────────────────────────
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
@@ -27,7 +28,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    format='%(asctime)s [%(levelname)s] %(name)s [uid=%(user_id)s w=%(worker_id)s]: %(message)s',
     handlers=[
         RotatingFileHandler(
             os.path.join(LOG_DIR, "bot.log"),
@@ -75,6 +76,7 @@ async def set_commands(bot: Bot):
 async def on_startup(bot: Bot):
     """Действия при запуске бота"""
     ensure_dirs()
+    setup_logging_filters()
     await db.init_db()
     await set_commands(bot)
 
@@ -163,6 +165,7 @@ async def main():
     dp.message.middleware(ThrottlingMiddleware(rate_limit=5, period=10.0))
 
     # Регистрация всех обработчиков
+    WorkerForm = get_worker_form()
     register_commands(dp, WorkerForm)
     register_registration_handlers(dp, WorkerForm)
     register_document_handlers(dp, WorkerForm)

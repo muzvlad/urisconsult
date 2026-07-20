@@ -1,6 +1,69 @@
 # Changelog
 
-## v2.7 (17.07.2026)
+## v2.8 (20.07.2026)
+
+Глубокий рефакторинг: DRY utils, ленивая инициализация, версионирование БД, единая структура хранения.
+
+### Архитектура — DRY
+- **`bot/utils.py`** — централизованные утилиты: `get_document_state()`, `build_edit_keyboard()`, `get_all_doc_keys()`, `get_field_prompt()`, `validate_file_extension()`
+- Убрано дублирование `doc_states` из `commands.py` (было 3 копии)
+- Убран захардкоженный `get_edit_keyboard()` из `reply_kb.py` — теперь генерируется из конфига
+- Клавиатура редактирования показывает документы **для текущей категории**
+
+### Архитектура — ленивая инициализация
+- `WorkerForm` создаётся лениво через `get_worker_form()` (при первом обращении)
+- Все импорты обновлены: `from handlers.registration import get_worker_form`
+- Убран side-effect при импорте модуля
+
+### Архитектура — типизация
+- **`bot/fsm_types.py`** — TypedDict для данных FSM (WorkerFormData)
+- **`bot/log_context.py`** — contextvars для `worker_id`/`user_id` в логах
+- Формат логов: `[uid=%(user_id)s w=%(worker_id)s]`
+
+### БД — версионирование
+- Миграции выполняются **один раз** через `PRAGMA user_version`
+- Текущая версия: 2 (normalize schema + status fields)
+- `_run_migrations(db, from_version)` — цепочка миграций v0→v1→v2
+- `save_worker()` теперь сохраняет встречи из `data['meetings']`
+
+### БД — исправления
+- `DocumentType` — `frozen=True` dataclass, category через `object.__setattr__`
+- Валидация citizenship перед переходом к документам (вместо hardcoded 'Патент')
+
+### Хранение данных — единая структура
+- Документы перемещены: `users/docs/` → `bot/Users/docs/`
+- Все пути консистентны: `bot/Users/users.db` + `bot/Users/docs/`
+- Обновлены: `bot/config/__init__.py`, `UI/src/config.py`
+
+### Rate limiting — fix memory leak
+- Фоновая `asyncio.Task` для очистки вместо счётчика запросов
+- Очистка неактивных пользователей каждые 60 сек (вместо каждые 100 запросов)
+
+### Temp файлы — fix race condition
+- `try/finally` в `process_confirmation` — temp файлы удаляются даже при ошибке
+
+### Валидация файлов — единый источник
+- `file_saver.py` и `documents.py` используют общий `config.ALLOWED_EXTENSIONS`
+- Убран дублированный `allowed_by_ext` из `file_saver.py`
+
+### UI — database is locked
+- Retry logic с экспоненциальной задержкой (5 попыток)
+- `PRAGMA busy_timeout=5000` для корректного ожидания лока
+- Каждый `execute`/`fetchone`/`fetchall` обёрнут в `_retry_on_locked()`
+
+### UI — сборка
+- `build_exe.bat` — убрано китайское зеркало pip, чистый ASCII
+- `build_exe.py` — добавлен `--add-data src`, вывод PyInstaller в консоль
+- `run.bat` — автоустановка зависимостей при первом запуске
+
+### Тесты
+- 62/62 бот-тестов, 46/46 UI-тестов
+- Исправлен frozen dataclass test
+- Исправлен meetings test (save_worker сохраняет встречи)
+
+---
+
+## v2.7 (15.07.2026)
 
 EXE-сборка, сетевая БД, БД-таймауты, пошаговые логи.
 

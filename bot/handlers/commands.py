@@ -18,9 +18,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 from config import DOCS_DIR
 from config.documents import DOC_FLOWS, DOC_LABELS, FIELD_LABELS, get_doc_flow
-from handlers.registration import WorkerForm
+from handlers.registration import get_worker_form
 from services import db
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from utils import get_document_state, get_all_doc_keys, get_field_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
             await _ask_rejected_field(callback.message, state, reasons[0], reasons, 0)
         else:
             await callback.message.answer("Введите ваше ФИО:")
-            await state.set_state(WorkerForm.name)
+            await state.set_state(get_worker_form().name)
 
     elif data.startswith("new_rejected:"):
         await db.resubmit_worker(worker_id)
@@ -73,7 +74,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
             "Начинаем заполнение новой анкеты.\n"
             "Введите ваше ФИО полностью:",
         )
-        await state.set_state(WorkerForm.name)
+        await state.set_state(get_worker_form().name)
 
 
 def get_start_keyboard():
@@ -135,7 +136,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             "Помогу собрать информацию и сохранить её в правильном формате."
         )
         await message.answer("Введите ваше ФИО полностью (например: Иванов Иван Иванович):")
-        await state.set_state(WorkerForm.name)
+        await state.set_state(get_worker_form().name)
 
 
 def _get_fix_keyboard():
@@ -197,7 +198,7 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
             await _ask_rejected_field(message, state, reasons[0], reasons, 0)
         else:
             await message.answer("Введите ваше ФИО:")
-            await state.set_state(WorkerForm.name)
+            await state.set_state(get_worker_form().name)
 
     elif message.text == "Новая анкета":
         await db.resubmit_worker(rejected_worker_id)
@@ -206,7 +207,7 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
             "Начинаем заполнение новой анкеты.\nВведите ваше ФИО полностью:",
             reply_markup=types.ReplyKeyboardRemove()
         )
-        await state.set_state(WorkerForm.name)
+        await state.set_state(get_worker_form().name)
 
     else:
         await message.answer("Пожалуйста, выберите действие:",
@@ -248,48 +249,23 @@ async def any_message(message: types.Message):
     )
 
 
-def _ask_rejected_field_prompt(field):
-    """Получить текст запроса для поля."""
-    field_prompts = {
-        'name': "Введите исправленное ФИО:",
-        'citizenship': "Введите категорию (Патент/Студент/ЕАЭС/РВП/ВНЖ/Россия):",
-        'gender': "Введите пол (Мужской/Женский):",
-        'position': "Введите должность:",
-        'object': "Введите объект:",
-        'object_address': "Введите адрес объекта:",
-        'manager': "Введите ФИО менеджера:",
-        'phone_main': "Введите основной телефон:",
-        'phone_additional': "Введите доп. телефон (или 'пропустить'):",
-        'email': "Введите email:",
-        'date': "Введите дату рождения (ДД.ММ.ГГГГ):",
-        'registration': "Введите регистрацию:",
-    }
-    return field_prompts.get(field, f"Введите значение для {field}:")
-
-
 async def _ask_rejected_field(message, state, field, reasons, index):
     """Запросить исправление конкретного отклонённого поля."""
     from keyboards.reply_kb import get_skip_keyboard
 
-    # Все документы из конфига
-    all_doc_keys = set()
-    for cat_docs in DOC_FLOWS.values():
-        for doc in cat_docs:
-            all_doc_keys.add(doc.key)
+    all_doc_keys = get_all_doc_keys()
 
     if field in all_doc_keys:
         # Документ — запрашиваем отправку файла
         doc_label = DOC_LABELS.get(field, field)
         await message.answer(f"Отправьте исправленный файл: {doc_label}",
                              reply_markup=get_skip_keyboard())
-        doc_states = {'photo': WorkerForm.photo, 'passport': WorkerForm.passport}
-        for cat_docs in DOC_FLOWS.values():
-            for doc in cat_docs:
-                if doc.key not in doc_states:
-                    doc_states[doc.key] = getattr(WorkerForm, doc.key, None)
-        state_obj = doc_states.get(field)
+        state_obj = get_document_state(field)
         if state_obj:
             await state.set_state(state_obj)
+        else:
+            logger.error("Не найдено состояние для документа: %s", field)
+            await message.answer("❌ Ошибка. Пропустите этот документ.")
         await state.update_data(
             fix_current_field=field,
             fix_reasons=reasons,
@@ -298,10 +274,10 @@ async def _ask_rejected_field(message, state, field, reasons, index):
         return
 
     # Текстовое поле — ВСЕГДА fix_value
-    prompt = _ask_rejected_field_prompt(field)
+    prompt = get_field_prompt(field)
     await message.answer(prompt)
 
-    await state.set_state(WorkerForm.fix_value)
+    await state.set_state(get_worker_form().fix_value)
     await state.update_data(
         fix_current_field=field,
         fix_reasons=reasons,

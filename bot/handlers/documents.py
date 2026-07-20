@@ -9,20 +9,16 @@ from aiogram import types, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove
 
-from config import DOCS_DIR, ALLOWED_EXTENSIONS
+from config import DOCS_DIR
 from config.documents import (
     DOC_FLOWS, DOC_PROMPTS, get_doc_flow, get_next_doc, get_doc_by_key,
 )
 from services.file_saver import FileSaver
 from keyboards.reply_kb import get_skip_keyboard
 from handlers.confirmation import show_confirmation
+from utils import get_document_state, validate_file_extension
 
 logger = logging.getLogger(__name__)
-
-
-def _validate_extension(file_path: str) -> bool:
-    ext = os.path.splitext(file_path)[1].lower()
-    return ext in ALLOWED_EXTENSIONS
 
 
 # ─── Скачивание документа ───────────────────────────────────────────
@@ -39,7 +35,7 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
         file = await bot.get_file(file_id)
         file_path = file.file_path
 
-        if not _validate_extension(file_path):
+        if not validate_file_extension(file_path):
             await message.answer(
                 f"❌ Недопустимый формат файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}\n"
                 "Попробуйте еще раз или нажмите 'Пропустить':"
@@ -116,7 +112,8 @@ async def _skip_document(message: types.Message, state: FSMContext, doc_key: str
 async def _go_next(message: types.Message, state: FSMContext,
                    current_doc_key: str, citizenship: str):
     """Перейти к следующему документу или завершить сбор."""
-    from handlers.registration import WorkerForm
+    from handlers.registration import get_worker_form
+    WorkerForm = get_worker_form()
 
     next_item = get_next_doc(current_doc_key, citizenship)
     if next_item:
@@ -135,7 +132,8 @@ async def _go_next(message: types.Message, state: FSMContext,
 
 async def _after_documents(message: types.Message, state: FSMContext):
     """Обработка после сбора документов (для России — доп. поля)."""
-    from handlers.registration import WorkerForm
+    from handlers.registration import get_worker_form
+    WorkerForm = get_worker_form()
     from keyboards.reply_kb import get_marital_keyboard
 
     data = await state.get_data()
@@ -169,12 +167,9 @@ async def skip_document(message: types.Message, state: FSMContext, doc_key: str)
 
 def register_document_handlers(dp, form_class):
     """Регистрация обработчиков для ВСЕХ документов из конфига."""
-    all_doc_keys = set()
-    for cat_docs in DOC_FLOWS.values():
-        for doc in cat_docs:
-            all_doc_keys.add(doc.key)
+    from utils import get_all_doc_keys
 
-    for doc_key in all_doc_keys:
+    for doc_key in get_all_doc_keys():
         state = getattr(form_class, doc_key)
 
         def make_doc_handler(dk):

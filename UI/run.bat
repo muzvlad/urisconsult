@@ -1,20 +1,26 @@
 @echo off
+cd /d "%~dp0"
 
-set "SCRIPT_DIR=%~dp0"
-
-REM Поддержка UNC-путей (сетевые папки)
-pushd "%SCRIPT_DIR%" 2>nul
-if errorlevel 1 (
-    set "SCRIPT_DIR=%TEMP%\urisconsult_ui"
-    if not exist "%SCRIPT_DIR%" mkdir "%SCRIPT_DIR%"
-    xcopy /s /e /q "%~dp0src" "%SCRIPT_DIR%\src\" >nul
-    xcopy /q "%~dp0db_viewer.py" "%SCRIPT_DIR%\" >nul
-    cd /d "%SCRIPT_DIR%"
+REM Если venv нет или пустой — создаём и ставим зависимости
+if not exist ".venv\Scripts\python.exe" (
+    echo Creating venv...
+    python -m venv .venv
+    echo Installing dependencies...
+    ".venv\Scripts\pip.exe" install -r requirements.txt --retries 5 --timeout 120 -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 )
 
-REM Запуск
-if exist "%SCRIPT_DIR%.venv\Scripts\python.exe" (
-    "%SCRIPT_DIR%.venv\Scripts\python.exe" db_viewer.py
-) else (
-    python db_viewer.py
+REM Проверяем что Pillow установлен
+".venv\Scripts\python.exe" -c "import PIL" >nul 2>&1
+if errorlevel 1 (
+    echo Installing dependencies...
+    ".venv\Scripts\pip.exe" install -r requirements.txt --retries 5 --timeout 120 -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+)
+
+echo Starting application...
+".venv\Scripts\python.exe" db_viewer.py
+
+if errorlevel 1 (
+    echo.
+    echo ERROR! Code: %errorlevel%
+    pause
 )

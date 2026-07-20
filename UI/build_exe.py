@@ -64,11 +64,14 @@ def create_executable() -> bool:
             '--icon=NONE',            # Без иконки
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
+            # Добавляем src как data (чтобы PyInstaller знал о структуре)
+            f'--add-data={src_dir}{os.pathsep}src',
             # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',
             '--hidden-import=PIL.Image',
             '--hidden-import=PIL.ImageTk',
+            '--hidden-import=PIL._tkinter_finder',
             '--hidden-import=reportlab',
             '--hidden-import=reportlab.pdfgen',
             '--hidden-import=reportlab.lib.pagesizes',
@@ -81,6 +84,7 @@ def create_executable() -> bool:
             '--hidden-import=sqlite3',
             '--hidden-import=threading',
             '--hidden-import=concurrent.futures',
+            '--hidden-import=src',
             '--hidden-import=src.config',
             '--hidden-import=src.database',
             '--hidden-import=src.models',
@@ -98,7 +102,7 @@ def create_executable() -> bool:
         print("=" * 50)
         print("Command:", ' '.join(cmd))
 
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=base_dir, encoding='utf-8', errors='replace')
+        result = subprocess.run(cmd, cwd=base_dir, encoding='utf-8', errors='replace')
 
         if result.returncode == 0:
             exe_path = os.path.join(base_dir, 'dist', '[Search]Driver.exe')
@@ -142,4 +146,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"\nFATAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nPress Enter to exit...")
