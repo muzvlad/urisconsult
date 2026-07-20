@@ -705,6 +705,10 @@ def main() -> None:
         _log("tk.Tk created")
         app = DBViewerApp(root)
         _log("DBViewerApp created")
+        root.deiconify()
+        root.lift()
+        root.focus_force()
+        _log("window lifted, starting mainloop")
         root.mainloop()
         _log("mainloop ended")
 
