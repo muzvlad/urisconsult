@@ -119,6 +119,12 @@ def main():
                         status_label.config(text=f"Повторная попытка {attempt}...")
                         splash_root.update()
 
+                # Закрываем splash ПЕРЕД запуском main (main создаст своё окно)
+                _log("Закрытие splash, запуск main()...")
+                if close_splash:
+                    close_splash()
+                    close_splash = None
+
                 _try_run()
                 return  # Успех — выходим
 
@@ -127,7 +133,14 @@ def main():
                 _log(f"Попытка {attempt} не удалась: {e}")
                 if attempt <= MAX_RETRIES:
                     _log(f"Повтор через 2 сек...")
+                    # Пересоздаём splash для следующей попытки
+                    if splash_root:
+                        try:
+                            splash_root.destroy()
+                        except Exception:
+                            pass
                     time.sleep(2)
+                    splash_root, close_splash, status_label = _show_splash()
 
         # Все попытки исчерпаны
         _log(f"Все попытки исчерпаны. Последняя ошибка: {last_error}")
