@@ -686,18 +686,50 @@ class DBViewerApp:
 
 def main() -> None:
     """Точка входа приложения."""
+    import sys, os
+
+    def _log(msg):
+        """Лог в файл для диагностики."""
+        try:
+            paths = [
+                os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
+                os.path.join(os.path.expanduser('~'), 'ui_error.log'),
+            ]
+            for p in paths:
+                try:
+                    with open(p, 'a', encoding='utf-8') as f:
+                        f.write(msg + '\n')
+                except Exception:
+                    continue
+                break
+        except Exception:
+            pass
+
+    _log("main() вызван")
     setup_logging(level=logging.INFO)
+    _log("Логирование настроено")
 
     try:
+        _log("Создание окна tk.Tk...")
         root = tk.Tk()
+        _log("Окно создано")
+
+        _log("Инициализация приложения...")
         app = DBViewerApp(root)
+        _log("Приложение инициализировано")
+
         root.deiconify()
         root.lift()
         root.focus_force()
+        _log("Окно поднято на передний план")
+
+        _log("Запуск mainloop...")
         root.mainloop()
+        _log("Mainloop завершён")
 
     except Exception as e:
-        log_exception("Application crashed")
+        _log(f"ОШИБКА: {e}")
+        log_exception("Аварийное завершение приложения")
         msg = f"Ошибка запуска:\n{e}"
         try:
             root = tk.Tk()
