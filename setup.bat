@@ -107,16 +107,32 @@ echo.
 REM --- Configure .env ---
 echo [5/5] Configuration...
 if exist "!REPO_DIR!\bot\.env" (
-    echo    bot.env exists, skip
+    REM Проверяем есть ли NETWORK_SERVER в .env
+    findstr /C:"NETWORK_SERVER" "!REPO_DIR!\bot\.env" >nul 2>&1
+    if errorlevel 1 (
+        echo    Adding NETWORK_SERVER to bot.env...
+        echo.>> "!REPO_DIR!\bot\.env"
+        set /p NETWORK_SRV="    Enter network server (e.g. \\192.168.1.100\share) or Enter to skip: "
+        if "!NETWORK_SRV!"=="" (
+            echo NETWORK_SERVER=>> "!REPO_DIR!\bot\.env"
+        ) else (
+            echo NETWORK_SERVER=!NETWORK_SRV!>> "!REPO_DIR!\bot\.env"
+        )
+    ) else (
+        echo    bot.env exists, skip
+    )
     goto :done
 )
 echo.
 set /p BOT_TOKEN="    Enter bot token from @BotFather (or Enter to skip): "
+set /p NETWORK_SRV="    Enter network server (e.g. \\192.168.1.100\share) or Enter to skip: "
 if "%BOT_TOKEN%"=="" (
     echo BOT_TOKEN=YOUR_TOKEN_HERE> "!REPO_DIR!\bot\.env"
+    echo NETWORK_SERVER=%NETWORK_SRV%>> "!REPO_DIR!\bot\.env"
     echo    [WARN] Edit bot.env before running bot
 ) else (
     echo BOT_TOKEN=%BOT_TOKEN%> "!REPO_DIR!\bot\.env"
+    echo NETWORK_SERVER=%NETWORK_SRV%>> "!REPO_DIR!\bot\.env"
     echo    OK
 )
 
