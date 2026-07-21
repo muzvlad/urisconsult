@@ -42,6 +42,10 @@ if not exist "!REPO_DIR!\bot\bot.py" goto :clone
 
 REM --- Pull existing ---
 echo    Pulling latest changes...
+
+REM Сначала откатываем локальные изменения чтобы pull не упал
+git -C "!REPO_DIR!" checkout -- . 2>nul
+
 if exist "!TOKEN_FILE!" (
     set /p GITHUB_TOKEN=<"!TOKEN_FILE!"
     git -C "!REPO_DIR!" pull --quiet 2>nul
@@ -127,12 +131,16 @@ echo.
 set /p BOT_TOKEN="    Enter bot token from @BotFather (or Enter to skip): "
 set /p NETWORK_SRV="    Enter network server (e.g. \\192.168.1.100\share) or Enter to skip: "
 if "%BOT_TOKEN%"=="" (
-    echo BOT_TOKEN=YOUR_TOKEN_HERE> "!REPO_DIR!\bot\.env"
-    echo NETWORK_SERVER=%NETWORK_SRV%>> "!REPO_DIR!\bot\.env"
+    >"!REPO_DIR!\bot\.env" (
+        echo BOT_TOKEN=YOUR_TOKEN_HERE
+        echo NETWORK_SERVER=%NETWORK_SRV%
+    )
     echo    [WARN] Edit bot.env before running bot
 ) else (
-    echo BOT_TOKEN=%BOT_TOKEN%> "!REPO_DIR!\bot\.env"
-    echo NETWORK_SERVER=%NETWORK_SRV%>> "!REPO_DIR!\bot\.env"
+    >"!REPO_DIR!\bot\.env" (
+        echo BOT_TOKEN=%BOT_TOKEN%
+        echo NETWORK_SERVER=%NETWORK_SRV%
+    )
     echo    OK
 )
 
