@@ -642,21 +642,28 @@ class DBViewerApp:
             show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
 
 
-def main(splash_root=None) -> None:
-    """Точка входа приложения."""
+def main(root=None, splash=None) -> None:
+    """Точка входа приложения.
+
+    Args:
+        root: Корневое окно tk.Tk() (создаётся в db_viewer.py)
+        splash: Splash window (Toplevel) для закрытия после загрузки
+    """
     diagnostic_log("main() вызван")
     setup_logging(level=logging.INFO)
     diagnostic_log("Логирование настроено")
 
+    own_root = root is None
     try:
-        diagnostic_log("Создание окна tk.Tk...")
-        root = tk.Tk()
-        diagnostic_log("Окно создано")
+        if own_root:
+            diagnostic_log("Создание окна tk.Tk...")
+            root = tk.Tk()
+            diagnostic_log("Окно создано")
 
         # Обновляем splash если он есть
-        if splash_root:
+        if splash:
             try:
-                splash_root.update()
+                splash.update()
             except Exception:
                 pass
 
@@ -665,9 +672,9 @@ def main(splash_root=None) -> None:
         diagnostic_log("Приложение инициализировано")
 
         # Закрываем splash — приложение готово
-        if splash_root:
+        if splash:
             try:
-                splash_root.destroy()
+                splash.destroy()
             except Exception:
                 pass
 
@@ -684,17 +691,22 @@ def main(splash_root=None) -> None:
         diagnostic_log(f"ОШИБКА: {e}")
         log_exception("Аварийное завершение приложения")
         # Закрываем splash при ошибке
-        if splash_root:
+        if splash:
             try:
-                splash_root.destroy()
+                splash.destroy()
+            except Exception:
+                pass
+        if own_root:
+            try:
+                root.destroy()
             except Exception:
                 pass
         msg = f"Ошибка запуска:\n{e}"
         try:
-            root = tk.Tk()
-            root.withdraw()
+            err_root = tk.Tk()
+            err_root.withdraw()
             messagebox.showerror("Ошибка", msg)
-            root.destroy()
+            err_root.destroy()
         except Exception:
             pass
 

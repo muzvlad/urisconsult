@@ -43,23 +43,23 @@ else:
 
 # ─── Splash screen ──────────────────────────────────────────────────
 
-def _create_splash():
-    """Создать splash screen. Возвращает (root, status_label)."""
+def _create_splash(root):
+    """Создать splash screen поверх root. Возвращает (splash_window, status_label)."""
     import tkinter as tk
     from tkinter import ttk
 
-    root = tk.Tk()
-    root.overrideredirect(True)
-    root.attributes('-topmost', True)
+    splash = tk.Toplevel(root)
+    splash.overrideredirect(True)
+    splash.attributes('-topmost', True)
 
     w, h = 400, 180
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
+    sw = splash.winfo_screenwidth()
+    sh = splash.winfo_screenheight()
     x = (sw - w) // 2
     y = (sh - h) // 2
-    root.geometry(f"{w}x{h}+{x}+{y}")
+    splash.geometry(f"{w}x{h}+{x}+{y}")
 
-    frame = tk.Frame(root, bg='#2c3e50', relief=tk.RAISED, borderwidth=2)
+    frame = tk.Frame(splash, bg='#2c3e50', relief=tk.RAISED, borderwidth=2)
     frame.pack(fill=tk.BOTH, expand=True)
 
     tk.Label(frame, text="URIS Consult",
@@ -78,38 +78,42 @@ def _create_splash():
                             font=('Arial', 9), bg='#2c3e50', fg='#888')
     status_label.pack(pady=(0, 15))
 
-    root.update()
-    return root, status_label
+    splash.update()
+    return splash, status_label
 
 
-def _destroy_splash(root):
+def _destroy_splash(splash):
     """Безопасно уничтожить splash."""
     try:
-        if root and root.winfo_exists():
-            root.destroy()
+        if splash and splash.winfo_exists():
+            splash.destroy()
     except Exception:
         pass
 
 
-def _try_run(splash_root=None):
-    """Попытка запустить приложение. Splash остаётся видимым пока идёт загрузка."""
+def _try_run(root, splash=None):
+    """Попытка запустить приложение."""
     _log("Импорт src.main...")
     from src.main import main as new_main
     _log("Импорт завершён, запуск main()...")
-    # Передаём splash в main чтобы он закрыл его когда будет готов
-    new_main(splash_root=splash_root)
+    new_main(root=root, splash=splash)
     _log("main() завершён")
     return True
 
 
 def main():
     """Запуск приложения с splash screen и retry."""
-    splash_root = None
+    import tkinter as tk
+
+    # Один корневой Tk() на всё приложение
+    root = tk.Tk()
+    root.withdraw()  # Скрываем пока не готово
+
+    splash = None
 
     try:
-        # Показываем splash
         _log("Показ splash screen...")
-        splash_root, status_label = _create_splash()
+        splash, status_label = _create_splash(root)
 
         last_error = None
         for attempt in range(1, MAX_RETRIES + 2):
@@ -118,32 +122,31 @@ def main():
                     _log(f"Попытка {attempt}/{MAX_RETRIES + 1}...")
                     if status_label:
                         status_label.config(text=f"Повторная попытка {attempt}...")
-                        splash_root.update()
+                        splash.update()
 
-                # Запускаем приложение — splash остаётся видимым
-                _try_run(splash_root)
+                _try_run(root, splash)
                 return
 
             except Exception as e:
                 last_error = e
                 _log(f"Попытка {attempt} не удалась: {e}")
-                _destroy_splash(splash_root)
-                splash_root = None
+                _destroy_splash(splash)
+                splash = None
                 if attempt <= MAX_RETRIES:
                     _log("Повтор через 2 сек...")
                     time.sleep(2)
-                    # Пересоздаём splash для следующей попытки
-                    splash_root, status_label = _create_splash()
+                    splash, status_label = _create_splash(root)
 
-        # Все попытки исчерпаны
         _log(f"Все попытки исчерпаны: {last_error}")
-        _destroy_splash(splash_root)
+        _destroy_splash(splash)
         _show_error(f"Не удалось запустить приложение:\n{last_error}")
+        root.destroy()
 
     except Exception as e:
         _log(f"Критическая ошибка: {e}\n{traceback.format_exc()}")
-        _destroy_splash(splash_root)
+        _destroy_splash(splash)
         _show_error(f"Критическая ошибка:\n{e}")
+        root.destroy()
 
 
 def _show_error(msg):
