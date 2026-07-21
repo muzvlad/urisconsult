@@ -16,34 +16,20 @@ from src.models import Worker, WorkerDocument, WorkerMeeting
 
 logger = logging.getLogger(__name__)
 
-# Максимальное количество повторов при "database is locked"
-_MAX_RETRIES = 10
-_RETRY_DELAY = 1.0  # секунд
-
 
 class _Conn:
-    """Контекстный менеджер для соединения с SQLite с retry при lock."""
+    """Контекстный менеджер для соединения с SQLite."""
 
-    def __init__(self, db_path, timeout):
+    def __init__(self, db_path, timeout=5.0):
         self._db_path = db_path
         self._timeout = timeout
         self._conn = None
 
     def _connect(self):
-        for attempt in range(_MAX_RETRIES):
-            try:
-                self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
-                self._conn.row_factory = sqlite3.Row
-                # WAL mode + увеличенный busy_timeout для совместной работы с ботом
-                self._conn.execute("PRAGMA journal_mode=WAL")
-                self._conn.execute("PRAGMA busy_timeout=10000")
-                return
-            except sqlite3.OperationalError as e:
-                if "database is locked" in str(e).lower() and attempt < _MAX_RETRIES - 1:
-                    logger.warning("DB locked on connect, retry %d/%d...", attempt + 1, _MAX_RETRIES)
-                    time.sleep(_RETRY_DELAY * (attempt + 1))
-                else:
-                    raise
+        self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
 
     def __enter__(self):
         self._connect()
@@ -60,17 +46,22 @@ class _Conn:
         return False
 
 
+class DatabaseError(Exception):
+    """Ошибка подключения к БД."""
+    pass
+
+
 def _retry_on_locked(func, *args, **kwargs):
     """Выполнить функцию с повтором при 'database is locked'."""
     last_error = None
-    for attempt in range(_MAX_RETRIES):
+    for attempt in range(5):
         try:
             return func(*args, **kwargs)
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e).lower():
                 last_error = e
-                logger.warning("Database locked, retry %d/%d...", attempt + 1, _MAX_RETRIES)
-                time.sleep(_RETRY_DELAY * (attempt + 1))
+                logger.warning("Database locked, retry %d/5...", attempt + 1)
+                time.sleep(0.5 * (attempt + 1))
             else:
                 raise
     raise last_error
@@ -81,7 +72,7 @@ def _retry_on_locked(func, *args, **kwargs):
 class DatabaseConnection:
     """Управление соединениями с БД."""
 
-    def __init__(self, db_path: Optional[Path] = None, timeout: float = 15.0):
+    def __init__(self, db_path: Optional[Path] = None, timeout: float = 5.0):
         self.db_path = db_path or get_paths().db_path
         self.timeout = timeout
         self._init_db()

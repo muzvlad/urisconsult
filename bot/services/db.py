@@ -1,5 +1,8 @@
 """
-Сервис для работы с SQLite базой данных (нормализованная схема).
+Слой работы с SQLite базой данных (нормализованная схема).
+
+Каждая операция открывает своё соединение и сразу закрывает —
+БД не блокируется между вызовами, UI работает параллельно.
 
 Схема:
   workers            — личная информация
@@ -12,6 +15,7 @@ import os
 import json
 import logging
 import aiosqlite
+from contextlib import asynccontextmanager
 
 from config import DB_PATH, USERS_DIR
 from config.documents import DOC_FLOWS, DOC_PREFIXES
@@ -19,122 +23,106 @@ from config.documents import DOC_FLOWS, DOC_PREFIXES
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-# Увеличивать при каждом изменении схемы БД
 CURRENT_SCHEMA_VERSION = 2
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
 
-async def get_db() -> aiosqlite.Connection:
-    """Получить соединение с БД (синглтон с проверкой здоровья)."""
-    global _db
-    if _db is not None:
-        try:
-            await _db.execute("SELECT 1")
-            return _db
-        except Exception:
-            try:
-                await _db.close()
-            except Exception:
-                pass
-            _db = None
-
-    _db = await aiosqlite.connect(DB_PATH)
-    _db.row_factory = aiosqlite.Row
-    await _db.execute("PRAGMA journal_mode=WAL")
-    await _db.execute("PRAGMA foreign_keys=ON")
-    await _db.execute("PRAGMA busy_timeout=10000")
-    return _db
-
-
-_db: aiosqlite.Connection | None = None
+@asynccontextmanager
+async def _get_conn():
+    """Контекстный менеджер: открывает соединение, отдаёт, закрывает."""
+    conn = await aiosqlite.connect(DB_PATH)
+    conn.row_factory = aiosqlite.Row
+    await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA foreign_keys=ON")
+    await conn.execute("PRAGMA busy_timeout=3000")
+    try:
+        yield conn
+    finally:
+        await conn.close()
 
 
 async def close_db():
-    """Закрыть соединение с БД."""
-    global _db
-    if _db is not None:
-        await _db.close()
-        _db = None
+    """Ничего не делает — соединения больше не глобальные."""
+    pass
 
 
 # ─── Инициализация ──────────────────────────────────────────────────
 
 async def init_db():
     """Инициализация БД: создание таблиц и миграция по версиям."""
-    db = await get_db()
+    async with _get_conn() as db:
+        # Таблица работников
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS workers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                citizenship TEXT,
+                gender TEXT,
+                position TEXT,
+                object TEXT,
+                object_address TEXT,
+                manager TEXT,
+                phone_main TEXT,
+                phone_additional TEXT,
+                email TEXT,
+                date TEXT,
+                registration TEXT,
+                marital_status TEXT,
+                relatives_json TEXT DEFAULT '[]',
+                telegram_id INTEGER,
+                telegram_username TEXT,
+                created_at TEXT,
+                status TEXT DEFAULT 'pending',
+                rejection_reasons TEXT DEFAULT '[]',
+                notified_at TEXT
+            )
+        """)
 
-    # Таблица работников (только личная информация)
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS workers (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            citizenship TEXT,
-            gender TEXT,
-            position TEXT,
-            object TEXT,
-            object_address TEXT,
-            manager TEXT,
-            phone_main TEXT,
-            phone_additional TEXT,
-            email TEXT,
-            date TEXT,
-            registration TEXT,
-            marital_status TEXT,
-            relatives_json TEXT DEFAULT '[]',
-            telegram_id INTEGER,
-            telegram_username TEXT,
-            created_at TEXT,
-            status TEXT DEFAULT 'pending',
-            rejection_reasons TEXT DEFAULT '[]',
-            notified_at TEXT
-        )
-    """)
+        # Таблица документов
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS worker_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worker_id TEXT NOT NULL,
+                doc_type TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (worker_id) REFERENCES workers(id),
+                UNIQUE(worker_id, doc_type)
+            )
+        """)
 
-    # Таблица документов (нормализовано)
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS worker_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            worker_id TEXT NOT NULL,
-            doc_type TEXT NOT NULL,
-            filename TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id),
-            UNIQUE(worker_id, doc_type)
-        )
-    """)
+        # Таблица встреч
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS worker_meetings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worker_id TEXT NOT NULL,
+                date TEXT,
+                note TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (worker_id) REFERENCES workers(id)
+            )
+        """)
 
-    # Таблица встреч
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS worker_meetings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            worker_id TEXT NOT NULL,
-            date TEXT,
-            note TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id)
-        )
-    """)
+        # Индексы
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
 
-    # Индексы
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
-
-    await db.commit()
-
-    # Версионированные миграции
-    cursor = await db.execute("PRAGMA user_version")
-    row = await cursor.fetchone()
-    current_version = row[0]
-
-    if current_version < CURRENT_SCHEMA_VERSION:
-        logger.info("Миграция БД: версия %d → %d", current_version, CURRENT_SCHEMA_VERSION)
-        await _run_migrations(db, current_version)
-        await db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
         await db.commit()
-        logger.info("Миграция БД завершена. Текущая версия: %d", CURRENT_SCHEMA_VERSION)
+
+        # Версионированные миграции
+        cursor = await db.execute("PRAGMA user_version")
+        row = await cursor.fetchone()
+        current_version = row[0]
+
+        if current_version < CURRENT_SCHEMA_VERSION:
+            logger.info("Миграция БД: версия %d → %d", current_version, CURRENT_SCHEMA_VERSION)
+            await _run_migrations(db, current_version)
+            await db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            await db.commit()
+            logger.info("Миграция БД завершена. Текущая версия: %d", CURRENT_SCHEMA_VERSION)
 
 
 async def _run_migrations(db: aiosqlite.Connection, from_version: int):
@@ -143,9 +131,6 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v0_to_v1(db)
     if from_version < 2:
         await _migrate_v1_to_v2(db)
-    # Здесь добавляются новые миграции:
-    # if from_version < 3:
-    #     await _migrate_v2_to_v3(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -163,7 +148,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
 
     logger.info("Миграция v0→v1: старая схема с колонками документов")
 
-    # Читаем все данные из старой таблицы
     cursor = await db.execute("SELECT * FROM workers")
     rows = await cursor.fetchall()
     old_columns = [desc[0] for desc in cursor.description]
@@ -171,32 +155,26 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
     for row in rows:
         old_data = dict(zip(old_columns, row))
 
-        # Определяем колонки документов
         doc_columns = set()
         for cat_docs in DOC_FLOWS.values():
             for doc in cat_docs:
                 doc_columns.add(doc.key)
 
-        # Личные данные — только колонки которые ЕСТЬ в старой таблице
         meta_fields = {'id'} | doc_columns | {'meetings', 'russia_marital_status', 'russia_relatives'}
         personal = {k: v for k, v in old_data.items() if k not in meta_fields}
 
-        # Семейное положение и родственники — маппим из старых колонок если есть
         if 'russia_marital_status' in old_columns:
             personal['marital_status'] = old_data.get('russia_marital_status', '')
         if 'russia_relatives' in old_columns:
             personal['relatives_json'] = old_data.get('russia_relatives', '[]')
 
-        # Убираем None → пустая строка
         personal = {k: (v if v is not None else '') for k, v in personal.items()}
 
-        # Вставляем работника (без документов)
         placeholders = ', '.join(['?'] * len(personal))
         cols = ', '.join(personal.keys())
         await db.execute(f"INSERT OR IGNORE INTO workers ({cols}) VALUES ({placeholders})",
                          list(personal.values()))
 
-        # Мигрируем документы
         for col in old_columns:
             if col in doc_columns:
                 filename = old_data.get(col)
@@ -206,7 +184,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
                         (old_data['id'], col, filename)
                     )
 
-        # Мигрируем встречи
         meetings_raw = old_data.get('meetings', '[]')
         if isinstance(meetings_raw, str):
             try:
@@ -225,11 +202,9 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
 
     await db.commit()
 
-    # Переименовываем старую таблицу (бэкап)
     await db.execute("ALTER TABLE workers RENAME TO workers_old_v1")
     await db.commit()
 
-    # Создаём новую таблицу workers
     await db.execute("""
         CREATE TABLE IF NOT EXISTS workers (
             id TEXT PRIMARY KEY,
@@ -253,7 +228,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
         )
     """)
 
-    # Копируем данные из старой таблицы в новую
     await db.execute("""
         INSERT OR IGNORE INTO workers
         (id, name, citizenship, gender, position, object, object_address,
@@ -265,7 +239,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
         FROM workers_old_v1
     """)
 
-    # Копируем документы из старой таблицы
     _valid_col_pattern = set()
     for docs in DOC_FLOWS.values():
         for doc in docs:
@@ -282,14 +255,12 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
                 (col,)
             )
 
-    # Копируем встречи
     await db.execute("""
         INSERT INTO worker_meetings (worker_id, date, note)
         SELECT id, '', meetings FROM workers_old_v1
         WHERE meetings IS NOT NULL AND meetings != '[]' AND meetings != ''
     """)
 
-    # Удаляем старую таблицу
     await db.execute("DROP TABLE IF EXISTS workers_old_v1")
     await db.commit()
     logger.info("Миграция v0→v1 завершена.")
@@ -299,13 +270,11 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
 
 async def _migrate_v1_to_v2(db: aiosqlite.Connection):
     """Миграция v1→v2: добавление notified_at, миграция JSON, синхронизация файлов."""
-    # Добавить notified_at если нет
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN notified_at TEXT")
     except Exception:
         pass
 
-    # Добавить status и rejection_reasons если нет
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN status TEXT DEFAULT 'pending'")
     except Exception:
@@ -317,9 +286,7 @@ async def _migrate_v1_to_v2(db: aiosqlite.Connection):
 
     await db.commit()
 
-    # Миграция: JSON-файлы → БД
     await _migrate_from_json(db)
-    # Синхронизация: файлы на диске → БД
     await _sync_docs_from_disk(db)
 
     logger.info("Миграция v1→v2 завершена.")
@@ -336,11 +303,10 @@ async def _migrate_from_json(db: aiosqlite.Connection):
     if not json_files:
         return
 
-    # Проверяем, есть ли уже данные в БД
     cursor = await db.execute("SELECT COUNT(*) FROM workers")
     count = (await cursor.fetchone())[0]
     if count > 0:
-        return  # Уже есть данные — не мигрируем
+        return
 
     for filename in json_files:
         filepath = os.path.join(USERS_DIR, filename)
@@ -352,7 +318,6 @@ async def _migrate_from_json(db: aiosqlite.Connection):
             if not worker_id:
                 continue
 
-            # Личные данные
             personal = {
                 'id': worker_id,
                 'name': data.get('name', ''),
@@ -379,7 +344,6 @@ async def _migrate_from_json(db: aiosqlite.Connection):
                 list(personal.values())
             )
 
-            # Документы — все ключи из DOC_FLOWS
             for cat_docs in DOC_FLOWS.values():
                 for doc in cat_docs:
                     value = data.get(doc.key, '')
@@ -396,7 +360,6 @@ async def _migrate_from_json(db: aiosqlite.Connection):
                             (worker_id, doc.key, value)
                         )
 
-            # Встречи
             meetings = data.get('meetings', [])
             if isinstance(meetings, str):
                 try:
@@ -426,11 +389,9 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
     if not os.path.isdir(DOCS_DIR):
         return
 
-    # Получаем все worker_id из БД
     cursor = await db.execute("SELECT id FROM workers")
     worker_ids = {row[0] for row in await cursor.fetchall()}
 
-    # Префиксы → doc_type маппинг
     prefix_to_doc = {}
     for cat_docs in DOC_FLOWS.values():
         for doc in cat_docs:
@@ -442,7 +403,6 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
         if not os.path.isdir(worker_dir):
             continue
 
-        # Уже существующие записи
         cursor = await db.execute(
             "SELECT doc_type FROM worker_documents WHERE worker_id = ?", (worker_id,)
         )
@@ -468,238 +428,235 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID (потокобезопасно через BEGIN IMMEDIATE)."""
-    db = await get_db()
-    # BEGIN IMMEDIATE блокирует БД для других процессов до завершения транзакции
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
-        row = await cursor.fetchone()
-        if not row:
-            next_id = 1
-        else:
-            try:
-                next_id = int(row[0]) + 1
-            except (ValueError, TypeError):
+    """Получить следующий доступный ID."""
+    async with _get_conn() as db:
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
+            row = await cursor.fetchone()
+            if not row:
                 next_id = 1
-        next_id_str = str(next_id).zfill(5)
-        # Вставляем временную запись чтобы зафиксировать ID
-        await db.execute(
-            "INSERT OR IGNORE INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
-            (next_id_str,)
-        )
-        await db.commit()
-        return next_id_str
-    except Exception:
-        await db.execute("ROLLBACK")
-        raise
+            else:
+                try:
+                    next_id = int(row[0]) + 1
+                except (ValueError, TypeError):
+                    next_id = 1
+            next_id_str = str(next_id).zfill(5)
+            await db.execute(
+                "INSERT OR IGNORE INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
+                (next_id_str,)
+            )
+            await db.commit()
+            return next_id_str
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
 
 
 async def save_worker(data: dict) -> str:
     """Сохранить работника в БД (INSERT или UPDATE по id)."""
-    db = await get_db()
-    worker_id = data.get('id', '')
+    async with _get_conn() as db:
+        worker_id = data.get('id', '')
 
-    # Личные данные (без документов)
-    personal_keys = [
-        'id', 'name', 'citizenship', 'gender', 'position', 'object',
-        'object_address', 'manager', 'phone_main', 'phone_additional',
-        'email', 'date', 'registration', 'marital_status', 'relatives_json',
-        'telegram_id', 'telegram_username', 'created_at',
-    ]
+        personal_keys = [
+            'id', 'name', 'citizenship', 'gender', 'position', 'object',
+            'object_address', 'manager', 'phone_main', 'phone_additional',
+            'email', 'date', 'registration', 'marital_status', 'relatives_json',
+            'telegram_id', 'telegram_username', 'created_at',
+        ]
 
-    personal = {k: data.get(k, '' if k != 'telegram_id' else None) for k in personal_keys}
+        personal = {k: data.get(k, '' if k != 'telegram_id' else None) for k in personal_keys}
 
-    placeholders = ', '.join(['?'] * len(personal))
-    cols = ', '.join(personal.keys())
-    # ON CONFLICT DO UPDATE — обновляем все поля кроме id
-    update_cols = [k for k in personal.keys() if k != 'id']
-    update_clause = ', '.join(f"{k} = excluded.{k}" for k in update_cols)
-    await db.execute(
-        f"INSERT INTO workers ({cols}) VALUES ({placeholders}) "
-        f"ON CONFLICT(id) DO UPDATE SET {update_clause}",
-        list(personal.values())
-    )
+        placeholders = ', '.join(['?'] * len(personal))
+        cols = ', '.join(personal.keys())
+        update_cols = [k for k in personal.keys() if k != 'id']
+        update_clause = ', '.join(f"{k} = excluded.{k}" for k in update_cols)
+        await db.execute(
+            f"INSERT INTO workers ({cols}) VALUES ({placeholders}) "
+            f"ON CONFLICT(id) DO UPDATE SET {update_clause}",
+            list(personal.values())
+        )
 
-    # Удаляем старые встречи перед вставкой новых
-    await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
+        await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
 
-    # Сохраняем встречи если есть
-    meetings = data.get('meetings', [])
-    if isinstance(meetings, str):
-        try:
-            meetings = json.loads(meetings)
-        except (json.JSONDecodeError, TypeError):
-            meetings = []
-    if meetings:
-        for m in (meetings or []):
-            if isinstance(m, dict):
-                await db.execute(
-                    "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-                    (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
-                )
+        meetings = data.get('meetings', [])
+        if isinstance(meetings, str):
+            try:
+                meetings = json.loads(meetings)
+            except (json.JSONDecodeError, TypeError):
+                meetings = []
+        if meetings:
+            for m in (meetings or []):
+                if isinstance(m, dict):
+                    await db.execute(
+                        "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                        (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+                    )
 
-    await db.commit()
-    return worker_id
+        await db.commit()
+        return worker_id
 
 
 async def save_documents(worker_id: str, doc_files: dict[str, str]):
     """Сохранить документы работника. doc_files = {doc_type: filename}."""
-    db = await get_db()
-    # Удаляем старые документы этого типа
-    for doc_type in doc_files:
-        await db.execute(
-            "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ?",
-            (worker_id, doc_type)
-        )
-    # Вставляем новые
-    for doc_type, filename in doc_files.items():
-        if filename:
+    async with _get_conn() as db:
+        for doc_type in doc_files:
             await db.execute(
-                "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                (worker_id, doc_type, filename)
+                "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ?",
+                (worker_id, doc_type)
             )
-    await db.commit()
+        for doc_type, filename in doc_files.items():
+            if filename:
+                await db.execute(
+                    "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                    (worker_id, doc_type, filename)
+                )
+        await db.commit()
 
 
 async def get_worker(worker_id: str) -> dict | None:
     """Получить работника по ID (с документами и встречами)."""
-    db = await get_db()
+    async with _get_conn() as db:
+        cursor = await db.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
+        row = await cursor.fetchone()
+        if row is None:
+            return None
 
-    cursor = await db.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
-    row = await cursor.fetchone()
-    if row is None:
-        return None
+        result = dict(row)
 
-    result = dict(row)
+        cursor = await db.execute(
+            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+            (worker_id,)
+        )
+        docs = await cursor.fetchall()
+        result['documents'] = {row[0]: row[1] for row in docs}
 
-    # Документы
-    cursor = await db.execute(
-        "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
-        (worker_id,)
-    )
-    docs = await cursor.fetchall()
-    result['documents'] = {row[0]: row[1] for row in docs}
+        cursor = await db.execute(
+            "SELECT date, note FROM worker_meetings WHERE worker_id = ? ORDER BY id",
+            (worker_id,)
+        )
+        meetings = await cursor.fetchall()
+        result['meetings_list'] = [{'date': row[0], 'note': row[1]} for row in meetings]
 
-    # Встречи
-    cursor = await db.execute(
-        "SELECT date, note FROM worker_meetings WHERE worker_id = ? ORDER BY id",
-        (worker_id,)
-    )
-    meetings = await cursor.fetchall()
-    result['meetings_list'] = [{'date': row[0], 'note': row[1]} for row in meetings]
-
-    return result
+        return result
 
 
 async def get_all_workers() -> list[dict]:
     """Получить всех работников (без документов для производительности)."""
-    db = await get_db()
-    cursor = await db.execute("SELECT * FROM workers ORDER BY id")
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    async with _get_conn() as db:
+        cursor = await db.execute("SELECT * FROM workers ORDER BY id")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 async def get_worker_documents(worker_id: str) -> dict[str, str]:
     """Получить документы работника: {doc_type: filename}."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
-        (worker_id,)
-    )
-    rows = await cursor.fetchall()
-    return {row[0]: row[1] for row in rows}
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+            (worker_id,)
+        )
+        rows = await cursor.fetchall()
+        return {row[0]: row[1] for row in rows}
 
 
 async def search_workers(query: str) -> list[dict]:
     """Поиск работников по ФИО."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT * FROM workers WHERE name LIKE ? ORDER BY id",
-        (f"%{query}%",)
-    )
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT * FROM workers WHERE name LIKE ? ORDER BY id",
+            (f"%{query}%",)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 # ─── Управление статусом анкеты ─────────────────────────────────────
 
 async def get_pending_workers() -> list[dict]:
-    """Получить работников со статусом pending (ожидающие обработки)."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT * FROM workers WHERE status = 'pending' ORDER BY created_at DESC"
-    )
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    """Получить работников со статусом pending."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT * FROM workers WHERE status = 'pending' ORDER BY created_at DESC"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 async def get_pending_count() -> int:
     """Количество анкет, ожидающих обработки."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT COUNT(*) FROM workers WHERE status = 'pending'"
-    )
-    row = await cursor.fetchone()
-    return row[0]
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM workers WHERE status = 'pending'"
+        )
+        row = await cursor.fetchone()
+        return row[0]
 
 
 async def accept_worker(worker_id: str):
     """Принять анкету — установить статус 'accepted'."""
-    db = await get_db()
-    await db.execute(
-        "UPDATE workers SET status = 'accepted', rejection_reasons = '[]' WHERE id = ?",
-        (worker_id,)
-    )
-    await db.commit()
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE workers SET status = 'accepted', rejection_reasons = '[]' WHERE id = ?",
+            (worker_id,)
+        )
+        await db.commit()
 
 
 async def reject_worker(worker_id: str, reasons: list[str]):
     """Отклонить анкету с указанием причин."""
-    db = await get_db()
-    await db.execute(
-        "UPDATE workers SET status = 'rejected', rejection_reasons = ?, notified_at = NULL WHERE id = ?",
-        (json.dumps(reasons, ensure_ascii=False), worker_id)
-    )
-    await db.commit()
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE workers SET status = 'rejected', rejection_reasons = ?, notified_at = NULL WHERE id = ?",
+            (json.dumps(reasons, ensure_ascii=False), worker_id)
+        )
+        await db.commit()
 
 
 async def resubmit_worker(worker_id: str):
     """Клиент переподал анкету — вернуть статус 'pending'."""
-    db = await get_db()
-    await db.execute(
-        "UPDATE workers SET status = 'pending', rejection_reasons = '[]', notified_at = NULL WHERE id = ?",
-        (worker_id,)
-    )
-    await db.commit()
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE workers SET status = 'pending', rejection_reasons = '[]', notified_at = NULL WHERE id = ?",
+            (worker_id,)
+        )
+        await db.commit()
 
 
 async def get_worker_status(worker_id: str) -> str | None:
     """Получить статус работника."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT status FROM workers WHERE id = ?", (worker_id,)
-    )
-    row = await cursor.fetchone()
-    return row[0] if row else None
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT status FROM workers WHERE id = ?", (worker_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
 
 
 async def mark_notified(worker_id: str):
     """Пометить работника как уведомлённого."""
     from datetime import datetime
-    db = await get_db()
-    await db.execute(
-        "UPDATE workers SET notified_at = ? WHERE id = ?",
-        (datetime.now().isoformat(), worker_id)
-    )
-    await db.commit()
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE workers SET notified_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), worker_id)
+        )
+        await db.commit()
 
 
 async def get_unnotified_rejected_workers() -> list[dict]:
     """Получить отклонённых работников, которым ещё не отправлено уведомление."""
-    db = await get_db()
-    cursor = await db.execute(
-        "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '')"
-    )
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '')"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def fetch_one(sql: str, params: tuple = ()) -> dict | None:
+    """Выполнить запрос и вернуть одну строку или None."""
+    async with _get_conn() as db:
+        cursor = await db.execute(sql, params)
+        row = await cursor.fetchone()
+        return dict(row) if row else None

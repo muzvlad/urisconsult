@@ -253,19 +253,5 @@ class TestWorkerMeetings:
         assert len(worker['meetings_list']) == 2
 
 
-class TestDatabaseSingleton:
-    def test_get_db_returns_same_connection(self, fresh_db):
-        db_path, users_dir, docs_dir = fresh_db
-        db_module = _patch_db_module(db_path, users_dir, docs_dir)
-
-        db1 = asyncio.get_event_loop().run_until_complete(db_module.get_db())
-        db2 = asyncio.get_event_loop().run_until_complete(db_module.get_db())
-        assert db1 is db2
-
-    def test_close_db_sets_none(self, fresh_db):
-        db_path, users_dir, docs_dir = fresh_db
-        db_module = _patch_db_module(db_path, users_dir, docs_dir)
-
-        asyncio.get_event_loop().run_until_complete(db_module.get_db())
-        asyncio.get_event_loop().run_until_complete(db_module.close_db())
-        assert db_module._db is None
+# TestDatabaseSingleton удалён — бот больше не использует синглтон-соединение.
+# Каждая операция открывает своё соединение и сразу закрывает.
