@@ -8,9 +8,9 @@ import shutil
 from pathlib import Path
 import pytest
 
-# Добавляем src в путь
-src_dir = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_dir))
+# Добавляем UI/ в путь чтобы 'from src.xxx import ...' работал
+ui_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(ui_dir))
 
 
 @pytest.fixture(scope="session")

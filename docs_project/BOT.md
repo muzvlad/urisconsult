@@ -77,6 +77,8 @@ python bot.py
 
 Путь: `bot/Users/users.db` (SQLite, WAL mode)
 
+Схема определена в `shared/__init__.py` (общий модуль для бота и UI).
+
 Таблица `workers`:
 
 | Группа | Колонки |
@@ -156,8 +158,20 @@ python bot.py
 ## Технические детали
 
 - **FSM**: aiogram 3.x MemoryStorage (ленивая инициализация)
-- **БД**: aiosqlite (async), версионирование через PRAGMA user_version
+- **БД**: aiosqlite (async), WAL mode, `busy_timeout=10000`
 - **Клавиатуры**: Reply (действия) + Inline (гражданство, редактирование)
 - **Токен**: файл `.env` → `BOT_TOKEN`
+- **Сетевой сервер**: файл `.env` → `NETWORK_SERVER`
 - **Rate limiting**: 5 сообщений / 10 сек, фоновая очистка
 - **Тесты**: 62 теста (config, db, handlers)
+
+## Конфигурация
+
+Файл `bot/.env`:
+
+```
+BOT_TOKEN=ваш_токен_бота
+NETWORK_SERVER=\\144.76.70.246\urisconsult
+```
+
+- `NETWORK_SERVER` — если пустой или недоступен, используется локальная БД в `bot/Users/`

@@ -42,25 +42,18 @@ def _build_worker_form() -> type:
 
     # Создаём класс динамически
     state_attrs = {s: State() for s in states}
-    return type('get_worker_form()', (StatesGroup,), state_attrs)
+    return type('WorkerForm', (StatesGroup,), state_attrs)
 
 
 _worker_form: type[StatesGroup] | None = None
 
 
 def get_worker_form() -> type[StatesGroup]:
-    """Получить get_worker_form() (ленивая инициализация)."""
+    """Получить WorkerForm (ленивая инициализация)."""
     global _worker_form
     if _worker_form is None:
         _worker_form = _build_worker_form()
     return _worker_form
-
-
-# Обратная совместимость: get_worker_form() = get_worker_form() при первом обращении
-def __getattr__(name):
-    if name == 'get_worker_form()':
-        return get_worker_form()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ─── Валидаторы ─────────────────────────────────────────────────────

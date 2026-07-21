@@ -12,9 +12,6 @@ from config.documents import (  # noqa: F401 — re-export
     CITIZENSHIP_DOC_KEYS, get_doc_flow, get_next_doc, get_doc_by_key,
 )
 
-# ─── Сетевой адрес сервера ───
-NETWORK_SERVER = r"\\144.76.70.246\urisconsult"
-
 # ─── Базовые пути ─────────────────────────────────────────────────────
 # __file__ = bot/config/__init__.py  →  bot/config/  →  bot/
 CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,10 +21,11 @@ PROJECT_ROOT = os.path.dirname(BASE_DIR)  # корень проекта
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+NETWORK_SERVER = os.getenv("NETWORK_SERVER", "")
 
 # Пути к папкам — приоритет сетевому серверу
 try:
-    if os.path.isdir(NETWORK_SERVER):
+    if NETWORK_SERVER and os.path.isdir(NETWORK_SERVER):
         USERS_DIR = os.path.join(NETWORK_SERVER, "bot", "Users")
         DB_PATH = os.path.join(USERS_DIR, "users.db")
         DOCS_DIR = os.path.join(USERS_DIR, "docs")

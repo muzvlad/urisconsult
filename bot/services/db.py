@@ -43,6 +43,7 @@ async def get_db() -> aiosqlite.Connection:
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")
     await _db.execute("PRAGMA foreign_keys=ON")
+    await _db.execute("PRAGMA busy_timeout=10000")
     return _db
 
 
@@ -467,17 +468,31 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID."""
+    """Получить следующий доступный ID (потокобезопасно через BEGIN IMMEDIATE)."""
     db = await get_db()
-    cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
-    row = await cursor.fetchone()
-    if not row:
-        return "00001"
+    # BEGIN IMMEDIATE блокирует БД для других процессов до завершения транзакции
+    await db.execute("BEGIN IMMEDIATE")
     try:
-        next_id = int(row[0]) + 1
-    except (ValueError, TypeError):
-        next_id = 1
-    return str(next_id).zfill(5)
+        cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
+        row = await cursor.fetchone()
+        if not row:
+            next_id = 1
+        else:
+            try:
+                next_id = int(row[0]) + 1
+            except (ValueError, TypeError):
+                next_id = 1
+        next_id_str = str(next_id).zfill(5)
+        # Вставляем временную запись чтобы зафиксировать ID
+        await db.execute(
+            "INSERT OR IGNORE INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
+            (next_id_str,)
+        )
+        await db.commit()
+        return next_id_str
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
 
 
 async def save_worker(data: dict) -> str:
@@ -497,10 +512,17 @@ async def save_worker(data: dict) -> str:
 
     placeholders = ', '.join(['?'] * len(personal))
     cols = ', '.join(personal.keys())
+    # ON CONFLICT DO UPDATE — обновляем все поля кроме id
+    update_cols = [k for k in personal.keys() if k != 'id']
+    update_clause = ', '.join(f"{k} = excluded.{k}" for k in update_cols)
     await db.execute(
-        f"INSERT OR REPLACE INTO workers ({cols}) VALUES ({placeholders})",
+        f"INSERT INTO workers ({cols}) VALUES ({placeholders}) "
+        f"ON CONFLICT(id) DO UPDATE SET {update_clause}",
         list(personal.values())
     )
+
+    # Удаляем старые встречи перед вставкой новых
+    await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
 
     # Сохраняем встречи если есть
     meetings = data.get('meetings', [])

@@ -14,84 +14,26 @@ from src.services import get_document_service, get_telegram_service, get_pdf_ser
 from src.models import Worker
 from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, PhotoWidget
 from src.dialogs import NotificationsWindow, RejectDialog, ask_yes_no, show_info, show_error, show_warning
-from src.logging_config import setup_logging, get_logger, log_error, log_exception, log_info
-
-# Русские названия документов (fallback если конфиг не загрузился)
-_DOC_LABELS_FALLBACK = {
-    'photo': 'Фото (селфи)',
-    'passport': 'Паспорт',
-    'patent_snils': 'СНИЛС',
-    'patent_registration': 'Регистрация',
-    'patent_migration_card': 'Миграционная карта',
-    'patent_dms': 'ДМС',
-    'patent_patent': 'Патент',
-    'patent_inn': 'ИНН',
-    'patent_receipt': 'Чек по патенту',
-    'patent_language_cert': 'Сертификат о знании языка',
-    'patent_bank_details': 'Реквизиты банковской карты',
-    'patent_fingerprint_card': 'Дактилоскопическая карта',
-    'student_snils': 'СНИЛС',
-    'student_registration': 'Регистрация',
-    'student_migration_card': 'Миграционная карта',
-    'student_dms': 'ДМС',
-    'student_inn': 'ИНН',
-    'student_fingerprint_card': 'Дактилоскопическая карта',
-    'student_university_cert': 'Справка из ВУЗа',
-    'student_bank_details': 'Реквизиты банковской карты',
-    'eaeas_registration': 'Регистрация',
-    'eaeas_migration_card': 'Миграционная карта',
-    'eaeas_dms': 'ДМС',
-    'eaeas_inn': 'ИНН',
-    'eaeas_snils': 'СНИЛС',
-    'eaeas_fingerprint_card': 'Дактилоскопическая карта',
-    'eaeas_bank_details': 'Реквизиты банковской карты',
-    'rvp_migration_card': 'Миграционная карта',
-    'rvp_dms_oms': 'ДМС/ОМС',
-    'rvp_inn': 'ИНН',
-    'rvp_snils': 'СНИЛС',
-    'rvp_bank_details': 'Реквизиты банковской карты',
-    'vnzh_migration_card': 'Миграционная карта',
-    'vnzh_vnzh': 'ВНЖ',
-    'vnzh_dms_oms': 'ДМС/ОМС',
-    'vnzh_inn': 'ИНН',
-    'vnzh_snils': 'СНИЛС',
-    'vnzh_work_book': 'Трудовая книжка/ЭТК',
-    'vnzh_bank_details': 'Реквизиты банковской карты',
-    'russia_passport_propiska': 'Паспорт (прописка)',
-    'russia_propiska': 'Прописка',
-    'russia_inn': 'ИНН',
-    'russia_snils': 'СНИЛС',
-    'russia_education_doc': 'Документ об образовании',
-    'russia_work_book': 'Трудовая книжка/ЭТК',
-    'russia_military_doc': 'Военный билет/Приписное',
-}
+from src.logging_config import setup_logging, get_logger, log_error, log_exception, log_info, diagnostic_log
 
 
 class DBViewerApp:
     """Главное приложение просмотра карточек сотрудников."""
 
     def __init__(self, root: tk.Tk):
-        import sys, os
-        def _log(msg):
-            try:
-                p = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log')
-                with open(p, 'a', encoding='utf-8') as f:
-                    f.write(f"[app] {msg}\n")
-            except: pass
-
         self.root = root
-        _log("Получение конфигурации...")
+        diagnostic_log("Получение конфигурации...")
         self.config = get_config()
         self.paths = get_paths()
-        _log(f"БД: {self.paths.db_path}")
-        _log(f"Документы: {self.paths.docs_dir}")
-        _log("Инициализация сервисов...")
+        diagnostic_log(f"БД: {self.paths.db_path}")
+        diagnostic_log(f"Документы: {self.paths.docs_dir}")
+        diagnostic_log("Инициализация сервисов...")
         self.doc_service = get_document_service()
         self.telegram = get_telegram_service()
         self.pdf_service = get_pdf_service()
-        _log("Подключение к БД...")
+        diagnostic_log("Подключение к БД...")
         self.db = get_db_service()
-        _log("БД подключена")
+        diagnostic_log("БД подключена")
 
         # Состояние
         self.search_results: List[Worker] = []
@@ -104,14 +46,14 @@ class DBViewerApp:
         self.status_bar: Optional[tk.Label] = None
         self.bell: Optional[NotificationBell] = None
 
-        _log("Инициализация БД (таблицы, миграции)...")
+        diagnostic_log("Инициализация БД (таблицы, миграции)...")
         self._init_db()
-        _log("Настройка интерфейса...")
+        diagnostic_log("Настройка интерфейса...")
         self._setup_ui()
-        _log("Обновление колокольчика...")
+        diagnostic_log("Обновление колокольчика...")
         self._refresh_pending_count()
         center_window(self.root, self.config.window_width, self.config.window_height)
-        _log("Приложение готово!")
+        diagnostic_log("Приложение готово!")
 
     def _init_db(self) -> None:
         """Инициализация БД."""
@@ -607,8 +549,6 @@ class DBViewerApp:
                 full_path = worker_dir / filename if worker_dir.exists() else None
                 if full_path and full_path.exists():
                     label = self.doc_service.get_document_label(doc_type)
-                    if label == doc_type:
-                        label = _DOC_LABELS_FALLBACK.get(doc_type, doc_type)
                     existing_docs.append(DocumentInfo(
                         doc_type=doc_type, label=label,
                         prefix='', filename=filename,
@@ -702,52 +642,53 @@ class DBViewerApp:
             show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
 
 
-def main() -> None:
+def main(splash_root=None) -> None:
     """Точка входа приложения."""
-    import sys, os
-
-    def _log(msg):
-        """Лог в файл для диагностики."""
-        try:
-            paths = [
-                os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
-                os.path.join(os.path.expanduser('~'), 'ui_error.log'),
-            ]
-            for p in paths:
-                try:
-                    with open(p, 'a', encoding='utf-8') as f:
-                        f.write(msg + '\n')
-                except Exception:
-                    continue
-                break
-        except Exception:
-            pass
-
-    _log("main() вызван")
+    diagnostic_log("main() вызван")
     setup_logging(level=logging.INFO)
-    _log("Логирование настроено")
+    diagnostic_log("Логирование настроено")
 
     try:
-        _log("Создание окна tk.Tk...")
+        diagnostic_log("Создание окна tk.Tk...")
         root = tk.Tk()
-        _log("Окно создано")
+        diagnostic_log("Окно создано")
 
-        _log("Инициализация приложения...")
+        # Обновляем splash если он есть
+        if splash_root:
+            try:
+                splash_root.update()
+            except Exception:
+                pass
+
+        diagnostic_log("Инициализация приложения...")
         app = DBViewerApp(root)
-        _log("Приложение инициализировано")
+        diagnostic_log("Приложение инициализировано")
+
+        # Закрываем splash — приложение готово
+        if splash_root:
+            try:
+                splash_root.destroy()
+            except Exception:
+                pass
 
         root.deiconify()
         root.lift()
         root.focus_force()
-        _log("Окно поднято на передний план")
+        diagnostic_log("Окно поднято на передний план")
 
-        _log("Запуск mainloop...")
+        diagnostic_log("Запуск mainloop...")
         root.mainloop()
-        _log("Mainloop завершён")
+        diagnostic_log("Mainloop завершён")
 
     except Exception as e:
-        _log(f"ОШИБКА: {e}")
+        diagnostic_log(f"ОШИБКА: {e}")
         log_exception("Аварийное завершение приложения")
+        # Закрываем splash при ошибке
+        if splash_root:
+            try:
+                splash_root.destroy()
+            except Exception:
+                pass
         msg = f"Ошибка запуска:\n{e}"
         try:
             root = tk.Tk()

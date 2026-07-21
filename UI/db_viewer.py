@@ -91,12 +91,13 @@ def _destroy_splash(root):
         pass
 
 
-def _try_run():
-    """Попытка запустить приложение."""
+def _try_run(splash_root=None):
+    """Попытка запустить приложение. Splash остаётся видимым пока идёт загрузка."""
     _log("Импорт src.main...")
     from src.main import main as new_main
     _log("Импорт завершён, запуск main()...")
-    new_main()
+    # Передаём splash в main чтобы он закрыл его когда будет готов
+    new_main(splash_root=splash_root)
     _log("main() завершён")
     return True
 
@@ -119,16 +120,15 @@ def main():
                         status_label.config(text=f"Повторная попытка {attempt}...")
                         splash_root.update()
 
-                # Закрываем splash перед main
-                _destroy_splash(splash_root)
-                splash_root = None
-
-                _try_run()
+                # Запускаем приложение — splash остаётся видимым
+                _try_run(splash_root)
                 return
 
             except Exception as e:
                 last_error = e
                 _log(f"Попытка {attempt} не удалась: {e}")
+                _destroy_splash(splash_root)
+                splash_root = None
                 if attempt <= MAX_RETRIES:
                     _log("Повтор через 2 сек...")
                     time.sleep(2)

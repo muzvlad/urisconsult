@@ -88,29 +88,6 @@ class AppConfig:
     app_title: str = "URIS Consult — Просмотр карточек"
 
 
-# ─── Сетевой адрес сервера ───
-NETWORK_SERVER = Path(r"\\144.76.70.246\urisconsult")
-
-
-def _log_config(msg):
-    """Лог конфигурации в файл."""
-    import sys
-    try:
-        paths = [
-            os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
-            os.path.join(os.path.expanduser('~'), 'ui_error.log'),
-        ]
-        for p in paths:
-            try:
-                with open(p, 'a', encoding='utf-8') as f:
-                    f.write(f"[config] {msg}\n")
-            except Exception:
-                continue
-            break
-    except Exception:
-        pass
-
-
 # ─── Определение путей ───
 
 def _get_base_path() -> Path:
@@ -138,6 +115,50 @@ def _get_project_root() -> Path:
     return base
 
 
+# ─── Сетевой адрес сервера ───
+def _get_network_server() -> str:
+    """Прочитать адрес сервера из .env файла напрямую."""
+    # Читаем .env файл напрямую (не используем get_paths() чтобы избежать циклического импорта)
+    base = _get_base_path()
+    # Ищем .env в bot/ директории
+    env_candidates = [
+        base / "bot" / ".env",
+        base / ".env",
+    ]
+    for env_path in env_candidates:
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("NETWORK_SERVER="):
+                            return line.split("=", 1)[1].strip()
+            except Exception:
+                pass
+    return ""
+
+NETWORK_SERVER = _get_network_server()
+
+
+def _log_config(msg):
+    """Лог конфигурации в файл."""
+    import sys
+    try:
+        paths = [
+            os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
+            os.path.join(os.path.expanduser('~'), 'ui_error.log'),
+        ]
+        for p in paths:
+            try:
+                with open(p, 'a', encoding='utf-8') as f:
+                    f.write(f"[config] {msg}\n")
+            except Exception:
+                continue
+            break
+    except Exception:
+        pass
+
+
 @lru_cache(maxsize=1)
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
@@ -147,13 +168,14 @@ def get_paths() -> AppPaths:
 
     def _try_network():
         try:
-            if NETWORK_SERVER.exists():
-                db_path = NETWORK_SERVER / "bot" / "Users" / "users.db"
-                docs_dir = NETWORK_SERVER / "bot" / "Users" / "docs"
-                bot_dir = NETWORK_SERVER / "bot"
+            net_path = Path(NETWORK_SERVER)
+            if net_path.exists():
+                db_path = net_path / "bot" / "Users" / "users.db"
+                docs_dir = net_path / "bot" / "Users" / "docs"
+                bot_dir = net_path / "bot"
                 if db_path.parent.exists() or docs_dir.exists():
                     result[0] = AppPaths(
-                        project_root=NETWORK_SERVER,
+                        project_root=net_path,
                         db_path=db_path,
                         docs_dir=docs_dir,
                         bot_dir=bot_dir,
@@ -224,65 +246,17 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
         sys.path = old_path
 
 
-# ─── Константы БД ───
+# ─── Константы БД (импортируются из общего модуля) ───
+import sys as _sys
+_shared_dir = str(Path(__file__).parent.parent.parent / "shared")
+if _shared_dir not in _sys.path:
+    _sys.path.insert(0, _shared_dir)
 
-WORKERS_TABLE = "workers"
-WORKER_DOCUMENTS_TABLE = "worker_documents"
-WORKER_MEETINGS_TABLE = "worker_meetings"
-
-WORKER_SCHEMA = f"""
-CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    citizenship TEXT,
-    gender TEXT,
-    position TEXT,
-    object TEXT,
-    object_address TEXT,
-    manager TEXT,
-    phone_main TEXT,
-    phone_additional TEXT,
-    email TEXT,
-    date TEXT,
-    registration TEXT,
-    marital_status TEXT,
-    relatives_json TEXT DEFAULT '[]',
-    telegram_id INTEGER,
-    telegram_username TEXT,
-    created_at TEXT,
-    status TEXT DEFAULT 'pending',
-    rejection_reasons TEXT DEFAULT '[]'
+from shared import (
+    WORKERS_TABLE, WORKER_DOCUMENTS_TABLE, WORKER_MEETINGS_TABLE,
+    WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA,
+    MIGRATIONS,
 )
-"""
-
-WORKER_DOCUMENTS_SCHEMA = f"""
-CREATE TABLE IF NOT EXISTS {WORKER_DOCUMENTS_TABLE} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    worker_id TEXT NOT NULL,
-    doc_type TEXT NOT NULL,
-    filename TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id),
-    UNIQUE(worker_id, doc_type)
-)
-"""
-
-WORKER_MEETINGS_SCHEMA = f"""
-CREATE TABLE IF NOT EXISTS {WORKER_MEETINGS_TABLE} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    worker_id TEXT NOT NULL,
-    date TEXT,
-    note TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)
-)
-"""
-
-MIGRATIONS = [
-    ("status", "TEXT DEFAULT 'pending'"),
-    ("rejection_reasons", "TEXT DEFAULT '[]'"),
-    ("notified_at", "TEXT"),
-]
 
 
 # ─── Вспомогательные функции ───
@@ -302,10 +276,20 @@ def format_phone(phone: str) -> str:
     if not phone:
         return ""
     digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) == 11:
+    if len(digits) == 11 and digits[0] == '7':
+        # Российский номер +7
         return f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
-    elif len(digits) == 10:
+    elif len(digits) == 10 and digits[0] == '9':
+        # Российный номер без кода страны
         return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:10]}"
+    elif len(digits) > 10:
+        # Международный номер — форматируем с пробелами для читаемости
+        formatted = ""
+        for i, d in enumerate(digits):
+            if i > 0 and i % 3 == 0:
+                formatted += " "
+            formatted += d
+        return f"+{formatted}"
     return phone
 
 

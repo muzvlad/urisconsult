@@ -4,6 +4,7 @@
 from __future__ import annotations
 import logging
 import logging.handlers
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -123,3 +124,22 @@ def log_exception(message: str, *args, **kwargs) -> None:
 
 def log_debug(message: str, *args, **kwargs) -> None:
     get_logger().debug(message, *args, **kwargs)
+
+
+def diagnostic_log(msg: str) -> None:
+    """Лог в файл для диагностики (до инициализации основного логирования)."""
+    import sys
+    try:
+        paths = [
+            os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
+            os.path.join(os.path.expanduser('~'), 'ui_error.log'),
+        ]
+        for p in paths:
+            try:
+                with open(p, 'a', encoding='utf-8') as f:
+                    f.write(f"[app] {msg}\n")
+            except Exception:
+                continue
+            break
+    except Exception:
+        pass

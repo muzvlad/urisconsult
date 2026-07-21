@@ -6,16 +6,19 @@
 
 ```
 urisconsult/
+├── shared/                     # Общие модули (бот + UI)
+│   └── __init__.py             # Схема БД (единый источник истины)
 ├── bot/                        # Telegram-бот (сбор данных)
 │   ├── bot.py                  # Точка входа бота
 │   ├── utils.py                # Общие утилиты (get_document_state, build_edit_keyboard)
-│   ├── types.py                # TypedDict для FSM данных
+│   ├── fsm_types.py            # TypedDict для FSM данных
 │   ├── log_context.py          # Contextvars для worker_id/user_id в логах
 │   ├── middleware.py            # Rate limiting (с фоновой очисткой)
 │   ├── seed_test_data.py       # Генерация тестовых анкет
 │   ├── backup_db.py            # Бэкап БД
+│   ├── .env                    # Конфигурация (BOT_TOKEN, NETWORK_SERVER)
 │   ├── config/
-│   │   ├── __init__.py         # Конфигурация (пути, ensure_dirs)
+│   │   ├── __init__.py         # Конфигурация (пути, .env, ensure_dirs)
 │   │   └── documents.py        # ЕДИНЫЙ конфиг документов (frozen dataclass)
 │   ├── handlers/
 │   │   ├── commands.py         # /start, /cancel, обработка отклонений
@@ -26,7 +29,7 @@ urisconsult/
 │   │   ├── reply_kb.py         # Reply клавиатуры
 │   │   └── inline_kb.py        # Inline клавиатуры
 │   ├── services/
-│   │   ├── db.py               # SQLite (нормализованная схема, версионирование)
+│   │   ├── db.py               # SQLite (WAL, BEGIN IMMEDIATE, версионирование)
 │   │   ├── db_saver.py         # Сохранение в БД
 │   │   └── file_saver.py       # Сохранение файлов + валидация
 │   └── Users/
@@ -36,26 +39,29 @@ urisconsult/
 │           ├── 00002/
 │           └── 00003/
 ├── UI/                         # Десктопное приложение
-│   ├── db_viewer.py            # Точка входа UI
+│   ├── db_viewer.py            # Точка входа (splash → main)
 │   ├── run.bat                 # Запуск (с автоустановкой зависимостей)
 │   ├── build_exe.bat           # Сборка EXE
 │   ├── build_exe.py            # Скрипт сборки
 │   ├── src/
 │   │   ├── main.py             # Tkinter GUI
-│   │   ├── database.py         # Repository pattern (retry при database is locked)
+│   │   ├── database.py         # Repository pattern (WAL, retry, 15s timeout)
 │   │   ├── models.py           # Worker, WorkerDocument
 │   │   ├── services.py         # Document, Telegram, PDF services
 │   │   ├── widgets.py          # UI компоненты
 │   │   ├── dialogs.py          # Диалоги
+│   │   ├── config.py           # Конфигурация (пути, сетевой сервер из .env)
 │   │   ├── splash.py           # Splash screen
-│   │   └── logging_config.py   # Логирование
+│   │   └── logging_config.py   # Логирование + diagnostic_log
 │   ├── tests/                  # 46 тестов
 │   └── requirements.txt        # Зависимости
 ├── docs_project/
 │   ├── README.md               # Этот файл
 │   ├── BOT.md                  # Документация бота
 │   ├── UI.md                   # Документация UI
+│   ├── CHANGELOG.md            # История версий
 │   └── tests/                  # 62 теста (config, db, handlers)
+├── pyproject.toml              # Конфигурация проекта
 └── .gitignore
 ```
 
@@ -133,15 +139,17 @@ build_exe.bat
 |---|---|
 | БД | `bot/Users/users.db` (SQLite, WAL mode) |
 | Документы | `bot/Users/docs/` |
-| Конфиг | `bot/.env` (BOT_TOKEN) |
+| Конфиг | `bot/.env` (BOT_TOKEN, NETWORK_SERVER) |
 | Логи | `bot/logs/bot.log` |
 
 ### Таблицы БД
 
+Определены в `shared/__init__.py` (единый источник истины для бота и UI):
+
 | Таблица | Описание |
 |---|---|
 | `workers` | Личная информация + статус |
-| `worker_documents` | Документы (worker_id, doc_type, filename) |
+| `worker_documents` | Документы (worker_id, doc_type, filename) UNIQUE |
 | `worker_meetings` | Встречи (worker_id, date, note) |
 
 ### Статусы анкет
@@ -160,19 +168,34 @@ build_exe.bat
 
 ## Тесты
 
-### Бот (62 теста)
+Все тесты запускаются из корня проекта:
+
 ```bash
-cd docs_project
-pip install pytest pytest-asyncio
-python -m pytest tests/ -v
+# Все тесты (108 штук)
+python -m pytest UI/tests/ docs_project/tests/ -v
+
+# Только UI тесты (46)
+python -m pytest UI/tests/ -v
+
+# Только тесты бота (62)
+python -m pytest docs_project/tests/ -v
 ```
 
-### UI (46 тестов)
-```bash
-cd UI
-pip install pytest
-python -m pytest tests/ -v
+## Конфигурация
+
+### Файл `.env`
+
 ```
+BOT_TOKEN=ваш_токен_бота
+NETWORK_SERVER=\\144.76.70.246\urisconsult
+```
+
+- `BOT_TOKEN` — токен Telegram бота (от @BotFather)
+- `NETWORK_SERVER` — адрес сетевого сервера (если пустой — используется локальная БД)
+
+### `pyproject.toml`
+
+Стандартная конфигурация Python проекта с зависимостями и настройками pytest.
 
 ## Тестовые данные
 

@@ -52,3 +52,6 @@ htmlcov/
 # Distribution / Packaging
 *.egg-info/
 *.egg
+
+# Shared module cache
+shared/__pycache__/

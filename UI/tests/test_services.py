@@ -17,6 +17,9 @@ class MockDocumentType:
     key: str
     label: str
     prefix: str
+    required: bool = False
+    can_skip: bool = True
+    category: str = ""
 
 
 @pytest.fixture
@@ -66,17 +69,6 @@ def sample_worker_with_docs(db_service, test_docs_dir):
     db_service.documents.add("TEST002", "passport", "pas_TEST002.jpg")
     db_service.documents.add("TEST002", "photo", "photo_TEST002.jpg")
     return worker
-
-
-# Mock DocumentType для тестов
-@dataclass
-class MockDocumentType:
-    key: str
-    label: str
-    prefix: str
-    required: bool = False
-    can_skip: bool = True
-    category: str = ""
 
 
 class TestDocumentService:

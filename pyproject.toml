@@ -1,0 +1,32 @@
+[project]
+name = "urisconsult"
+version = "2.9.0"
+description = "HR Management System: Telegram bot for worker registration + Desktop UI for processing"
+readme = "docs_project/README.md"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+
+dependencies = [
+    "aiohttp>=3.9.0",
+    "aiogram>=3.4.0",
+    "python-dotenv>=1.0.0",
+    "Pillow>=10.0.0",
+    "aiofiles>=23.1.0",
+    "magic-filter>=1.0.12",
+    "pydantic>=2.4.2",
+    "aiosqlite>=0.22.1",
+    "certifi>=2023.7.22",
+    "typing-extensions>=4.7.1",
+    "reportlab>=3.6.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["docs_project/tests", "UI/tests"]
+asyncio_mode = "auto"
+pythonpath = ["UI", "bot", "shared"]

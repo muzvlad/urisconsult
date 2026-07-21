@@ -34,7 +34,9 @@ class _Conn:
             try:
                 self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
                 self._conn.row_factory = sqlite3.Row
-                self._conn.execute("PRAGMA busy_timeout=5000")
+                # WAL mode + увеличенный busy_timeout для совместной работы с ботом
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA busy_timeout=10000")
                 return
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e).lower() and attempt < _MAX_RETRIES - 1:
@@ -79,7 +81,7 @@ def _retry_on_locked(func, *args, **kwargs):
 class DatabaseConnection:
     """Управление соединениями с БД."""
 
-    def __init__(self, db_path: Optional[Path] = None, timeout: float = 60.0):
+    def __init__(self, db_path: Optional[Path] = None, timeout: float = 15.0):
         self.db_path = db_path or get_paths().db_path
         self.timeout = timeout
         self._init_db()
@@ -92,7 +94,7 @@ class DatabaseConnection:
     def _do_init_db(self) -> None:
         """Выполнение инициализации (с вызовом через _retry_on_locked)."""
         with self.get_connection() as conn:
-            conn.execute("PRAGMA foreign_keys=ON")
+            # WAL mode уже установлен в _Conn._connect()
 
             # Проверяем какие таблицы уже есть (read-only запрос)
             existing_tables = {
@@ -120,7 +122,13 @@ class DatabaseConnection:
                     pass  # Колонка уже существует
 
         # Синхронизация файлов на диске → БД (отдельная транзакция)
-        _retry_on_locked(self._sync_docs_from_disk)
+        try:
+            _retry_on_locked(self._sync_docs_from_disk)
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower():
+                logger.warning("Could not sync docs from disk (DB locked by bot): %s", e)
+            else:
+                raise
 
     def _sync_docs_from_disk(self) -> None:
         """Сканировать docs_dir и дописать недостающие записи в worker_documents."""
@@ -229,6 +237,12 @@ class DatabaseConnection:
 class WorkerRepository:
     """Репозиторий для работы с сотрудниками."""
 
+    # Допустимые поля для поиска (whitelist)
+    _VALID_SEARCH_FIELDS = frozenset({
+        "name", "id", "phone_main", "email", "position", "object",
+        "citizenship", "phone_additional", "object_address", "manager",
+    })
+
     def __init__(self, db: Optional[DatabaseConnection] = None):
         self.db = db or DatabaseConnection()
 
@@ -246,6 +260,11 @@ class WorkerRepository:
         """Поиск по ФИО и другим полям."""
         if fields is None:
             fields = ["name", "id", "phone_main", "email", "position", "object"]
+
+        # Валидация полей через whitelist
+        fields = [f for f in fields if f in self._VALID_SEARCH_FIELDS]
+        if not fields:
+            fields = ["name"]
 
         conditions = " OR ".join([f"{f} LIKE ?" for f in fields])
         sql = f"SELECT * FROM {WORKERS_TABLE} WHERE {conditions} ORDER BY id"
@@ -342,7 +361,7 @@ class WorkerRepository:
 
     def delete_worker(self, worker_id: str) -> bool:
         """Полностью удалить сотрудника: БД + файлы документов."""
-        import os, glob
+        import shutil
         from src.config import get_paths
 
         paths = get_paths()
@@ -351,15 +370,14 @@ class WorkerRepository:
         self.db.execute(f"DELETE FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?", (worker_id,))
         self.db.execute(f"DELETE FROM {WORKER_MEETINGS_TABLE} WHERE worker_id = ?", (worker_id,))
 
-        # Удаляем файлы документов с диска
+        # Удаляем папку документов работника (docs/{worker_id}/)
         docs_dir = paths.docs_dir
-        if docs_dir.exists():
-            for pattern in [f"*_{worker_id}.*", f"*_{worker_id}_*"]:
-                for f in docs_dir.glob(pattern):
-                    try:
-                        f.unlink()
-                    except OSError:
-                        pass
+        worker_dir = docs_dir / worker_id
+        if worker_dir.exists() and worker_dir.is_dir():
+            try:
+                shutil.rmtree(worker_dir)
+            except OSError:
+                pass
 
         # Удаляем сотрудника
         sql = f"DELETE FROM {WORKERS_TABLE} WHERE id = ?"
