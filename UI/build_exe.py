@@ -52,7 +52,9 @@ def create_executable() -> bool:
     try:
         # Определяем пути
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(base_dir)  # корень проекта (на уровень выше UI/)
         src_dir = os.path.join(base_dir, 'src')
+        shared_dir = os.path.join(project_root, 'shared')
         db_viewer = os.path.join(base_dir, 'db_viewer.py')
 
         # Команда для создания exe
@@ -64,8 +66,9 @@ def create_executable() -> bool:
             '--icon=NONE',            # Без иконки
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
-            # Добавляем src как data (чтобы PyInstaller знал о структуре)
+            # Добавляем src и shared как data
             f'--add-data={src_dir}{os.pathsep}src',
+            f'--add-data={shared_dir}{os.pathsep}shared',
             # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',
@@ -94,6 +97,7 @@ def create_executable() -> bool:
             '--hidden-import=src.main',
             '--hidden-import=src.splash',
             '--hidden-import=src.logging_config',
+            '--hidden-import=shared',
             db_viewer
         ]
 

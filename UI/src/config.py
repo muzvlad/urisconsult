@@ -248,7 +248,11 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
 
 # ─── Константы БД (импортируются из общего модуля) ───
 import sys as _sys
-_shared_dir = str(Path(__file__).parent.parent.parent / "shared")
+# В PyInstaller shared/ лежит в sys._MEIPASS, в dev режиме — в корне проекта
+if getattr(_sys, "frozen", False):
+    _shared_dir = str(Path(_sys._MEIPASS) / "shared")
+else:
+    _shared_dir = str(Path(__file__).parent.parent.parent / "shared")
 if _shared_dir not in _sys.path:
     _sys.path.insert(0, _shared_dir)
 
