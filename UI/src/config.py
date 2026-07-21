@@ -248,19 +248,50 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
 
 # ─── Константы БД (импортируются из общего модуля) ───
 import sys as _sys
-# В PyInstaller shared/ лежит в sys._MEIPASS, в dev режиме — в корне проекта
-if getattr(_sys, "frozen", False):
-    _shared_dir = str(Path(_sys._MEIPASS) / "shared")
-else:
-    _shared_dir = str(Path(__file__).parent.parent.parent / "shared")
-if _shared_dir not in _sys.path:
-    _sys.path.insert(0, _shared_dir)
 
-from shared import (
-    WORKERS_TABLE, WORKER_DOCUMENTS_TABLE, WORKER_MEETINGS_TABLE,
-    WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA,
-    MIGRATIONS,
-)
+def _import_shared():
+    """Импортировать shared модуль с поиском по нескольким путям."""
+    # Вариант 1: уже есть в sys.path (dev режим)
+    try:
+        import shared
+        return shared
+    except ImportError:
+        pass
+
+    # Вариант 2: PyInstaller — ищем в _MEIPASS
+    if getattr(_sys, "frozen", False):
+        meipass = Path(_sys._MEIPASS)
+        for name in ["shared", "Shared"]:
+            p = meipass / name
+            if p.exists() and str(p) not in _sys.path:
+                _sys.path.insert(0, str(p))
+            try:
+                import shared
+                return shared
+            except ImportError:
+                pass
+
+    # Вариант 3: корень проекта
+    root = Path(__file__).parent.parent.parent
+    for name in ["shared", "Shared"]:
+        p = root / name
+        if p.exists() and str(p) not in _sys.path:
+            _sys.path.insert(0, str(p))
+    try:
+        import shared
+        return shared
+    except ImportError:
+        raise ImportError("Cannot find 'shared' module. Checked: sys.path, _MEIPASS, project root")
+
+_shared = _import_shared()
+
+WORKERS_TABLE = _shared.WORKERS_TABLE
+WORKER_DOCUMENTS_TABLE = _shared.WORKER_DOCUMENTS_TABLE
+WORKER_MEETINGS_TABLE = _shared.WORKER_MEETINGS_TABLE
+WORKER_SCHEMA = _shared.WORKER_SCHEMA
+WORKER_DOCUMENTS_SCHEMA = _shared.WORKER_DOCUMENTS_SCHEMA
+WORKER_MEETINGS_SCHEMA = _shared.WORKER_MEETINGS_SCHEMA
+MIGRATIONS = _shared.MIGRATIONS
 
 
 # ─── Вспомогательные функции ───
