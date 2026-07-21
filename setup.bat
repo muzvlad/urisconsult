@@ -43,6 +43,9 @@ if not exist "!REPO_DIR!\bot\bot.py" goto :clone
 REM --- Pull existing ---
 echo    Pulling latest changes...
 
+REM Сохраняем текущий коммит
+for /f %%i in ('git -C "!REPO_DIR!" rev-parse HEAD 2^>nul') do set "OLD_COMMIT=%%i"
+
 REM Сначала откатываем локальные изменения чтобы pull не упал
 git -C "!REPO_DIR!" checkout -- . 2>nul
 
@@ -56,6 +59,18 @@ if errorlevel 1 (
     echo    [WARN] Pull failed, trying fetch+reset...
     git -C "!REPO_DIR!" fetch --quiet 2>nul
     git -C "!REPO_DIR!" reset --hard origin/master --quiet 2>nul
+)
+
+REM Показываем что изменилось
+for /f %%i in ('git -C "!REPO_DIR!" rev-parse HEAD 2^>nul') do set "NEW_COMMIT=%%i"
+if "!OLD_COMMIT!" NEQ "!NEW_COMMIT!" (
+    echo.
+    echo    --- Updated files ---
+    git -C "!REPO_DIR!" diff --stat "!OLD_COMMIT!" "!NEW_COMMIT!" 2>nul
+    echo    ---------------------
+    echo.
+) else (
+    echo    Already up to date.
 )
 goto :clone_done
 
