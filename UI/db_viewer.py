@@ -94,8 +94,19 @@ def _destroy_splash(splash):
 def _try_run(root, splash=None):
     """Попытка запустить приложение."""
     _log("Импорт src.main...")
+    # Обновляем splash пока идёт импорт (долго в EXE)
+    if splash:
+        try:
+            splash.update()
+        except Exception:
+            pass
     from src.main import main as new_main
     _log("Импорт завершён, запуск main()...")
+    if splash:
+        try:
+            splash.update()
+        except Exception:
+            pass
     new_main(root=root, splash=splash)
     _log("main() завершён")
     return True

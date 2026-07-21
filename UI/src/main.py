@@ -20,18 +20,22 @@ from src.logging_config import setup_logging, get_logger, log_error, log_excepti
 class DBViewerApp:
     """Главное приложение просмотра карточек сотрудников."""
 
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, splash: Optional[tk.Toplevel] = None):
         self.root = root
-        diagnostic_log("Получение конфигурации...")
+        self.splash = splash
+
+        self._splash_update("Получение конфигурации...")
         self.config = get_config()
         self.paths = get_paths()
         diagnostic_log(f"БД: {self.paths.db_path}")
         diagnostic_log(f"Документы: {self.paths.docs_dir}")
-        diagnostic_log("Инициализация сервисов...")
+
+        self._splash_update("Инициализация сервисов...")
         self.doc_service = get_document_service()
         self.telegram = get_telegram_service()
         self.pdf_service = get_pdf_service()
-        diagnostic_log("Подключение к БД...")
+
+        self._splash_update("Подключение к БД...")
         self.db = get_db_service()
         diagnostic_log("БД подключена")
 
@@ -46,13 +50,23 @@ class DBViewerApp:
         self.status_bar: Optional[tk.Label] = None
         self.bell: Optional[NotificationBell] = None
 
-        diagnostic_log("Инициализация БД (таблицы, миграции)...")
+        self._splash_update("Инициализация БД...")
         self._init_db()
-        diagnostic_log("Настройка интерфейса...")
+        self._splash_update("Настройка интерфейса...")
         self._setup_ui()
-        diagnostic_log("Обновление колокольчика...")
+
+        self._splash_update("Обновление колокольчика...")
         self._refresh_pending_count()
         center_window(self.root, self.config.window_width, self.config.window_height)
+
+    def _splash_update(self, text: str = "") -> None:
+        """Обновить splash screen если он есть."""
+        if self.splash:
+            try:
+                if self.splash.winfo_exists():
+                    self.splash.update()
+            except Exception:
+                pass
         diagnostic_log("Приложение готово!")
 
     def _init_db(self) -> None:
@@ -668,7 +682,7 @@ def main(root=None, splash=None) -> None:
                 pass
 
         diagnostic_log("Инициализация приложения...")
-        app = DBViewerApp(root)
+        app = DBViewerApp(root, splash=splash)
         diagnostic_log("Приложение инициализировано")
 
         # Закрываем splash — приложение готово
