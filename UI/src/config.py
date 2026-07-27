@@ -139,7 +139,7 @@ def _get_api_server() -> str:
             except Exception:
                 pass
     # 3. Hardcoded fallback (сервер бота)
-    return "http://144.76.70.246:8080"
+    return "http://144.76.70.246:56755"
 
 API_SERVER = _get_api_server()
 

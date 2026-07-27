@@ -85,7 +85,7 @@ def console_print(msg, color='white'):
     print(f"{c}{msg}{reset}", flush=True)
 
 
-API_PORT = 8080
+API_PORT = 56755
 
 
 def _start_api_server():

@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 REM API сервер (менять при необходимости)
-set API_SERVER=http://144.76.70.246:8080
+set API_SERVER=http://144.76.70.246:56755
 
 REM Если venv нет или пустой — создаём и ставим зависимости
 if not exist ".venv\Scripts\python.exe" (
