@@ -387,8 +387,8 @@ class DBViewerApp:
                     log_info(f"Worker {updated.id} updated")
                 else:
                     show_error(self.root, "Ошибка", "Не удалось обновить запись")
-        except ConnectionError as e:
-            show_error(self.root, "Ошибка", f"Сервер недоступен ({self.api.base_url}).\n{e}")
+            except ConnectionError as e:
+                show_error(self.root, "Ошибка", f"Сервер недоступен ({self.api.base_url}).\n{e}")
             except Exception as e:
                 log_error(f"Error updating worker {updated.id}: {e}", exc_info=True)
                 show_error(self.root, "Ошибка", f"Ошибка: {e}")
