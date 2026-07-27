@@ -179,5 +179,7 @@ def get_db_service() -> APIClient:
     global _api_client
     if _api_client is None:
         from src.config import API_SERVER
+        from src.logging_config import diagnostic_log
+        diagnostic_log(f"API URL: {API_SERVER}")
         _api_client = APIClient(API_SERVER)
     return _api_client

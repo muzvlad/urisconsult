@@ -117,7 +117,12 @@ def _get_project_root() -> Path:
 
 # ─── API сервер ───
 def _get_api_server() -> str:
-    """Прочитать адрес API сервера из .env файла."""
+    """Прочитать адрес API сервера: env var > .env файл > hardcoded."""
+    # 1. Переменная окружения (run.bat, docker и т.д.)
+    env_val = os.environ.get("API_SERVER", "").strip()
+    if env_val:
+        return env_val
+    # 2. .env файл
     base = _get_base_path()
     env_candidates = [
         base / "bot" / ".env",
@@ -133,7 +138,8 @@ def _get_api_server() -> str:
                             return line.split("=", 1)[1].strip()
             except Exception:
                 pass
-    return ""
+    # 3. Hardcoded fallback (сервер бота)
+    return "http://144.76.70.246:8080"
 
 API_SERVER = _get_api_server()
 
@@ -157,6 +163,8 @@ def _log_config(msg):
             break
     except Exception:
         pass
+
+_log_config(f"API_SERVER={API_SERVER}")
 
 
 @lru_cache(maxsize=1)
