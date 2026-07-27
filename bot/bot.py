@@ -94,11 +94,20 @@ def _start_api_server():
         from api_server import app
 
         def _run():
-            app.run(host='0.0.0.0', port=API_PORT, debug=False, use_reloader=False)
+            try:
+                app.run(host='0.0.0.0', port=API_PORT, debug=False, use_reloader=False)
+            except Exception as e:
+                console_print(f"  ОШИБКА API-потока: {e}", 'red')
+                logger.error("API server thread crashed: %s", e)
 
         t = threading.Thread(target=_run, daemon=True, name="api-server")
         t.start()
-        console_print(f"  API-сервер: http://0.0.0.0:{API_PORT}", 'green')
+        import time
+        time.sleep(1)
+        if t.is_alive():
+            console_print(f"  API-сервер: http://0.0.0.0:{API_PORT}", 'green')
+        else:
+            console_print(f"  ОШИБКА API-сервера: поток умер", 'red')
     except Exception as e:
         console_print(f"  ОШИБКА API-сервера: {e}", 'red')
         logger.error("Failed to start API server: %s", e)
