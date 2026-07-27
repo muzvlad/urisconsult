@@ -107,6 +107,10 @@ class APIClient:
         data = self._get(f"/api/workers/{worker_id}/meetings")
         return data if isinstance(data, list) else []
 
+    def add_meeting(self, worker_id: str, date: str, note: str) -> bool:
+        resp = self._post(f"/api/workers/{worker_id}/meetings", {"date": date, "note": note})
+        return bool(resp)
+
     def get_pending_count(self) -> int:
         data = self._get("/api/pending/count")
         return data.get("count", 0) if isinstance(data, dict) else 0

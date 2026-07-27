@@ -399,3 +399,78 @@ class EditDialog:
 
         self.dialog.destroy()
         self.on_save(self.worker)
+
+
+# ─── Диалог добавления встречи ───
+
+class MeetingDialog:
+    """Диалог добавления встречи сотруднику."""
+
+    def __init__(self, parent: tk.Widget, worker: Worker,
+                 on_added: Callable[[], None]):
+        self.worker = worker
+        self.on_added = on_added
+        self.api = get_api_client()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Новая встреча — {worker.name}")
+        self.dialog.configure(bg='#f0f0f0')
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        self._center_window(400, 220)
+        self._build_ui()
+
+    def _center_window(self, w: int, h: int) -> None:
+        self.dialog.update_idletasks()
+        sw = self.dialog.winfo_screenwidth()
+        sh = self.dialog.winfo_screenheight()
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        self.dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _build_ui(self) -> None:
+        header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
+        header.pack(fill=tk.X)
+        tk.Label(header, text=f"📅 Новая встреча",
+                 font=('Arial', 13, 'bold'), bg='#2c3e50', fg='white').pack()
+        tk.Label(header, text=self.worker.name,
+                 font=('Arial', 10), bg='#2c3e50', fg='#bbb').pack()
+
+        form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
+        form.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(form, text="Дата:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        self.date_entry = tk.Entry(form, font=('Arial', 11), width=30)
+        self.date_entry.pack(fill=tk.X, pady=(0, 10))
+        self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
+
+        tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        self.note_entry = tk.Entry(form, font=('Arial', 11), width=30)
+        self.note_entry.pack(fill=tk.X, pady=(0, 5))
+
+        btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
+                  bg='#95a5a6', fg='white', font=('Arial', 10),
+                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT, padx=(15, 5))
+
+        tk.Button(btn_frame, text="Добавить",
+                  command=self._save,
+                  bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
+                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.RIGHT, padx=(5, 15))
+
+    def _save(self) -> None:
+        date = self.date_entry.get().strip()
+        note = self.note_entry.get().strip()
+        if not note:
+            note = "Встреча"
+        try:
+            self.api.add_meeting(self.worker.id, date, note)
+            self.dialog.destroy()
+            self.on_added()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось добавить встречу:\n{e}", parent=self.dialog)
