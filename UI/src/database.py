@@ -29,7 +29,9 @@ class _Conn:
         self._conn = sqlite3.connect(str(self._db_path), timeout=self._timeout)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute("PRAGMA busy_timeout=30000")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA locking_mode=NORMAL")
 
     def __enter__(self):
         self._connect()
@@ -54,14 +56,14 @@ class DatabaseError(Exception):
 def _retry_on_locked(func, *args, **kwargs):
     """Выполнить функцию с повтором при 'database is locked'."""
     last_error = None
-    for attempt in range(5):
+    for attempt in range(20):
         try:
             return func(*args, **kwargs)
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e).lower():
                 last_error = e
-                logger.warning("Database locked, retry %d/5...", attempt + 1)
-                time.sleep(0.5 * (attempt + 1))
+                logger.warning("Database locked, retry %d/20...", attempt + 1)
+                time.sleep(1.0 * (attempt + 1))
             else:
                 raise
     raise last_error
@@ -72,7 +74,7 @@ def _retry_on_locked(func, *args, **kwargs):
 class DatabaseConnection:
     """Управление соединениями с БД."""
 
-    def __init__(self, db_path: Optional[Path] = None, timeout: float = 5.0):
+    def __init__(self, db_path: Optional[Path] = None, timeout: float = 30.0):
         self.db_path = db_path or get_paths().db_path
         self.timeout = timeout
         self._init_db()
@@ -146,16 +148,21 @@ class DatabaseConnection:
             prefix_to_doc = {
                 'photo': 'photo',
                 'pas': 'passport',
-                'pat': 'patent_patent',
+                'pas_trans': 'patent_passport_translation',
                 'snils': 'patent_snils',
                 'reg': 'patent_registration',
                 'mig': 'patent_migration_card',
                 'dms': 'patent_dms',
+                'pat_front': 'patent_patent_front',
+                'pat_back': 'patent_patent_back',
                 'inn': 'patent_inn',
-                'chek': 'patent_receipt',
+                'chek1': 'patent_receipt_1',
+                'chek2': 'patent_receipt_2',
+                'chek3': 'patent_receipt_3',
                 'lang': 'patent_language_cert',
                 'bank': 'patent_bank_details',
-                'dactyl': 'patent_fingerprint_card',
+                'dactyl_front': 'patent_fingerprint_front',
+                'dactyl_back': 'patent_fingerprint_back',
                 'propiska': 'russia_passport_propiska',
                 'edu': 'russia_education_doc',
                 'trud': 'russia_work_book',

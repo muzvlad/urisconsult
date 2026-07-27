@@ -89,7 +89,7 @@ def create_executable() -> bool:
             '--hidden-import=concurrent.futures',
             '--hidden-import=src',
             '--hidden-import=src.config',
-            '--hidden-import=src.database',
+            '--hidden-import=src.api_client',
             '--hidden-import=src.models',
             '--hidden-import=src.services',
             '--hidden-import=src.widgets',

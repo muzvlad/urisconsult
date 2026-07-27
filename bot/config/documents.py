@@ -27,16 +27,21 @@ _PHOTO = DocumentType(key='photo', label='Фото', prefix='photo', required=Tr
 _PASSPORT = DocumentType(key='passport', label='Паспорт', prefix='pas', required=True)
 
 # Патент
+_PATENT_PASSPORT_TRANSLATION = DocumentType(key='patent_passport_translation', label='Перевод паспорта', prefix='pas_trans')
 _PATENT_SNILS = DocumentType(key='patent_snils', label='СНИЛС', prefix='snils')
 _PATENT_REGISTRATION = DocumentType(key='patent_registration', label='Регистрация', prefix='reg')
 _PATENT_MIGRATION_CARD = DocumentType(key='patent_migration_card', label='Миграционная карта', prefix='mig')
 _PATENT_DMS = DocumentType(key='patent_dms', label='ДМС', prefix='dms')
-_PATENT_PATENT = DocumentType(key='patent_patent', label='Патент', prefix='pat')
+_PATENT_PATENT_FRONT = DocumentType(key='patent_patent_front', label='Патент (лицевая)', prefix='pat_front')
+_PATENT_PATENT_BACK = DocumentType(key='patent_patent_back', label='Патент (разворот)', prefix='pat_back')
 _PATENT_INN = DocumentType(key='patent_inn', label='ИНН', prefix='inn', can_skip=True)
-_PATENT_RECEIPT = DocumentType(key='patent_receipt', label='Чек по патенту', prefix='chek')
+_PATENT_RECEIPT_1 = DocumentType(key='patent_receipt_1', label='Чек по патенту 1', prefix='chek1')
+_PATENT_RECEIPT_2 = DocumentType(key='patent_receipt_2', label='Чек по патенту 2', prefix='chek2')
+_PATENT_RECEIPT_3 = DocumentType(key='patent_receipt_3', label='Чек по патенту 3', prefix='chek3')
 _PATENT_LANGUAGE_CERT = DocumentType(key='patent_language_cert', label='Сертификат о знании языка', prefix='lang')
 _PATENT_BANK_DETAILS = DocumentType(key='patent_bank_details', label='Реквизиты банковской карты', prefix='bank')
-_PATENT_FINGERPRINT_CARD = DocumentType(key='patent_fingerprint_card', label='Дактилоскопическая карта', prefix='dactyl')
+_PATENT_FINGERPRINT_FRONT = DocumentType(key='patent_fingerprint_front', label='Дактилоскопия (лицевая)', prefix='dactyl_front')
+_PATENT_FINGERPRINT_BACK = DocumentType(key='patent_fingerprint_back', label='Дактилоскопия (разворот)', prefix='dactyl_back')
 
 # Студент
 _STUDENT_SNILS = DocumentType(key='student_snils', label='СНИЛС', prefix='snils')
@@ -88,9 +93,12 @@ _RUSSIA_MILITARY_DOC = DocumentType(key='russia_military_doc', label='Военн
 DOC_FLOWS: Dict[str, List[DocumentType]] = {
     'Патент': [
         _PHOTO, _PASSPORT,
-        _PATENT_SNILS, _PATENT_REGISTRATION, _PATENT_MIGRATION_CARD,
-        _PATENT_DMS, _PATENT_PATENT, _PATENT_INN, _PATENT_RECEIPT,
-        _PATENT_LANGUAGE_CERT, _PATENT_BANK_DETAILS, _PATENT_FINGERPRINT_CARD,
+        _PATENT_PASSPORT_TRANSLATION, _PATENT_SNILS,
+        _PATENT_REGISTRATION, _PATENT_MIGRATION_CARD,
+        _PATENT_DMS, _PATENT_PATENT_FRONT, _PATENT_PATENT_BACK,
+        _PATENT_INN, _PATENT_RECEIPT_1, _PATENT_RECEIPT_2, _PATENT_RECEIPT_3,
+        _PATENT_LANGUAGE_CERT, _PATENT_BANK_DETAILS,
+        _PATENT_FINGERPRINT_FRONT, _PATENT_FINGERPRINT_BACK,
     ],
     'Студент': [
         _PHOTO, _PASSPORT,
@@ -174,16 +182,21 @@ CITIZENSHIP_DOC_KEYS: Dict[str, List[str]] = {
 DOC_PROMPTS: Dict[str, str] = {
     'photo': '📸 Отправьте фото (селфи):',
     'passport': '🪪 Отправьте паспорт в развороте:',
-    'patent_snils': '📄 Отправьте СНИЛС (или перевод паспорта):',
+    'patent_passport_translation': '📄 Отправьте перевод паспорта:',
+    'patent_snils': '📄 Отправьте СНИЛС:',
     'patent_registration': '📋 Отправьте регистрацию:',
     'patent_migration_card': '🎫 Отправьте миграционную карту:',
     'patent_dms': '🏥 Отправьте ДМС:',
-    'patent_patent': '📝 Отправьте патент:',
+    'patent_patent_front': '📝 Отправьте патент (лицевая сторона):',
+    'patent_patent_back': '📝 Отправьте патент (разворот):',
     'patent_inn': '🔢 Отправьте ИНН (можно пропустить):',
-    'patent_receipt': '🧾 Отправьте чек по патенту:',
+    'patent_receipt_1': '🧾 Отправьте чек по патенту 1:',
+    'patent_receipt_2': '🧾 Отправьте чек по патенту 2 (или пропустите):',
+    'patent_receipt_3': '🧾 Отправьте чек по патенту 3 (или пропустите):',
     'patent_language_cert': '🎓 Отправьте сертификат о знании языка:',
     'patent_bank_details': '💳 Отправьте реквизиты банковской карты:',
-    'patent_fingerprint_card': '🖐 Отправьте дактилоскопическую карту:',
+    'patent_fingerprint_front': '🖐 Отправьте дактилоскопию (лицевая сторона):',
+    'patent_fingerprint_back': '🖐 Отправьте дактилоскопию (разворот):',
     'student_snils': '📄 Отправьте СНИЛС (или перевод паспорта):',
     'student_registration': '📋 Отправьте регистрацию:',
     'student_migration_card': '🎫 Отправьте миграционную карту:',

@@ -17,7 +17,6 @@ import tkinter as tk
 from tkinter import messagebox
 
 from src.config import get_paths, get_config, get_bot_token, get_document_config
-from src.database import get_db_service
 from src.models import Worker
 
 
@@ -46,7 +45,8 @@ class DocumentService:
 
     def get_worker_documents(self, worker: Worker) -> List[DocumentInfo]:
         """Получить список документов сотрудника с информацией о файлах."""
-        db_docs = get_db_service().documents.get_by_worker(worker.id)
+        from src.api_client import get_db_service
+        db_docs = get_db_service().get_documents(worker.id)
         citizenship = worker.citizenship
         # Нормализация citizenship для совпадения с ключами DOC_FLOWS
         citizenship_map = {
@@ -73,12 +73,11 @@ class DocumentService:
 
     def _find_document_file(self, worker_id: str, prefix: str) -> Optional[Path]:
         """Найти файл документа по префиксу и ID."""
-        worker_dir = self.paths.docs_dir / worker_id
-        if not worker_dir.exists():
-            return None
+        from src.api_client import get_db_service
+        api = get_db_service()
         for ext in self.config.image_extensions:
-            path = worker_dir / f"{prefix}{ext}"
-            if path.exists():
+            path = api.download_file(worker_id, f"{prefix}{ext}")
+            if path:
                 return path
         return None
 
@@ -323,7 +322,8 @@ class PDFExportService:
             y -= 25
             c.setFont(self._font_name, 10)
 
-            db_docs = get_db_service().documents.get_by_worker(worker.id)
+            from src.api_client import get_db_service
+            db_docs = get_db_service().get_documents(worker.id)
 
             for doc in self.doc_service._doc_flows[citizenship]:
                 if y < 50:
@@ -334,14 +334,7 @@ class PDFExportService:
 
                 filename_doc = db_docs.get(doc.key, '')
                 if filename_doc and worker.id:
-                    doc_path = None
-                    worker_dir = self.paths.docs_dir / worker.id
-                    if worker_dir.exists():
-                        for ext in self.config.image_extensions:
-                            tp = worker_dir / f"{doc.prefix}{ext}"
-                            if tp.exists():
-                                doc_path = tp
-                                break
+                    doc_path = self.doc_service._find_document_file(worker.id, doc.prefix)
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
                     update_progress()
@@ -374,7 +367,8 @@ class PDFExportService:
                 y -= 16
 
         # Встречи
-        meetings = get_db_service().meetings.get_by_worker(worker.id)
+        from src.api_client import get_db_service
+        meetings = get_db_service().get_meetings(worker.id)
         if meetings:
             update_progress()
             y -= 10
@@ -401,12 +395,13 @@ class PDFExportService:
         citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
         normalized = citizenship_map.get(citizenship, citizenship)
         if normalized in self.doc_service._doc_flows:
-            db_docs = get_db_service().documents.get_by_worker(worker.id)
+            from src.api_client import get_db_service
+            db_docs = get_db_service().get_documents(worker.id)
             for doc in self.doc_service._doc_flows[normalized]:
                 count += 1
         if worker.is_rejected and worker.reasons:
             count += len(worker.reasons) + 1
-        meetings = get_db_service().meetings.get_by_worker(worker.id)
+        meetings = get_db_service().get_meetings(worker.id)
         if meetings:
             count += len(meetings) + 1
         return count

@@ -35,7 +35,7 @@ async def _get_conn():
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA journal_mode=WAL")
     await conn.execute("PRAGMA foreign_keys=ON")
-    await conn.execute("PRAGMA busy_timeout=5000")
+    await conn.execute("PRAGMA busy_timeout=30000")
     try:
         yield conn
     finally:
@@ -349,7 +349,7 @@ async def _migrate_from_json(db: aiosqlite.Connection):
                     value = data.get(doc.key, '')
                     if not value and doc.key == 'passport':
                         value = data.get('Паспорт', '')
-                    if not value and doc.key == 'patent_patent':
+                    if not value and doc.key == 'patent_patent_front':
                         value = data.get('Патент', '')
                     if not value and doc.key == 'registration':
                         value = data.get('Регистрация', '')
@@ -420,8 +420,9 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
                 )
                 added += 1
 
-    if added:
-        await db.commit()
+        # Коммит после каждого работника чтобы не держать блокировку долго
+        if added:
+            await db.commit()
         logger.info("Синхронизировано %d документов из файловой системы", added)
 
 
@@ -430,8 +431,8 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
 async def get_next_id() -> str:
     """Получить следующий доступный ID."""
     async with _get_conn() as db:
-        await db.execute("BEGIN IMMEDIATE")
         try:
+            # Сначала пробуем без блокировки (быстрый путь)
             cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
             row = await cursor.fetchone()
             if not row:
@@ -442,6 +443,7 @@ async def get_next_id() -> str:
                 except (ValueError, TypeError):
                     next_id = 1
             next_id_str = str(next_id).zfill(5)
+            # INSERT IMMEDIATE чтобы заблокировать только при записи
             await db.execute(
                 "INSERT OR IGNORE INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
                 (next_id_str,)

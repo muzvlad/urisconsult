@@ -10,7 +10,7 @@ from pathlib import Path
 from src.config import get_config, get_paths, get_document_config
 from src.models import Worker
 from src.services import get_telegram_service
-from src.database import get_db_service
+from src.api_client import get_db_service as get_api_client
 from src.logging_config import get_logger, log_error, log_exception
 
 
@@ -149,7 +149,7 @@ class NotificationsWindow:
         self.on_reject = on_reject
         self.on_view = on_view
         self.config = get_config()
-        self.db = get_db_service()
+        self.api = get_api_client()
 
         self.window = tk.Toplevel(parent)
         self.window.title("Новые анкеты")
@@ -201,7 +201,11 @@ class NotificationsWindow:
 
     def _load_data(self) -> None:
         """Загрузить pending анкеты."""
-        pending = self.db.workers.get_pending()
+        try:
+            pending = self.api.get_workers(status='pending')
+        except ConnectionError:
+            messagebox.showerror("Ошибка", "Сервер недоступен", parent=self.window)
+            return
         self.title_label.config(text=f"🔔 Новые анкеты ({len(pending)})")
 
         if not pending:
@@ -236,12 +240,14 @@ class NotificationsWindow:
     def _handle_accept(self, worker: Worker) -> None:
         """Обработка принятия анкеты."""
         try:
-            if self.db.workers.accept(worker.id):
+            if self.api.accept_worker(worker.id):
                 messagebox.showinfo("Готово", f"Анкета #{worker.id} принята!", parent=self.window)
                 self.window.destroy()
                 self.on_refresh()
             else:
                 messagebox.showerror("Ошибка", "Не удалось обновить статус", parent=self.window)
+        except ConnectionError:
+            messagebox.showerror("Ошибка", "Сервер недоступен", parent=self.window)
         except Exception as e:
             log_exception(f"Error accepting worker {worker.id}")
             messagebox.showerror("Ошибка", f"Ошибка: {e}", parent=self.window)
@@ -249,7 +255,7 @@ class NotificationsWindow:
     def _handle_reject(self, worker: Worker, reasons: List[str]) -> None:
         """Обработка отклонения анкеты — бот отправит уведомление через 60 сек."""
         try:
-            if self.db.workers.reject(worker.id, reasons):
+            if self.api.reject_worker(worker.id, reasons):
                 messagebox.showinfo("Готово",
                                     f"Анкета #{worker.id} отклонена.\n"
                                     f"Клиент получит уведомление в Telegram.",
@@ -258,6 +264,8 @@ class NotificationsWindow:
                 self.on_refresh()
             else:
                 messagebox.showerror("Ошибка", "Не удалось обновить статус", parent=self.window)
+        except ConnectionError:
+            messagebox.showerror("Ошибка", "Сервер недоступен", parent=self.window)
         except Exception as e:
             log_exception(f"Error rejecting worker {worker.id}")
             messagebox.showerror("Ошибка", f"Ошибка: {e}", parent=self.window)

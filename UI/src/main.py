@@ -9,7 +9,7 @@ from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
 from src.config import get_config, get_paths, center_window
-from src.database import get_db_service, DatabaseConnection, init_db
+from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
 from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, PhotoWidget
@@ -35,9 +35,9 @@ class DBViewerApp:
         self.telegram = get_telegram_service()
         self.pdf_service = get_pdf_service()
 
-        self._splash_update("Подключение к БД...")
-        self.db = get_db_service()
-        diagnostic_log("БД подключена")
+        self._splash_update("Подключение к API...")
+        self.api = get_api_client()
+        diagnostic_log("API клиент инициализирован")
 
         # Состояние
         self.search_results: List[Worker] = []
@@ -50,8 +50,6 @@ class DBViewerApp:
         self.status_bar: Optional[tk.Label] = None
         self.bell: Optional[NotificationBell] = None
 
-        self._splash_update("Инициализация БД...")
-        self._init_db()
         self._splash_update("Настройка интерфейса...")
         self._setup_ui()
 
@@ -68,16 +66,6 @@ class DBViewerApp:
             except Exception:
                 pass
         diagnostic_log("Приложение готово!")
-
-    def _init_db(self) -> None:
-        """Инициализация БД."""
-        try:
-            init_db(self.paths.db_path)
-            get_logger().info("Database initialized successfully")
-        except Exception as e:
-            log_error(f"Failed to initialize database: {e}", exc_info=True)
-            show_error(self.root, "Ошибка", f"Не удалось инициализировать БД:\n{e}")
-            raise
 
     def _setup_ui(self) -> None:
         """Построение интерфейса."""
@@ -266,9 +254,12 @@ class DBViewerApp:
     def _refresh_pending_count(self) -> None:
         """Обновить счетчик на колокольчике."""
         try:
-            count = self.db.workers.count_pending()
+            count = self.api.get_pending_count()
             if self.bell:
                 self.bell.set_count(count)
+        except ConnectionError:
+            if self.bell:
+                self.bell.set_count(0)
         except Exception:
             if self.bell:
                 self.bell.set_count(0)
@@ -304,7 +295,7 @@ class DBViewerApp:
         self._execute_search("1=1", ())
 
     def _execute_search(self, where_clause: str, params: tuple) -> None:
-        """Выполнить поиск в БД."""
+        """Выполнить поиск через API."""
         if not self.list_widget:
             return
 
@@ -312,12 +303,12 @@ class DBViewerApp:
         self.search_results = []
 
         try:
-            sql = f"SELECT * FROM workers WHERE {where_clause} ORDER BY id"
-            rows = self.db.db.fetchall(sql, params)
-
-            for row in rows:
-                worker = Worker.from_row(row)
-                self.search_results.append(worker)
+            if where_clause == "1=1":
+                self.search_results = self.api.get_workers()
+            else:
+                # Extract search query from params: ("name LIKE ?", (f"%{query}%",))
+                query_text = params[0].strip("%") if params else ""
+                self.search_results = self.api.get_workers(search=query_text)
 
             self.list_widget.set_workers(self.search_results)
             self.status_bar.config(text=f"Найдено: {len(self.search_results)}")
@@ -325,6 +316,8 @@ class DBViewerApp:
 
             if not self.search_results:
                 show_info(self.root, "Результаты", "Записи не найдены")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Search error: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка поиска: {e}")
@@ -345,13 +338,15 @@ class DBViewerApp:
     def _accept_worker(self, worker: Worker) -> None:
         """Принять анкету."""
         try:
-            if self.db.workers.accept(worker.id):
+            if self.api.accept_worker(worker.id):
                 show_info(self.root, "Готово", f"Анкета #{worker.id} принята!")
                 self._refresh_pending_count()
                 self._refresh_current_worker()
                 log_info(f"Worker {worker.id} accepted")
             else:
                 show_error(self.root, "Ошибка", "Не удалось обновить статус")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error accepting worker {worker.id}: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка: {e}")
@@ -364,7 +359,7 @@ class DBViewerApp:
     def _handle_reject(self, worker: Worker, reasons: List[str]) -> None:
         """Обработка отклонения — бот отправит уведомление через 60 сек."""
         try:
-            if self.db.workers.reject(worker.id, reasons):
+            if self.api.reject_worker(worker.id, reasons):
                 show_info(self.root, "Готово",
                           f"Анкета #{worker.id} отклонена.\n"
                           f"Клиент получит уведомление в Telegram.")
@@ -373,6 +368,8 @@ class DBViewerApp:
                 log_info(f"Worker {worker.id} rejected with reasons: {reasons}")
             else:
                 show_error(self.root, "Ошибка", "Не удалось обновить статус")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error rejecting worker {worker.id}: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка: {e}")
@@ -383,13 +380,15 @@ class DBViewerApp:
 
         def on_save(updated: Worker):
             try:
-                if self.db.workers.update(updated):
+                if self.api.update_worker(updated):
                     show_info(self.root, "Готово", f"Анкета #{updated.id} обновлена!")
                     self._refresh_current_worker()
                     self._refresh_pending_count()
                     log_info(f"Worker {updated.id} updated")
                 else:
                     show_error(self.root, "Ошибка", "Не удалось обновить запись")
+            except ConnectionError:
+                show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
             except Exception as e:
                 log_error(f"Error updating worker {updated.id}: {e}", exc_info=True)
                 show_error(self.root, "Ошибка", f"Ошибка: {e}")
@@ -407,7 +406,7 @@ class DBViewerApp:
             return
 
         try:
-            if self.db.workers.delete_worker(worker.id):
+            if self.api.delete_worker(worker.id):
                 show_info(self.root, "Готово", f"Анкета #{worker.id} удалена!")
                 self.current_worker = None
                 self._refresh_current_list()
@@ -419,6 +418,8 @@ class DBViewerApp:
                 log_info(f"Worker {worker.id} deleted")
             else:
                 show_error(self.root, "Ошибка", "Не удалось удалить запись")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error deleting worker {worker.id}: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка: {e}")
@@ -426,7 +427,7 @@ class DBViewerApp:
     def _refresh_current_worker(self) -> None:
         """Обновить отображение текущего сотрудника."""
         if self.current_worker:
-            fresh = self.db.workers.get_by_id(self.current_worker.id)
+            fresh = self.api.get_worker(self.current_worker.id)
             if fresh:
                 self.current_worker = fresh
                 self._display_worker_details(fresh)
@@ -509,7 +510,6 @@ class DBViewerApp:
             ('manager', 'Менеджер'),
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
-            ('email', 'Электронная почта'),
             ('date', 'Дата рождения'),
             ('registration', 'Регистрация'),
             ('marital_status', 'Семейное положение'),
@@ -550,7 +550,7 @@ class DBViewerApp:
 
         # ── Документы ──
         try:
-            db_docs = self.db.documents.get_by_worker(worker.id)
+            db_docs = self.api.get_documents(worker.id)
             citizenship = worker.citizenship
 
             # Показываем все документы из БД у которых есть файл
@@ -559,8 +559,7 @@ class DBViewerApp:
             for doc_type, filename in db_docs.items():
                 if not filename or doc_type == 'photo':
                     continue
-                worker_dir = self.doc_service.paths.docs_dir / worker.id
-                full_path = worker_dir / filename if worker_dir.exists() else None
+                full_path = self.api.download_file(worker.id, filename)
                 if full_path and full_path.exists():
                     label = self.doc_service.get_document_label(doc_type)
                     existing_docs.append(DocumentInfo(
@@ -601,7 +600,7 @@ class DBViewerApp:
                          font=('Arial', 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
 
         # ── Встречи ──
-        meetings = self.db.meetings.get_by_worker(worker.id)
+        meetings = self.api.get_meetings(worker.id)
         if meetings:
             meetings_frame = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
             meetings_frame.pack(fill=tk.X, padx=5, pady=5)

@@ -111,15 +111,15 @@ if errorlevel 1 (
 REM --- Configure .env ---
 echo [5/5] Configuration...
 if exist "%REPO_DIR%\bot\.env" (
-    findstr /C:"NETWORK_SERVER" "%REPO_DIR%\bot\.env" >nul 2>&1
+    findstr /C:"API_SERVER" "%REPO_DIR%\bot\.env" >nul 2>&1
     if errorlevel 1 (
-        echo    Adding NETWORK_SERVER...
+        echo    Adding API_SERVER...
         echo.>> "%REPO_DIR%\bot\.env"
-        set /p NETWORK_SRV="    Network server (\\server\share) or Enter to skip: "
-        if "!NETWORK_SRV!"=="" (
+        set /p API_SRV="    API server (http://ip:8080) or Enter to skip: "
+        if "!API_SRV!"=="" (
             echo.>> "%REPO_DIR%\bot\.env"
         ) else (
-            echo NETWORK_SERVER=!NETWORK_SRV!>> "%REPO_DIR%\bot\.env"
+            echo API_SERVER=!API_SRV!>> "%REPO_DIR%\bot\.env"
         )
     ) else (
         echo    bot.env OK
@@ -128,14 +128,14 @@ if exist "%REPO_DIR%\bot\.env" (
 )
 echo.
 set /p BOT_TOKEN="    Bot token from @BotFather (Enter to skip): "
-set /p NETWORK_SRV="    Network server (\\server\share) or Enter to skip: "
+set /p API_SRV="    API server (http://ip:8080) or Enter to skip: "
 if "%BOT_TOKEN%"=="" (
     echo BOT_TOKEN=YOUR_TOKEN_HERE> "%REPO_DIR%\bot\.env"
-    echo NETWORK_SERVER=%NETWORK_SRV%>> "%REPO_DIR%\bot\.env"
+    echo API_SERVER=%API_SRV%>> "%REPO_DIR%\bot\.env"
     echo    [WARN] Edit bot\.env before running bot
 ) else (
     echo BOT_TOKEN=%BOT_TOKEN%> "%REPO_DIR%\bot\.env"
-    echo NETWORK_SERVER=%NETWORK_SRV%>> "%REPO_DIR%\bot\.env"
+    echo API_SERVER=%API_SRV%>> "%REPO_DIR%\bot\.env"
     echo    OK
 )
 

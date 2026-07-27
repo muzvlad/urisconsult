@@ -22,7 +22,7 @@ def _log(msg):
         for p in paths:
             try:
                 with open(p, 'a', encoding='utf-8') as f:
-                    f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
             except Exception:
                 continue
             break

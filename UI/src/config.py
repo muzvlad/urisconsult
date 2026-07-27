@@ -115,12 +115,10 @@ def _get_project_root() -> Path:
     return base
 
 
-# ─── Сетевой адрес сервера ───
-def _get_network_server() -> str:
-    """Прочитать адрес сервера из .env файла напрямую."""
-    # Читаем .env файл напрямую (не используем get_paths() чтобы избежать циклического импорта)
+# ─── API сервер ───
+def _get_api_server() -> str:
+    """Прочитать адрес API сервера из .env файла."""
     base = _get_base_path()
-    # Ищем .env в bot/ директории
     env_candidates = [
         base / "bot" / ".env",
         base / ".env",
@@ -131,18 +129,20 @@ def _get_network_server() -> str:
                 with open(env_path, "r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
-                        if line.startswith("NETWORK_SERVER="):
+                        if line.startswith("API_SERVER="):
                             return line.split("=", 1)[1].strip()
             except Exception:
                 pass
     return ""
 
-NETWORK_SERVER = _get_network_server()
+API_SERVER = _get_api_server()
 
 
 def _log_config(msg):
     """Лог конфигурации в файл."""
     import sys
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         paths = [
             os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
@@ -151,7 +151,7 @@ def _log_config(msg):
         for p in paths:
             try:
                 with open(p, 'a', encoding='utf-8') as f:
-                    f.write(f"[config] {msg}\n")
+                    f.write(f"[{ts}] {msg}\n")
             except Exception:
                 continue
             break
@@ -162,39 +162,8 @@ def _log_config(msg):
 @lru_cache(maxsize=1)
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
-    import threading
-
-    result = [None]
-
-    def _try_network():
-        try:
-            net_path = Path(NETWORK_SERVER)
-            if net_path.exists():
-                db_path = net_path / "bot" / "Users" / "users.db"
-                docs_dir = net_path / "bot" / "Users" / "docs"
-                bot_dir = net_path / "bot"
-                if db_path.parent.exists() or docs_dir.exists():
-                    result[0] = AppPaths(
-                        project_root=net_path,
-                        db_path=db_path,
-                        docs_dir=docs_dir,
-                        bot_dir=bot_dir,
-                    )
-        except (OSError, PermissionError):
-            pass
-
-    # Проверка сети с таймаутом 3 секунды
-    t = threading.Thread(target=_try_network, daemon=True)
-    t.start()
-    t.join(timeout=3)
-
-    if result[0] is not None:
-        _log_config(f"Сервер доступен: {NETWORK_SERVER}")
-        return result[0]
-
-    # Локальный режим
     root = _get_project_root()
-    _log_config(f"Сервер недоступен! Fallback на локальную БД: {root}")
+    _log_config(f"Локальный режим: {root}")
     return AppPaths(
         project_root=root,
         db_path=root / "bot" / "Users" / "users.db",

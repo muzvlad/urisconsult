@@ -213,7 +213,6 @@ class WorkerCardWidget(tk.Frame):
             f"Должность: {self.worker.position}",
             f"Объект: {self.worker.object}",
             f"Тел: {self.worker.phone_main}",
-            f"Email: {self.worker.email}",
         ]
         for item in info_items:
             if item.split(': ')[1]:

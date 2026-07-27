@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -84,6 +85,25 @@ def console_print(msg, color='white'):
     print(f"{c}{msg}{reset}", flush=True)
 
 
+API_PORT = 8080
+
+
+def _start_api_server():
+    """Запустить Flask API-сервер в фоновом потоке."""
+    try:
+        from api_server import app
+
+        def _run():
+            app.run(host='0.0.0.0', port=API_PORT, debug=False, use_reloader=False)
+
+        t = threading.Thread(target=_run, daemon=True, name="api-server")
+        t.start()
+        console_print(f"  API-сервер: http://0.0.0.0:{API_PORT}", 'green')
+    except Exception as e:
+        console_print(f"  ОШИБКА API-сервера: {e}", 'red')
+        logger.error("Failed to start API server: %s", e)
+
+
 async def set_commands(bot: Bot):
     """Установка команд бота"""
     commands = [
@@ -100,6 +120,9 @@ async def on_startup(bot: Bot):
     await db.init_db()
     await set_commands(bot)
 
+    # Запуск API-сервера в фоновом потоке
+    _start_api_server()
+
     # Очистка старых temp-файлов
     temp_count = 0
     for f in glob.glob(os.path.join(DOCS_DIR, "temp_*")):
@@ -115,6 +138,7 @@ async def on_startup(bot: Bot):
     console_print("=" * 50, 'green')
     console_print(f"  БД: {DB_PATH}")
     console_print(f"  Документы: {DOCS_DIR}")
+    console_print(f"  API: http://0.0.0.0:{API_PORT}")
     if temp_count:
         console_print(f"  Очищено {temp_count} temp-файлов")
     console_print("=" * 50, 'green')
