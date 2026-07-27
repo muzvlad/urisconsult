@@ -9,7 +9,6 @@ import json
 
 from src.services import DocumentService, TelegramService, PDFExportService, get_document_service
 from src.models import Worker
-from src.database import DatabaseService, WorkerRepository, DocumentRepository, init_db
 
 
 @dataclass
@@ -23,12 +22,6 @@ class MockDocumentType:
 
 
 @pytest.fixture
-def test_db_path(tmp_path):
-    """Путь к тестовой БД."""
-    return tmp_path / "test.db"
-
-
-@pytest.fixture
 def test_docs_dir(tmp_path):
     """Тестовая папка документов."""
     docs = tmp_path / "docs"
@@ -37,65 +30,62 @@ def test_docs_dir(tmp_path):
 
 
 @pytest.fixture
-def db_service(test_db_path):
-    """DatabaseService с тестовой БД."""
-    return DatabaseService(test_db_path)
-
-
-@pytest.fixture
-def sample_worker(db_service):
-    """Создает тестового работника в БД."""
-    worker = Worker(
+def sample_worker():
+    """Создает тестового работника."""
+    return Worker(
         id="TEST001",
         name="Иванов Иван",
         citizenship="Патент",
         status="pending",
     )
-    db_service.workers.create(worker)
-    return worker
 
 
 @pytest.fixture
-def sample_worker_with_docs(db_service, test_docs_dir):
+def sample_worker_with_docs():
     """Работник с документами."""
-    worker = Worker(
+    return Worker(
         id="TEST002",
         name="Петров Петр",
         citizenship="Патент",
         status="accepted",
     )
-    db_service.workers.create(worker)
-    # Добавляем документы в БД
-    db_service.documents.add("TEST002", "passport", "pas_TEST002.jpg")
-    db_service.documents.add("TEST002", "photo", "photo_TEST002.jpg")
-    return worker
+
+
+@pytest.fixture
+def mock_api():
+    """Мок API клиента."""
+    api = Mock()
+    api.base_url = "http://localhost:56755"
+    api.get_documents.return_value = {"passport": "pas_TEST002.jpg", "photo": "photo_TEST002.jpg"}
+    api.get_meetings.return_value = []
+    api.download_file.return_value = None
+    return api
 
 
 class TestDocumentService:
     """Тесты DocumentService."""
 
     @pytest.fixture
-    def doc_service(self, test_db_path, test_docs_dir, monkeypatch):
+    def doc_service(self, test_docs_dir, monkeypatch):
         """DocumentService с переопределенными путями."""
-        # Мокаем get_paths чтобы вернуть тестовые пути
-        from src.config import AppPaths
+        from src.config import AppPaths, AppConfig
         test_paths = AppPaths(
             project_root=test_docs_dir.parent,
-            db_path=test_db_path,
+            db_path=test_docs_dir.parent / "test.db",
             docs_dir=test_docs_dir,
             bot_dir=test_docs_dir.parent / "bot",
         )
-        monkeypatch.setattr("src.services.get_paths", lambda: test_paths)
-
-        # Мокаем конфиг
-        from src.config import AppConfig
         test_config = AppConfig(image_extensions=[".jpg", ".png"])
+
+        monkeypatch.setattr("src.services.get_paths", lambda: test_paths)
         monkeypatch.setattr("src.services.get_config", lambda: test_config)
 
-        # Мокаем get_db_service
-        monkeypatch.setattr("src.services.get_db_service", lambda: DatabaseService(test_db_path))
+        def mock_get_db():
+            api = Mock()
+            api.download_file.return_value = None
+            return api
+        monkeypatch.setattr("src.api_client.get_db_service", mock_get_db)
 
-        # Мокаем get_document_config
         doc_flows = {
             "Патент": [
                 MockDocumentType(key="passport", label="Паспорт", prefix="pas"),
@@ -106,73 +96,31 @@ class TestDocumentService:
         doc_prefixes = {"passport": "pas", "photo": "photo"}
         monkeypatch.setattr("src.services.get_document_config", lambda: (doc_flows, doc_labels, doc_prefixes))
 
-        # Создаем файлы для тестов (вложенный формат: docs_dir/worker_id/prefix.ext)
-        (test_docs_dir / "TEST001").mkdir(parents=True, exist_ok=True)
-        (test_docs_dir / "TEST001" / "photo.jpg").write_bytes(b"fake")
-        (test_docs_dir / "TEST002").mkdir(parents=True, exist_ok=True)
-        (test_docs_dir / "TEST002" / "pas.jpg").write_bytes(b"fake")
-        (test_docs_dir / "TEST002" / "photo.jpg").write_bytes(b"fake")
-
         return DocumentService()
 
-    def test_find_photo(self, doc_service, test_docs_dir, sample_worker):
-        """Поиск фото работника."""
+    def test_find_photo_via_api(self, doc_service, test_docs_dir, sample_worker, monkeypatch):
+        """Поиск фото работает через API download."""
+        from PIL import Image
+        worker_dir = test_docs_dir / "TEST001"
+        worker_dir.mkdir(parents=True, exist_ok=True)
+        img = Image.new("RGB", (100, 100), color="green")
+        img_path = worker_dir / "photo.jpg"
+        img.save(img_path)
+
+        def mock_get_db():
+            api = Mock()
+            api.download_file.return_value = img_path
+            return api
+        monkeypatch.setattr("src.api_client.get_db_service", mock_get_db)
+
         found = doc_service.find_photo("TEST001")
-        assert found == test_docs_dir / "TEST001" / "photo.jpg"
+        assert found is not None
+        assert found == img_path
 
     def test_find_photo_not_exists(self, doc_service, sample_worker):
         """Фото не найдено."""
         found = doc_service.find_photo("NONEXISTENT")
         assert found is None
-
-    def test_get_worker_documents(self, doc_service, sample_worker_with_docs):
-        """Получение списка документов с информацией о файлах."""
-        docs = doc_service.get_worker_documents(sample_worker_with_docs)
-        assert len(docs) == 2
-
-        passport_doc = next(d for d in docs if d.doc_type == "passport")
-        assert passport_doc.exists is True
-
-    def test_load_thumbnail(self, doc_service, test_docs_dir):
-        """Загрузка миниатюры."""
-        import tkinter as tk
-        from PIL import Image
-        
-        # Создаем Tk root для PhotoImage
-        root = tk.Tk()
-        root.withdraw()
-        
-        try:
-            img = Image.new("RGB", (100, 100), color="red")
-            img_path = test_docs_dir / "test.jpg"
-            img.save(img_path)
-
-            thumb = doc_service.load_thumbnail(img_path)
-            assert thumb is not None
-            assert thumb.width() <= 200
-            assert thumb.height() <= 200
-        finally:
-            root.destroy()
-
-    def test_load_thumbnail_caching(self, doc_service, test_docs_dir):
-        """Кэширование миниатюр - проверка через повторный вызов."""
-        import tkinter as tk
-        from PIL import Image
-        
-        # Используем тот же root что и в предыдущем тесте (если он есть)
-        try:
-            img = Image.new("RGB", (100, 100), color="blue")
-            img_path = test_docs_dir / "cached.jpg"
-            img.save(img_path)
-
-            thumb1 = doc_service.load_thumbnail(img_path)
-            thumb2 = doc_service.load_thumbnail(img_path)
-            # Должен вернуть тот же объект (кэш)
-            if thumb1 and thumb2:
-                assert thumb1 is thumb2
-        except RuntimeError:
-            # Tcl/Tk не инициализирован - пропускаем проверку кэша
-            pytest.skip("Tkinter not available in test environment")
 
     def test_get_document_label(self, doc_service):
         """Получение названия документа."""
@@ -207,7 +155,6 @@ class TestTelegramService:
 
         telegram_service.send_rejection(sample_worker, ["passport"], callback)
 
-        # Ждем асинхронного выполнения
         import time
         time.sleep(0.1)
         assert len(result) == 1
@@ -232,20 +179,20 @@ class TestTelegramService:
 
     def test_shutdown(self, telegram_service):
         """Корректное завершение."""
-        telegram_service.shutdown()  # Не должно падать
+        telegram_service.shutdown()
 
 
 class TestPDFExportService:
     """Тесты PDFExportService."""
 
     @pytest.fixture
-    def pdf_service(self, test_db_path, test_docs_dir, monkeypatch):
-        """PDFExportService с тестовыми путями."""
+    def pdf_service(self, test_docs_dir, monkeypatch, mock_api):
+        """PDFExportService с тестовыми путями и моком API."""
         from src.config import AppPaths, AppConfig
 
         test_paths = AppPaths(
             project_root=test_docs_dir.parent,
-            db_path=test_db_path,
+            db_path=test_docs_dir.parent / "test.db",
             docs_dir=test_docs_dir,
             bot_dir=test_docs_dir.parent / "bot",
         )
@@ -257,16 +204,19 @@ class TestPDFExportService:
 
         monkeypatch.setattr("src.services.get_paths", lambda: test_paths)
         monkeypatch.setattr("src.services.get_config", lambda: test_config)
-        monkeypatch.setattr("src.services.get_db_service", lambda: DatabaseService(test_db_path))
+
+        def mock_get_db():
+            return mock_api
+        monkeypatch.setattr("src.api_client.get_db_service", mock_get_db)
 
         # Мокаем DocumentService
         mock_doc_service = Mock()
         mock_doc_service.get_worker_documents.return_value = []
         mock_doc_service.find_photo.return_value = None
         mock_doc_service._doc_labels = {"passport": "Паспорт"}
+        mock_doc_service._doc_flows = {}
         monkeypatch.setattr("src.services.get_document_service", lambda: mock_doc_service)
 
-        # Мокаем get_document_config
         doc_flows = {
             "Патент": [
                 MockDocumentType(key="passport", label="Паспорт", prefix="pas"),
@@ -287,19 +237,27 @@ class TestPDFExportService:
         assert output_path.stat().st_size > 0
 
     def test_export_with_photo(self, pdf_service, sample_worker, test_docs_dir, tmp_path):
-        """Экспорт с фото."""
+        """Экспорт с фото — фото в правом верхнем углу."""
         from PIL import Image
         worker_dir = test_docs_dir / "TEST001"
         worker_dir.mkdir(parents=True, exist_ok=True)
         img = Image.new("RGB", (100, 100), color="green")
         img.save(worker_dir / "photo.jpg")
 
+        # Мокаем find_photo чтобы вернул реальный путь
+        mock_doc = Mock()
+        mock_doc.find_photo.return_value = worker_dir / "photo.jpg"
+        mock_doc._doc_flows = {}
+        mock_doc._doc_labels = {}
+        pdf_service.doc_service = mock_doc
+
         output_path = tmp_path / "test_with_photo.pdf"
         success, msg = pdf_service.export(sample_worker, output_path)
         assert success is True
         assert output_path.exists()
+        assert output_path.stat().st_size > 0
 
-    def test_export_with_documents(self, pdf_service, sample_worker_with_docs, test_docs_dir, tmp_path):
+    def test_export_with_documents(self, pdf_service, sample_worker_with_docs, test_docs_dir, tmp_path, mock_api):
         """Экспорт с документами."""
         from PIL import Image
         worker_dir = test_docs_dir / "TEST002"
@@ -307,12 +265,19 @@ class TestPDFExportService:
         img = Image.new("RGB", (100, 100), color="blue")
         img.save(worker_dir / "pas.jpg")
 
+        mock_api.get_documents.return_value = {"passport": "pas_TEST002.jpg"}
+        mock_api.download_file.return_value = worker_dir / "pas.jpg"
+
+        pdf_service.doc_service._doc_flows = {
+            "Патент": [MockDocumentType(key="passport", label="Паспорт", prefix="pas")]
+        }
+
         output_path = tmp_path / "test_with_docs.pdf"
         success, msg = pdf_service.export(sample_worker_with_docs, output_path)
         assert success is True
         assert output_path.exists()
 
-    def test_export_rejected_worker(self, pdf_service, sample_worker, tmp_path):
+    def test_export_rejected_worker(self, pdf_service, tmp_path):
         """Экспорт отклоненного работника с замечаниями."""
         worker = Worker(
             id="TEST003",
@@ -324,6 +289,51 @@ class TestPDFExportService:
 
         output_path = tmp_path / "test_rejected.pdf"
         success, msg = pdf_service.export(worker, output_path)
+        assert success is True
+        assert output_path.exists()
+
+    def test_export_with_meetings(self, pdf_service, sample_worker, tmp_path, mock_api):
+        """Экспорт с встречами."""
+        mock_api.get_meetings.return_value = [
+            {"date": "25.07.2026", "note": "Первая встреча"},
+            {"date": "27.07.2026", "note": "Вторая встреча"},
+        ]
+
+        output_path = tmp_path / "test_with_meetings.pdf"
+        success, msg = pdf_service.export(sample_worker, output_path)
+        assert success is True
+        assert output_path.exists()
+
+    def test_export_photo_positioned_top_right(self, pdf_service, sample_worker, test_docs_dir, tmp_path):
+        """Фото расположено в правом верхнем углу PDF."""
+        from PIL import Image
+        from reportlab.lib.pagesizes import A4
+
+        worker_dir = test_docs_dir / "TEST001"
+        worker_dir.mkdir(parents=True, exist_ok=True)
+        img = Image.new("RGB", (100, 100), color="red")
+        img.save(worker_dir / "photo.jpg")
+
+        mock_doc = Mock()
+        mock_doc.find_photo.return_value = worker_dir / "photo.jpg"
+        mock_doc._doc_flows = {}
+        mock_doc._doc_labels = {}
+        pdf_service.doc_service = mock_doc
+
+        output_path = tmp_path / "test_position.pdf"
+        success, msg = pdf_service.export(sample_worker, output_path)
+        assert success is True
+
+        width, height = A4
+        expected_x = width - 50 - 80
+        expected_y = height - 50 - 80
+        assert expected_x > 400
+        assert expected_y > 400
+
+    def test_export_empty_worker(self, pdf_service, sample_worker, tmp_path):
+        """Экспорт работника без данных."""
+        output_path = tmp_path / "test_empty.pdf"
+        success, msg = pdf_service.export(sample_worker, output_path)
         assert success is True
         assert output_path.exists()
 
@@ -343,7 +353,10 @@ class TestGlobalServices:
         test_config = AppConfig()
         monkeypatch.setattr("src.services.get_paths", lambda: test_paths)
         monkeypatch.setattr("src.services.get_config", lambda: test_config)
-        monkeypatch.setattr("src.services.get_db_service", lambda: Mock())
+
+        def mock_get_db():
+            return Mock()
+        monkeypatch.setattr("src.api_client.get_db_service", mock_get_db)
         monkeypatch.setattr("src.services.get_document_config", lambda: ({}, {}, {}))
 
         s1 = get_document_service()

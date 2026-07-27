@@ -389,6 +389,7 @@ class PDFExportService:
 
     def _count_pdf_items(self, worker: Worker) -> int:
         """Подсчет общего количества элементов для прогресса."""
+        from src.api_client import get_db_service
         count = 10  # базовые поля
         if self.doc_service.find_photo(worker.id):
             count += 1
@@ -396,7 +397,6 @@ class PDFExportService:
         citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
         normalized = citizenship_map.get(citizenship, citizenship)
         if normalized in self.doc_service._doc_flows:
-            from src.api_client import get_db_service
             db_docs = get_db_service().get_documents(worker.id)
             for doc in self.doc_service._doc_flows[normalized]:
                 count += 1
