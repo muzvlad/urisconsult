@@ -296,16 +296,17 @@ class PDFExportService:
                 update_progress()
                 y -= 18
 
-        # Фото
+        # Фото — в правом верхнем углу (поверх всего)
         if worker.id:
             photo_path = self.doc_service.find_photo(worker.id)
             if photo_path:
                 try:
                     img = ImageReader(str(photo_path))
-                    c.drawImage(img, 450, y - 10, width=80, height=80,
+                    photo_x = width - 50 - 80
+                    photo_y = height - 50 - 80
+                    c.drawImage(img, photo_x, photo_y, width=80, height=80,
                                 preserveAspectRatio=True, mask='auto')
                     update_progress()
-                    y -= 100
                 except Exception:
                     pass
 
