@@ -13,6 +13,9 @@ from services import db
 
 app = Flask(__name__)
 
+import logging
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
 MIME_OVERRIDES = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
     '.png': 'image/png', '.gif': 'image/gif',
