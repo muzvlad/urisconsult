@@ -148,7 +148,7 @@ def _log_config(msg):
     """Лог конфигурации в файл."""
     import sys
     from datetime import datetime
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     try:
         paths = [
             os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
@@ -206,23 +206,27 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
     """
     Получить конфиг документов из бота.
     Возвращает (DOC_FLOWS, DOC_LABELS, DOC_PREFIXES).
+    Импортирует documents.py напрямую по пути, минуя config/__init__.py
+    (у которого могут быть лишние зависимости вроде dotenv).
     """
+    import importlib.util
     paths = get_paths()
-    bot_config_dir = paths.bot_dir / "config"
+    docs_py = paths.bot_dir / "config" / "documents.py"
 
-    # Сохраняем и восстанавливаем sys.path чтобы не засорять
-    old_path = sys.path.copy()
-    try:
-        if str(bot_config_dir.parent) not in sys.path:
-            sys.path.insert(0, str(bot_config_dir.parent))
-        from config.documents import DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
-        _log_config(f"doc_flows loaded: {list(DOC_FLOWS.keys())}")
-        return DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
-    except ImportError as e:
-        _log_config(f"doc_flows import FAILED: {e} (bot_config_dir={bot_config_dir})")
+    if not docs_py.exists():
+        _log_config(f"doc_flows: {docs_py} not found")
         return {}, {}, {}
-    finally:
-        sys.path = old_path
+
+    try:
+        spec = importlib.util.spec_from_file_location("documents_module", str(docs_py))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        result = (mod.DOC_FLOWS, mod.DOC_LABELS, mod.DOC_PREFIXES)
+        _log_config(f"doc_flows loaded: {list(mod.DOC_FLOWS.keys())}")
+        return result
+    except Exception as e:
+        _log_config(f"doc_flows import FAILED: {e}")
+        return {}, {}, {}
 
 
 # ─── Константы БД (импортируются из общего модуля) ───

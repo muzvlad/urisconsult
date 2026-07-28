@@ -51,7 +51,7 @@ def setup_logging(
 # Форматтер
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        datefmt="%d.%m.%Y %H:%M:%S",
     )
 
     # Консольный обработчик — только ошибки
@@ -130,7 +130,7 @@ def diagnostic_log(msg: str) -> None:
     """Лог в файл для диагностики (до инициализации основного логирования)."""
     import sys
     from datetime import datetime
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     try:
         paths = [
             os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'ui_error.log'),
