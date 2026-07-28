@@ -206,27 +206,35 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
     """
     Получить конфиг документов из бота.
     Возвращает (DOC_FLOWS, DOC_LABELS, DOC_PREFIXES).
-    Импортирует documents.py напрямую по пути, минуя config/__init__.py
-    (у которого могут быть лишние зависимости вроде dotenv).
+    Ищет documents.py: bundle (EXE) → файл на диске.
     """
     import importlib.util
+
+    # Ищем documents.py в нескольких местах
+    candidates = []
+    if getattr(sys, "frozen", False):
+        # В EXE — ищем в _MEIPASS (бандл PyInstaller)
+        meipass = Path(sys._MEIPASS)
+        candidates.append(meipass / "bot_config" / "documents.py")
+        candidates.append(meipass / "documents.py")
+    # На диске — относительно bot_dir
     paths = get_paths()
-    docs_py = paths.bot_dir / "config" / "documents.py"
+    candidates.append(paths.bot_dir / "config" / "documents.py")
 
-    if not docs_py.exists():
-        _log_config(f"doc_flows: {docs_py} not found")
-        return {}, {}, {}
+    for docs_py in candidates:
+        if docs_py.exists():
+            try:
+                spec = importlib.util.spec_from_file_location("documents_module", str(docs_py))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                result = (mod.DOC_FLOWS, mod.DOC_LABELS, mod.DOC_PREFIXES)
+                _log_config(f"doc_flows loaded from {docs_py}: {list(mod.DOC_FLOWS.keys())[:3]}...")
+                return result
+            except Exception as e:
+                _log_config(f"doc_flows import FAILED from {docs_py}: {e}")
 
-    try:
-        spec = importlib.util.spec_from_file_location("documents_module", str(docs_py))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        result = (mod.DOC_FLOWS, mod.DOC_LABELS, mod.DOC_PREFIXES)
-        _log_config(f"doc_flows loaded: {list(mod.DOC_FLOWS.keys())}")
-        return result
-    except Exception as e:
-        _log_config(f"doc_flows import FAILED: {e}")
-        return {}, {}, {}
+    _log_config(f"doc_flows: documents.py not found in any location")
+    return {}, {}, {}
 
 
 # ─── Константы БД (импортируются из общего модуля) ───

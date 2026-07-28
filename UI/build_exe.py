@@ -55,6 +55,7 @@ def create_executable() -> bool:
         project_root = os.path.dirname(base_dir)  # корень проекта (на уровень выше UI/)
         src_dir = os.path.join(base_dir, 'src')
         shared_dir = os.path.join(project_root, 'shared')
+        bot_config_dir = os.path.join(project_root, 'bot', 'config')
         db_viewer = os.path.join(base_dir, 'db_viewer.py')
 
         # Команда для создания exe
@@ -66,9 +67,10 @@ def create_executable() -> bool:
             '--icon=NONE',            # Без иконки
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
-            # Добавляем src и shared как data
+            # Добавляем src, shared и bot/config как data
             f'--add-data={src_dir}{os.pathsep}src',
             f'--add-data={shared_dir}{os.pathsep}shared',
+            f'--add-data={bot_config_dir}{os.pathsep}bot_config',
             # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',
