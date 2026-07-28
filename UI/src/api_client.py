@@ -8,6 +8,7 @@ import logging
 import os
 import urllib.request
 import urllib.error
+import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -79,12 +80,12 @@ class APIClient:
     # ── Workers ──
 
     def get_workers(self, status: Optional[str] = None, search: Optional[str] = None) -> List[Worker]:
-        params = []
+        params = {}
         if status:
-            params.append(f"status={status}")
+            params["status"] = status
         if search:
-            params.append(f"search={search}")
-        qs = ("?" + "&".join(params)) if params else ""
+            params["search"] = search
+        qs = ("?" + urllib.parse.urlencode(params)) if params else ""
         data = self._get(f"/api/workers{qs}")
         if not data:
             return []
