@@ -437,18 +437,7 @@ class MeetingDialog:
         tk.Label(header, text=self.worker.name,
                  font=('Arial', 10), bg='#2c3e50', fg='#bbb').pack()
 
-        form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
-        form.pack(fill=tk.BOTH, expand=True)
-
-        tk.Label(form, text="Дата:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.date_entry = tk.Entry(form, font=('Arial', 11), width=30)
-        self.date_entry.pack(fill=tk.X, pady=(0, 10))
-        self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
-
-        tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.note_entry = tk.Entry(form, font=('Arial', 11), width=30)
-        self.note_entry.pack(fill=tk.X, pady=(0, 5))
-
+        # Кнопки первыми (side=BOTTOM), чтобы заняли место
         btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
@@ -462,6 +451,19 @@ class MeetingDialog:
                   bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
+
+        # Форма заполняет оставшееся пространство
+        form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
+        form.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(form, text="Дата:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        self.date_entry = tk.Entry(form, font=('Arial', 11), width=30)
+        self.date_entry.pack(fill=tk.X, pady=(0, 10))
+        self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
+
+        tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        self.note_entry = tk.Entry(form, font=('Arial', 11), width=30)
+        self.note_entry.pack(fill=tk.X, pady=(0, 5))
 
     def _save(self) -> None:
         date = self.date_entry.get().strip()
