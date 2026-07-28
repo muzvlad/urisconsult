@@ -216,8 +216,10 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
         if str(bot_config_dir.parent) not in sys.path:
             sys.path.insert(0, str(bot_config_dir.parent))
         from config.documents import DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
+        _log_config(f"doc_flows loaded: {list(DOC_FLOWS.keys())}")
         return DOC_FLOWS, DOC_LABELS, DOC_PREFIXES
-    except ImportError:
+    except ImportError as e:
+        _log_config(f"doc_flows import FAILED: {e} (bot_config_dir={bot_config_dir})")
         return {}, {}, {}
     finally:
         sys.path = old_path

@@ -57,6 +57,15 @@ def get_worker(worker_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/workers/<worker_id>/documents', methods=['GET'])
+def get_worker_documents(worker_id):
+    try:
+        docs = run_async(db.get_worker_documents(worker_id))
+        return jsonify(docs)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/workers/<worker_id>', methods=['PUT'])
 def update_worker(worker_id):
     try:
