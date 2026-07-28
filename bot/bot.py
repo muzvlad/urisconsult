@@ -10,7 +10,7 @@ import logging
 import threading
 from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
+from services.fsm_storage import SQLiteStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault, InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import BOT_TOKEN, DOCS_DIR, DB_PATH, ensure_dirs
@@ -211,7 +211,7 @@ async def check_rejected_workers(bot: Bot):
 async def main():
     """Главная функция запуска бота"""
     bot = Bot(token=BOT_TOKEN)
-    storage = MemoryStorage()
+    storage = SQLiteStorage(str(DB_PATH))
     dp = Dispatcher(storage=storage)
 
     # Rate limiting middleware
@@ -236,6 +236,7 @@ async def main():
             except asyncio.CancelledError:
                 pass
     finally:
+        await storage.close()
         await db.close_db()
         await bot.session.close()
         console_print("\nБот остановлен.", 'yellow')
