@@ -490,12 +490,22 @@ class DBViewerApp:
         dates_frame = tk.Frame(left_col, bg='white')
         dates_frame.pack(anchor=tk.W, pady=(8, 0))
         if worker.created_at:
-            created = worker.created_at[:10].replace('-', '.')
-            tk.Label(dates_frame, text=f"Дата заведения: {created}",
+            try:
+                dt = worker.created_at[:16].replace('T', ' ')
+                from datetime import datetime as _dt
+                dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
+            except Exception:
+                dt = worker.created_at[:16]
+            tk.Label(dates_frame, text=f"Дата заведения: {dt}",
                      font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
         if worker.updated_at:
-            updated = worker.updated_at[:10].replace('-', '.')
-            tk.Label(dates_frame, text=f"Последнее редактирование: {updated}",
+            try:
+                dt = worker.updated_at[:16].replace('T', ' ')
+                from datetime import datetime as _dt
+                dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
+            except Exception:
+                dt = worker.updated_at[:16]
+            tk.Label(dates_frame, text=f"Последнее редактирование: {dt}",
                      font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
 
         tk.Label(right_col, text=f"ИД: {worker.id}",
