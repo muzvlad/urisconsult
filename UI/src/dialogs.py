@@ -418,7 +418,7 @@ class MeetingDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
-        self._center_window(400, 220)
+        self._center_window(400, 260)
         self._build_ui()
 
     def _center_window(self, w: int, h: int) -> None:
