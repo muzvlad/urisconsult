@@ -462,12 +462,12 @@ class MeetingDialog:
         self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
 
         tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.note_entry = tk.Entry(form, font=('Arial', 11), width=30)
-        self.note_entry.pack(fill=tk.X, pady=(0, 5))
+        self.note_text = tk.Text(form, font=('Arial', 11), width=30, height=3, wrap=tk.WORD)
+        self.note_text.pack(fill=tk.X, pady=(0, 5))
 
     def _save(self) -> None:
         date = self.date_entry.get().strip()
-        note = self.note_entry.get().strip()
+        note = self.note_text.get("1.0", tk.END).strip()
         if not note:
             note = "Встреча"
         try:
