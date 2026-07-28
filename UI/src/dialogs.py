@@ -456,10 +456,15 @@ class MeetingDialog:
         form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
         form.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form, text="Дата:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.date_entry = tk.Entry(form, font=('Arial', 11), width=30)
-        self.date_entry.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(form, text="Дата и время:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        dt_row = tk.Frame(form, bg='#f0f0f0')
+        dt_row.pack(fill=tk.X, pady=(0, 10))
+        self.date_entry = tk.Entry(dt_row, font=('Arial', 11), width=15)
+        self.date_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
+        self.time_entry = tk.Entry(dt_row, font=('Arial', 11), width=8)
+        self.time_entry.pack(side=tk.LEFT)
+        self.time_entry.insert(0, __import__('datetime').datetime.now().strftime('%H:%M'))
 
         tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
         self.note_text = tk.Text(form, font=('Arial', 11), width=30, height=3, wrap=tk.WORD)
@@ -467,6 +472,9 @@ class MeetingDialog:
 
     def _save(self) -> None:
         date = self.date_entry.get().strip()
+        time_str = self.time_entry.get().strip()
+        if time_str:
+            date = f"{date} {time_str}"
         note = self.note_text.get("1.0", tk.END).strip()
         if not note:
             note = "Встреча"
