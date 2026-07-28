@@ -168,6 +168,7 @@ def _dict_to_worker(d: dict) -> Worker:
         telegram_id=d.get("telegram_id"),
         telegram_username=d.get("telegram_username", ""),
         created_at=d.get("created_at", ""),
+        updated_at=d.get("updated_at", ""),
         status=d.get("status", "pending"),
         rejection_reasons=d.get("rejection_reasons", "[]"),
     )

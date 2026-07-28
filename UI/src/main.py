@@ -486,6 +486,18 @@ class DBViewerApp:
                   padx=10, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT)
 
+        # Даты
+        dates_frame = tk.Frame(left_col, bg='white')
+        dates_frame.pack(anchor=tk.W, pady=(8, 0))
+        if worker.created_at:
+            created = worker.created_at[:10].replace('-', '.')
+            tk.Label(dates_frame, text=f"Дата заведения: {created}",
+                     font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
+        if worker.updated_at:
+            updated = worker.updated_at[:10].replace('-', '.')
+            tk.Label(dates_frame, text=f"Последнее редактирование: {updated}",
+                     font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
+
         tk.Label(right_col, text=f"ИД: {worker.id}",
                  font=('Arial', 12), bg='white').pack(anchor=tk.NE)
 

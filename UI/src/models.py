@@ -30,6 +30,7 @@ class Worker:
     telegram_id: Optional[int] = None
     telegram_username: str = ""
     created_at: str = ""
+    updated_at: str = ""
     status: str = "pending"
     rejection_reasons: str = "[]"
 
@@ -92,6 +93,7 @@ class Worker:
             telegram_id=row["telegram_id"] if "telegram_id" in row.keys() else None,
             telegram_username=get("telegram_username"),
             created_at=get("created_at"),
+            updated_at=get("updated_at"),
             status=get("status", "pending"),
             rejection_reasons=get("rejection_reasons", "[]"),
         )
@@ -116,6 +118,7 @@ class Worker:
             "telegram_id": self.telegram_id,
             "telegram_username": self.telegram_username,
             "created_at": self.created_at,
+            "updated_at": self.updated_at,
             "status": self.status,
             "rejection_reasons": self.rejection_reasons,
         }

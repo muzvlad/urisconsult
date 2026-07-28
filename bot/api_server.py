@@ -69,8 +69,10 @@ def get_worker_documents(worker_id):
 @app.route('/api/workers/<worker_id>', methods=['PUT'])
 def update_worker(worker_id):
     try:
+        from datetime import datetime
         data = request.get_json(force=True)
         data['id'] = worker_id
+        data['updated_at'] = datetime.now().isoformat()
         run_async(db.save_worker(data))
         return jsonify({"ok": True})
     except Exception as e:

@@ -464,7 +464,7 @@ async def save_worker(data: dict) -> str:
             'id', 'name', 'citizenship', 'gender', 'position', 'object',
             'object_address', 'manager', 'phone_main', 'phone_additional',
             'email', 'date', 'registration', 'marital_status', 'relatives_json',
-            'telegram_id', 'telegram_username', 'created_at',
+            'telegram_id', 'telegram_username', 'created_at', 'updated_at',
         ]
 
         personal = {k: data.get(k, '' if k != 'telegram_id' else None) for k in personal_keys}

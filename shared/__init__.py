@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
     telegram_id INTEGER,
     telegram_username TEXT,
     created_at TEXT,
+    updated_at TEXT,
     status TEXT DEFAULT 'pending',
     rejection_reasons TEXT DEFAULT '[]',
     notified_at TEXT
@@ -66,4 +67,5 @@ MIGRATIONS = [
     ("status", "TEXT DEFAULT 'pending'"),
     ("rejection_reasons", "TEXT DEFAULT '[]'"),
     ("notified_at", "TEXT"),
+    ("updated_at", "TEXT"),
 ]
