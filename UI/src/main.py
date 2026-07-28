@@ -548,6 +548,34 @@ class DBViewerApp:
         except Exception as e:
             pass
 
+        # ── Встречи ──
+        meetings = self.api.get_meetings(worker.id)
+        meetings_frame = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
+        meetings_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        header_row = tk.Frame(meetings_frame, bg='white')
+        header_row.pack(fill=tk.X, padx=10, pady=(10, 5))
+        tk.Label(header_row, text="Встречи:",
+                 font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
+
+        def _open_meeting_dialog():
+            from src.dialogs import MeetingDialog
+            MeetingDialog(self.root, worker, lambda: self._refresh_current_worker())
+        tk.Button(header_row, text="+ Добавить встречу", command=_open_meeting_dialog,
+                  bg='#3498db', fg='white', font=('Arial', 9),
+                  padx=8, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
+
+        if meetings:
+            for m in meetings:
+                date = m.get('date', '')
+                note = m.get('note', '')
+                text = f"• {date} — {note}" if date else f"• {note}"
+                tk.Label(meetings_frame, text=text, font=('Arial', 10),
+                         bg='white', anchor='w', wraplength=700).pack(anchor=tk.W, padx=20, pady=1)
+        else:
+            tk.Label(meetings_frame, text="Нет встреч",
+                     font=('Arial', 10), bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
+
         # ── Документы ──
         try:
             db_docs = self.api.get_documents(worker.id)
@@ -598,34 +626,6 @@ class DBViewerApp:
                 label = self.doc_service.get_document_label(r)
                 tk.Label(rej_frame, text=f"  • {label}",
                          font=('Arial', 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
-
-        # ── Встречи ──
-        meetings = self.api.get_meetings(worker.id)
-        meetings_frame = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
-        meetings_frame.pack(fill=tk.X, padx=5, pady=5)
-
-        header_row = tk.Frame(meetings_frame, bg='white')
-        header_row.pack(fill=tk.X, padx=10, pady=(10, 5))
-        tk.Label(header_row, text="Встречи:",
-                 font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
-
-        def _open_meeting_dialog():
-            from src.dialogs import MeetingDialog
-            MeetingDialog(self.root, worker, lambda: self._refresh_current_worker())
-        tk.Button(header_row, text="+ Добавить встречу", command=_open_meeting_dialog,
-                  bg='#3498db', fg='white', font=('Arial', 9),
-                  padx=8, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
-
-        if meetings:
-            for m in meetings:
-                date = m.get('date', '')
-                note = m.get('note', '')
-                text = f"• {date} — {note}" if date else f"• {note}"
-                tk.Label(meetings_frame, text=text, font=('Arial', 10),
-                         bg='white', anchor='w', wraplength=700).pack(anchor=tk.W, padx=20, pady=1)
-        else:
-            tk.Label(meetings_frame, text="Нет встреч",
-                     font=('Arial', 10), bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
 
         # Обновление scrollregion
         self._update_scroll_region()
