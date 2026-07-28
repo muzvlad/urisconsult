@@ -71,6 +71,8 @@ def create_executable() -> bool:
             f'--add-data={src_dir}{os.pathsep}src',
             f'--add-data={shared_dir}{os.pathsep}shared',
             f'--add-data={bot_config_dir}{os.pathsep}bot_config',
+            # Пути для поиска пакетов
+            f'--paths={project_root}',
             # Скрытые импорты для надежности
             '--hidden-import=tkinter',
             '--hidden-import=PIL',

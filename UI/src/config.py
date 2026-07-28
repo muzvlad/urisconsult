@@ -171,7 +171,27 @@ _log_config(f"API_SERVER={API_SERVER}")
 def get_paths() -> AppPaths:
     """Получить все пути приложения (кэшируется)."""
     root = _get_project_root()
-    _log_config(f"Локальный режим: {root}")
+
+    if getattr(sys, "frozen", False):
+        # В EXE: bot_dir ищем рядом с EXE (если скопирована папка bot/)
+        # или в _MEIPASS (бандл)
+        exe_dir = Path(sys.executable).parent
+        meipass = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else None
+
+        # bot_dir: сначала рядом с EXE, потом в бандле
+        bot_dir = exe_dir / "bot"
+        if not bot_dir.exists() and meipass:
+            bot_dir = meipass / "bot_config"
+
+        _log_config(f"EXE mode: root={root}, bot_dir={bot_dir}")
+        return AppPaths(
+            project_root=root,
+            db_path=Path(""),  # через API
+            docs_dir=Path(""),  # через API
+            bot_dir=bot_dir,
+        )
+
+    _log_config(f"Dev mode: root={root}")
     return AppPaths(
         project_root=root,
         db_path=root / "bot" / "Users" / "users.db",
@@ -261,6 +281,13 @@ def _import_shared():
                 return shared
             except ImportError:
                 pass
+        # Также пробуем импортировать как пакет из _MEIPASS
+        try:
+            sys.path.insert(0, str(meipass))
+            import shared
+            return shared
+        except ImportError:
+            pass
 
     # Вариант 3: корень проекта
     root = Path(__file__).parent.parent.parent
