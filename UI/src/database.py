@@ -320,11 +320,12 @@ class WorkerRepository:
             id, name, citizenship, gender, position, object, object_address,
             manager, phone_main, phone_additional, email, date, registration,
             marital_status, relatives_json, telegram_id, telegram_username,
-            created_at, status, rejection_reasons
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, updated_at, status, rejection_reasons
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         data = worker.to_dict()
         data["created_at"] = data.get("created_at") or datetime.now().isoformat()
+        data["updated_at"] = data.get("updated_at") or datetime.now().isoformat()
         try:
             with self.db.get_connection() as conn:
                 conn.execute(sql, tuple(data.values()))
@@ -339,10 +340,11 @@ class WorkerRepository:
             name=?, citizenship=?, gender=?, position=?, object=?, object_address=?,
             manager=?, phone_main=?, phone_additional=?, email=?, date=?, registration=?,
             marital_status=?, relatives_json=?, telegram_id=?, telegram_username=?,
-            status=?, rejection_reasons=?
+            updated_at=?, status=?, rejection_reasons=?
         WHERE id=?
         """
         data = worker.to_dict()
+        data["updated_at"] = datetime.now().isoformat()
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.execute(sql, (
@@ -351,7 +353,7 @@ class WorkerRepository:
                     data["phone_main"], data["phone_additional"], data["email"],
                     data["date"], data["registration"], data["marital_status"],
                     data["relatives_json"], data["telegram_id"], data["telegram_username"],
-                    data["status"], data["rejection_reasons"], data["id"]
+                    data["updated_at"], data["status"], data["rejection_reasons"], data["id"]
                 ))
             return cursor.rowcount > 0
         except Exception:

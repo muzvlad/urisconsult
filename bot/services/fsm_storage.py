@@ -17,12 +17,17 @@ CREATE TABLE IF NOT EXISTS fsm_storage (
     bot_id INTEGER NOT NULL,
     chat_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
-    thread_id INTEGER,
+    thread_id INTEGER NOT NULL DEFAULT 0,
     state TEXT,
     data TEXT,
     PRIMARY KEY (bot_id, chat_id, user_id, thread_id)
 )
 """
+
+
+def _tid(thread_id) -> int:
+    """thread_id: None → 0 (NULL ломает ON CONFLICT в SQLite)."""
+    return thread_id if thread_id is not None else 0
 
 
 class SQLiteStorage(BaseStorage):
@@ -42,41 +47,45 @@ class SQLiteStorage(BaseStorage):
     async def set_state(self, key: StorageKey, state: State = None) -> None:
         conn = await self._get_conn()
         state_str = state.state if state and hasattr(state, 'state') else (str(state) if state else None)
+        tid = _tid(key.thread_id)
         await conn.execute(
             """INSERT INTO fsm_storage (bot_id, chat_id, user_id, thread_id, state)
                VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(bot_id, chat_id, user_id, thread_id)
                DO UPDATE SET state = excluded.state""",
-            (key.bot_id, key.chat_id, key.user_id, key.thread_id, state_str),
+            (key.bot_id, key.chat_id, key.user_id, tid, state_str),
         )
         await conn.commit()
 
     async def get_state(self, key: StorageKey) -> Optional[str]:
         conn = await self._get_conn()
+        tid = _tid(key.thread_id)
         cursor = await conn.execute(
-            "SELECT state FROM fsm_storage WHERE bot_id=? AND chat_id=? AND user_id=? AND thread_id IS ?",
-            (key.bot_id, key.chat_id, key.user_id, key.thread_id),
+            "SELECT state FROM fsm_storage WHERE bot_id=? AND chat_id=? AND user_id=? AND thread_id=?",
+            (key.bot_id, key.chat_id, key.user_id, tid),
         )
         row = await cursor.fetchone()
         return row[0] if row else None
 
     async def set_data(self, key: StorageKey, data: Mapping[str, Any]) -> None:
         conn = await self._get_conn()
+        tid = _tid(key.thread_id)
         data_json = json.dumps(dict(data), ensure_ascii=False)
         await conn.execute(
             """INSERT INTO fsm_storage (bot_id, chat_id, user_id, thread_id, data)
                VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(bot_id, chat_id, user_id, thread_id)
                DO UPDATE SET data = excluded.data""",
-            (key.bot_id, key.chat_id, key.user_id, key.thread_id, data_json),
+            (key.bot_id, key.chat_id, key.user_id, tid, data_json),
         )
         await conn.commit()
 
     async def get_data(self, key: StorageKey) -> dict[str, Any]:
         conn = await self._get_conn()
+        tid = _tid(key.thread_id)
         cursor = await conn.execute(
-            "SELECT data FROM fsm_storage WHERE bot_id=? AND chat_id=? AND user_id=? AND thread_id IS ?",
-            (key.bot_id, key.chat_id, key.user_id, key.thread_id),
+            "SELECT data FROM fsm_storage WHERE bot_id=? AND chat_id=? AND user_id=? AND thread_id=?",
+            (key.bot_id, key.chat_id, key.user_id, tid),
         )
         row = await cursor.fetchone()
         if row and row[0]:
