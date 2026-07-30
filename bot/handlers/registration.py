@@ -27,9 +27,9 @@ def _build_worker_form() -> type:
     """Динамически создаёт StatesGroup с состояниями для всех документов."""
     # Базовые состояния (личные данные)
     states = {
-        'name', 'citizenship', 'gender', 'position', 'object',
+        'name', 'citizenship', 'gender',         'position', 'object',
         'object_address', 'manager', 'phone_main', 'phone_additional',
-        'email', 'date',
+        'date',
         'russia_marital_status', 'russia_relatives', 'russia_relatives_phone',
         'confirmation', 'edit',
         'fix_choice', 'fix_value',
@@ -177,8 +177,8 @@ async def process_phone_additional(message: types.Message, state: FSMContext):
         await message.answer("❌ Пожалуйста, введите номер телефона или нажмите 'Пропустить'")
         return
     await state.update_data(phone_additional=phone)
-    await message.answer("📧 Введите ваш email:", reply_markup=ReplyKeyboardRemove())
-    await state.set_state(get_worker_form().email)
+    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
+    await state.set_state(get_worker_form().date)
 
 
 async def process_email(message: types.Message, state: FSMContext):
@@ -308,7 +308,6 @@ def register_registration_handlers(dp, form_class):
     dp.message.register(process_manager, form_class.manager)
     dp.message.register(process_phone_main, form_class.phone_main)
     dp.message.register(process_phone_additional, form_class.phone_additional)
-    dp.message.register(process_email, form_class.email)
     dp.message.register(process_date, form_class.date)
 
     # Обработчики для России (доп. поля)
