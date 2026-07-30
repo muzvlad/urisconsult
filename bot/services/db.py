@@ -583,10 +583,10 @@ async def search_workers(query: str) -> list[dict]:
 
 
 async def get_workers_by_status(status: str) -> list[dict]:
-    """Получить работников по статусу."""
+    """Получить работников по статусу (без записей-сирот)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = ? ORDER BY id",
+            "SELECT * FROM workers WHERE status = ? AND name != '__reserved__' ORDER BY id",
             (status,)
         )
         rows = await cursor.fetchall()
@@ -596,20 +596,20 @@ async def get_workers_by_status(status: str) -> list[dict]:
 # ─── Управление статусом анкеты ─────────────────────────────────────
 
 async def get_pending_workers() -> list[dict]:
-    """Получить работников со статусом pending."""
+    """Получить работников со статусом pending (без записей-сирот)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = 'pending' ORDER BY created_at DESC"
+            "SELECT * FROM workers WHERE status = 'pending' AND name != '__reserved__' ORDER BY created_at DESC"
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
 
 async def get_pending_count() -> int:
-    """Количество анкет, ожидающих обработки."""
+    """Количество анкет, ожидающих обработки (без записей-сирот)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT COUNT(*) FROM workers WHERE status = 'pending'"
+            "SELECT COUNT(*) FROM workers WHERE status = 'pending' AND name != '__reserved__'"
         )
         row = await cursor.fetchone()
         return row[0]
@@ -667,10 +667,10 @@ async def mark_notified(worker_id: str):
 
 
 async def get_unnotified_rejected_workers() -> list[dict]:
-    """Получить отклонённых работников, которым ещё не отправлено уведомление."""
+    """Получить отклонённых работников, которым ещё не отправлено уведомление (без записей-сирот)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '')"
+            "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '') AND name != '__reserved__'"
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
