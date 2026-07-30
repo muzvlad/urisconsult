@@ -23,7 +23,7 @@ from config.documents import DOC_FLOWS, DOC_PREFIXES
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
@@ -73,6 +73,7 @@ async def init_db():
                 telegram_id INTEGER,
                 telegram_username TEXT,
                 created_at TEXT,
+                updated_at TEXT,
                 status TEXT DEFAULT 'pending',
                 rejection_reasons TEXT DEFAULT '[]',
                 notified_at TEXT
@@ -131,6 +132,8 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v0_to_v1(db)
     if from_version < 2:
         await _migrate_v1_to_v2(db)
+    if from_version < 3:
+        await _migrate_v2_to_v3(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -290,6 +293,18 @@ async def _migrate_v1_to_v2(db: aiosqlite.Connection):
     await _sync_docs_from_disk(db)
 
     logger.info("Миграция v1→v2 завершена.")
+
+
+# ─── Миграция v2 → v3: добавление updated_at ─────────────────────
+
+async def _migrate_v2_to_v3(db: aiosqlite.Connection):
+    """Миграция v2→v3: добавление колонки updated_at."""
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN updated_at TEXT")
+        logger.info("Миграция v2→v3: добавлена колонка updated_at")
+    except Exception:
+        pass
+    await db.commit()
 
 
 # ─── Миграция из JSON ────────────────────────────────────────────────
