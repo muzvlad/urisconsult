@@ -131,7 +131,11 @@ async def _go_next(message: types.Message, state: FSMContext,
 # ─── После сбора документов ─────────────────────────────────────────
 
 async def _after_documents(message: types.Message, state: FSMContext):
-    """Обработка после сбора документов (для России — доп. поля)."""
+    """Обработка после сбора документов.
+
+    Для России: дополнительные поля (семейное положение, родственники).
+    Семейное положение запрашивается ТОЛЬКО для мужчин — это осознанное решение,
+    т.к. семейное положение влияет на воинский учёт и льготы."""
     from handlers.registration import get_worker_form
     WorkerForm = get_worker_form()
     from keyboards.reply_kb import get_marital_keyboard

@@ -54,7 +54,7 @@ class DBSaver:
             'registration': data.get('registration', ''),
             'marital_status': data.get('russia_marital_status', ''),
             'relatives_json': json.dumps(data.get('russia_relatives_list', []), ensure_ascii=False),
-            'created_at': datetime.now().isoformat(),
+            'created_at': data.get('created_at', datetime.now().isoformat()),
             'updated_at': datetime.now().isoformat(),
             'telegram_id': user_id,
             'status': status,

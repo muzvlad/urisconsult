@@ -55,19 +55,13 @@ def build_edit_keyboard(citizenship: str = '') -> InlineKeyboardMarkup:
     """
     Генерировать клавиатуру редактирования из конфига.
 
-    Показывает базовые текстовые поля + документы для данной категории.
+    Показывает только текстовые поля. Документы редактируются через повторную загрузку.
     """
     builder = InlineKeyboardBuilder()
 
     # Базовые текстовые поля
     for field_key, label in _BASE_FIELDS:
         builder.button(text=label, callback_data=f"edit_{field_key}")
-
-    # Документы для категории
-    if citizenship and citizenship in DOC_FLOWS:
-        for doc in DOC_FLOWS[citizenship]:
-            label = DOC_LABELS.get(doc.key, doc.key)
-            builder.button(text=f"📎 {label}", callback_data=f"edit_{doc.key}")
 
     builder.button(text="✅ Готово", callback_data="edit_done")
     builder.adjust(2)

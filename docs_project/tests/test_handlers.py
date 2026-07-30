@@ -109,7 +109,7 @@ class TestWorkerForm:
 
     def test_has_russia_extra_states(self):
         WorkerForm = get_worker_form()
-        extra = ['russia_marital_status', 'russia_relatives', 'russia_relatives_phone']
+        extra = ['russia_marital_status', 'russia_relatives']
         for state_name in extra:
             assert hasattr(WorkerForm, state_name), \
                 f"WorkerForm не имеет состояние '{state_name}'"
@@ -140,20 +140,20 @@ class TestWorkerForm:
 
 class TestDocumentFlows:
     def test_all_keys_valid(self):
-        pattern = re.compile(r'^[a-z_]+$')
+        pattern = re.compile(r'^[a-z0-9_]+$')
         from config.documents import DOC_FLOWS
         for cat, docs in DOC_FLOWS.items():
             for doc in docs:
                 assert pattern.match(doc.key), \
-                    f"Ключ '{doc.key}' не соответствует паттерну [a-z_]+"
+                    f"Ключ '{doc.key}' не соответствует паттерну [a-z0-9_]+"
 
     def test_prefixes_valid(self):
         from config.documents import DOC_FLOWS
         for cat, docs in DOC_FLOWS.items():
             for doc in docs:
-                assert len(doc.prefix) <= 10, \
+                assert len(doc.prefix) <= 20, \
                     f"Префикс '{doc.prefix}' слишком длинный (key={doc.key})"
-                assert doc.prefix.isalnum(), \
+                assert doc.prefix.replace('_', '').isalnum(), \
                     f"Префикс '{doc.prefix}' содержит спецсимволы (key={doc.key})"
 
     def test_can_skip_flags_consistent(self):

@@ -37,8 +37,8 @@ python bot.py
 
 Документы зависят от категории гражданства:
 
-**Патент (12 документов):**
-Фото → Паспорт → СНИЛС → Регистрация → Миграционная карта → ДМС → Патент → ИНН → Чек → Сертификат языка → Реквизиты карты → Дактилоскопическая карта
+**Патент (17 документов):**
+Фото → Паспорт → Перевод паспорта → СНИЛС → Регистрация → Миграционная карта → ДМС → Патент (лицевая) → Патент (разворот) → ИНН → Чек 1 → Чек 2 → Чек 3 → Сертификат языка → Реквизиты карты → Дактилоскопия (лицевая) → Дактилоскопия (разворот)
 
 **Студент (10 документов):**
 Фото → Паспорт → СНИЛС → Регистрация → Миграционная карта → ДМС → ИНН → Дактилоскопическая карта → Справка из ВУЗа → Реквизиты карты
@@ -86,7 +86,7 @@ python bot.py
 | Основное | id, name, citizenship, gender, position, object, object_address, manager |
 | Контакты | phone_main, phone_additional, email, date |
 | Семья | marital_status, relatives_json |
-| Мета | registration, telegram_id, telegram_username, created_at |
+| Мета | registration, telegram_id, telegram_username, created_at, updated_at |
 | Статус | status (pending/accepted/rejected), rejection_reasons, notified_at |
 
 Таблица `worker_documents` (UNIQUE по worker_id + doc_type):
@@ -157,13 +157,13 @@ python bot.py
 
 ## Технические детали
 
-- **FSM**: aiogram 3.x MemoryStorage (ленивая инициализация)
+- **FSM**: aiogram 3.x SQLiteStorage (выживает при перезапуске бота)
 - **БД**: aiosqlite (async), WAL mode, `busy_timeout=10000`
 - **Клавиатуры**: Reply (действия) + Inline (гражданство, редактирование)
 - **Токен**: файл `.env` → `BOT_TOKEN`
 - **Сетевой сервер**: файл `.env` → `NETWORK_SERVER`
 - **Rate limiting**: 5 сообщений / 10 сек, фоновая очистка
-- **Тесты**: 62 теста (config, db, handlers)
+- **Тесты**: 106 тестов (config, db, handlers)
 
 ## Конфигурация
 

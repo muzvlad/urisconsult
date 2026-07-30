@@ -27,10 +27,10 @@ def _build_worker_form() -> type:
     """Динамически создаёт StatesGroup с состояниями для всех документов."""
     # Базовые состояния (личные данные)
     states = {
-        'name', 'citizenship', 'gender',         'position', 'object',
+        'name', 'citizenship', 'gender', 'position', 'object',
         'object_address', 'manager', 'phone_main', 'phone_additional',
-        'date',
-        'russia_marital_status', 'russia_relatives', 'russia_relatives_phone',
+        'email', 'date',
+        'russia_marital_status', 'russia_relatives',
         'confirmation', 'edit',
         'fix_choice', 'fix_value',
     }

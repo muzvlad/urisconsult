@@ -58,8 +58,8 @@ class TestDocFlows:
             keys = [d.key for d in docs]
             assert len(keys) == len(set(keys))
 
-    def test_patent_has_12_docs(self):
-        assert len(DOC_FLOWS['Патент']) == 12
+    def test_patent_has_17_docs(self):
+        assert len(DOC_FLOWS['Патент']) == 17
 
     def test_student_has_10_docs(self):
         assert len(DOC_FLOWS['Студент']) == 10
@@ -133,7 +133,7 @@ class TestHelperFunctions:
     def test_get_doc_flow_valid(self):
         flow = get_doc_flow('Патент')
         assert isinstance(flow, list)
-        assert len(flow) == 12
+        assert len(flow) == 17
 
     def test_get_doc_flow_invalid_returns_patent(self):
         flow = get_doc_flow('Несуществующая категория')

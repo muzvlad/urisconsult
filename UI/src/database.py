@@ -204,9 +204,6 @@ class DatabaseConnection:
                 except OSError:
                     continue
 
-        if added:
-            conn.commit()
-
     def get_connection(self):
         return _Conn(self.db_path, self.timeout)
 

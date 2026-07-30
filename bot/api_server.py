@@ -4,6 +4,7 @@ import sys
 import shutil
 import asyncio
 import mimetypes
+import logging
 from flask import Flask, jsonify, request, send_from_directory
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,7 +14,7 @@ from services import db
 
 app = Flask(__name__)
 
-import logging
+_logger = logging.getLogger(__name__)
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 MIME_OVERRIDES = {
@@ -37,13 +38,13 @@ def list_workers():
         if search:
             workers = run_async(db.search_workers(search))
         elif status:
-            workers = run_async(db.get_all_workers())
-            workers = [w for w in workers if w.get('status') == status]
+            workers = run_async(db.get_workers_by_status(status))
         else:
             workers = run_async(db.get_all_workers())
         return jsonify(workers)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logging.getLogger(__name__).error("list_workers error: %s", e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>', methods=['GET'])
@@ -54,7 +55,8 @@ def get_worker(worker_id):
             return jsonify({"error": "Worker not found"}), 404
         return jsonify(worker)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("get_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>/documents', methods=['GET'])
@@ -63,7 +65,8 @@ def get_worker_documents(worker_id):
         docs = run_async(db.get_worker_documents(worker_id))
         return jsonify(docs)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("get_worker_documents(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>', methods=['PUT'])
@@ -76,14 +79,13 @@ def update_worker(worker_id):
         run_async(db.save_worker(data))
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("update_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>', methods=['DELETE'])
 def delete_worker(worker_id):
     try:
-        import aiosqlite
-
         async def _delete():
             async with db._get_conn() as conn:
                 await conn.execute("DELETE FROM worker_documents WHERE worker_id = ?", (worker_id,))
@@ -99,7 +101,8 @@ def delete_worker(worker_id):
 
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("delete_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ─── Status ────────────────────────────────────────────────────────────
@@ -110,7 +113,8 @@ def accept_worker(worker_id):
         run_async(db.accept_worker(worker_id))
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("accept_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>/reject', methods=['PUT'])
@@ -121,7 +125,18 @@ def reject_worker(worker_id):
         run_async(db.reject_worker(worker_id, reasons))
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("reject_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/resubmit', methods=['PUT'])
+def resubmit_worker(worker_id):
+    try:
+        run_async(db.resubmit_worker(worker_id))
+        return jsonify({"ok": True})
+    except Exception as e:
+        _logger.error("resubmit_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ─── Pending count ─────────────────────────────────────────────────────
@@ -132,7 +147,8 @@ def pending_count():
         count = run_async(db.get_pending_count())
         return jsonify({"count": count})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("pending_count error: %s", e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ─── Meetings ──────────────────────────────────────────────────────────
@@ -152,7 +168,8 @@ def list_meetings(worker_id):
         meetings = run_async(_get_meetings())
         return jsonify(meetings)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("list_meetings(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 @app.route('/api/workers/<worker_id>/meetings', methods=['POST'])
@@ -171,7 +188,8 @@ def add_meeting(worker_id):
         run_async(_add())
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("add_meeting(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ─── File serving ──────────────────────────────────────────────────────

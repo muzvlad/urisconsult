@@ -113,6 +113,10 @@ async def init_db():
 
         await db.commit()
 
+        # Очистка записей-сирот: __reserved__ от прерванных регистраций
+        await db.execute("DELETE FROM workers WHERE name = '__reserved__'")
+        await db.commit()
+
         # Версионированные миграции
         cursor = await db.execute("PRAGMA user_version")
         row = await cursor.fetchone()
@@ -178,15 +182,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
         await db.execute(f"INSERT OR IGNORE INTO workers ({cols}) VALUES ({placeholders})",
                          list(personal.values()))
 
-        for col in old_columns:
-            if col in doc_columns:
-                filename = old_data.get(col)
-                if filename:
-                    await db.execute(
-                        "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                        (old_data['id'], col, filename)
-                    )
-
         meetings_raw = old_data.get('meetings', '[]')
         if isinstance(meetings_raw, str):
             try:
@@ -203,10 +198,7 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
                     (old_data['id'], m.get('date', ''), m.get('note', m.get('description', '')))
                 )
 
-    await db.commit()
-
     await db.execute("ALTER TABLE workers RENAME TO workers_old_v1")
-    await db.commit()
 
     await db.execute("""
         CREATE TABLE IF NOT EXISTS workers (
@@ -265,7 +257,6 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
     """)
 
     await db.execute("DROP TABLE IF EXISTS workers_old_v1")
-    await db.commit()
     logger.info("Миграция v0→v1 завершена.")
 
 
@@ -286,8 +277,10 @@ async def _migrate_v1_to_v2(db: aiosqlite.Connection):
         await db.execute("ALTER TABLE workers ADD COLUMN rejection_reasons TEXT DEFAULT '[]'")
     except Exception:
         pass
-
-    await db.commit()
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN updated_at TEXT")
+    except Exception:
+        pass
 
     await _migrate_from_json(db)
     await _sync_docs_from_disk(db)
@@ -444,10 +437,9 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID."""
+    """Получить следующий доступный ID (без race condition)."""
     async with _get_conn() as db:
-        try:
-            # Сначала пробуем без блокировки (быстрый путь)
+        for _ in range(100):  # ponytail: limit以防无限循环
             cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
             row = await cursor.fetchone()
             if not row:
@@ -458,16 +450,18 @@ async def get_next_id() -> str:
                 except (ValueError, TypeError):
                     next_id = 1
             next_id_str = str(next_id).zfill(5)
-            # INSERT IMMEDIATE чтобы заблокировать только при записи
-            await db.execute(
-                "INSERT OR IGNORE INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
-                (next_id_str,)
-            )
-            await db.commit()
-            return next_id_str
-        except Exception:
-            await db.execute("ROLLBACK")
-            raise
+            try:
+                await db.execute(
+                    "INSERT INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
+                    (next_id_str,)
+                )
+                await db.commit()
+                logger.debug("get_next_id: created __reserved__ id=%s", next_id_str)
+                return next_id_str
+            except Exception:
+                # ponytail: IntegrityError — ID занят, пробуем следующий
+                continue
+        raise RuntimeError("Не удалось сгенерировать уникальный ID после 100 попыток")
 
 
 async def save_worker(data: dict) -> str:
@@ -486,7 +480,7 @@ async def save_worker(data: dict) -> str:
 
         placeholders = ', '.join(['?'] * len(personal))
         cols = ', '.join(personal.keys())
-        update_cols = [k for k in personal.keys() if k != 'id']
+        update_cols = [k for k in personal.keys() if k not in ('id', 'created_at')]
         update_clause = ', '.join(f"{k} = excluded.{k}" for k in update_cols)
         await db.execute(
             f"INSERT INTO workers ({cols}) VALUES ({placeholders}) "
@@ -583,6 +577,17 @@ async def search_workers(query: str) -> list[dict]:
         cursor = await db.execute(
             "SELECT * FROM workers WHERE name LIKE ? ORDER BY id",
             (f"%{query}%",)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def get_workers_by_status(status: str) -> list[dict]:
+    """Получить работников по статусу."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT * FROM workers WHERE status = ? ORDER BY id",
+            (status,)
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]

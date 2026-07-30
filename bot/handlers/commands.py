@@ -248,8 +248,6 @@ async def any_message(message: types.Message):
 
 async def _ask_rejected_field(message, state, field, reasons, index):
     """Запросить исправление конкретного отклонённого поля."""
-    from keyboards.reply_kb import get_skip_keyboard
-
     all_doc_keys = get_all_doc_keys()
 
     if field in all_doc_keys:

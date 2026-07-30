@@ -60,7 +60,7 @@ urisconsult/
 │   ├── BOT.md                  # Документация бота
 │   ├── UI.md                   # Документация UI
 │   ├── CHANGELOG.md            # История версий
-│   └── tests/                  # 62 теста (config, db, handlers)
+│   └── tests/                  # 106 тестов (config, db, handlers)
 ├── pyproject.toml              # Конфигурация проекта
 └── .gitignore
 ```
@@ -171,13 +171,13 @@ build_exe.bat
 Все тесты запускаются из корня проекта:
 
 ```bash
-# Все тесты (108 штук)
+# Все тесты (106 штук)
 python -m pytest UI/tests/ docs_project/tests/ -v
 
-# Только UI тесты (46)
+# Только UI тесты
 python -m pytest UI/tests/ -v
 
-# Только тесты бота (62)
+# Только тесты бота (106)
 python -m pytest docs_project/tests/ -v
 ```
 

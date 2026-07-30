@@ -80,7 +80,6 @@ _VNZH_BANK_DETAILS = DocumentType(key='vnzh_bank_details', label='Реквизи
 
 # Россия
 _RUSSIA_PASSPORT_PROPISKA = DocumentType(key='russia_passport_propiska', label='Паспорт прописка', prefix='propiska')
-_RUSSIA_PROPISKA = DocumentType(key='russia_propiska', label='Прописка', prefix='propiska')
 _RUSSIA_INN = DocumentType(key='russia_inn', label='ИНН', prefix='inn')
 _RUSSIA_SNILS = DocumentType(key='russia_snils', label='СНИЛС', prefix='snils')
 _RUSSIA_EDUCATION_DOC = DocumentType(key='russia_education_doc', label='Документ об образовании', prefix='edu', can_skip=True)
