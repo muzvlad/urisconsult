@@ -40,6 +40,11 @@ class SQLiteStorage(BaseStorage):
     async def _get_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
             self._conn = await aiosqlite.connect(self._db_path)
+            # Пересоздаём таблицу если схема устарела (thread_id nullable → NOT NULL DEFAULT 0)
+            cursor = await self._conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='fsm_storage'")
+            row = await cursor.fetchone()
+            if row and 'NOT NULL DEFAULT 0' not in (row[0] or ''):
+                await self._conn.execute("DROP TABLE IF EXISTS fsm_storage")
             await self._conn.execute(_CREATE_TABLE)
             await self._conn.commit()
         return self._conn
