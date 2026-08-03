@@ -108,6 +108,30 @@ class DocumentService:
         except Exception:
             return None
 
+    def load_pdf_thumbnail(self, path: Path, size: Tuple[int, int] = (120, 120)) -> Optional[ImageTk.PhotoImage]:
+        """Миниатюра первой страницы PDF (теми через PyMuPDF)."""
+        cache_key = f"pdf:{path}:{size[0]}x{size[1]}"
+        if cache_key in self._image_cache:
+            return self._image_cache[cache_key]
+
+        try:
+            import fitz
+            doc = fitz.open(str(path))
+            page = doc.load_page(0)
+            pix = page.get_pixmap(dpi=60)
+            image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            doc.close()
+            image.thumbnail(size, Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+
+            if len(self._image_cache) >= self._cache_max_size:
+                first_key = next(iter(self._image_cache))
+                del self._image_cache[first_key]
+            self._image_cache[cache_key] = photo
+            return photo
+        except Exception:
+            return None
+
     def open_file(self, path: Path) -> bool:
         """Открыть файл в системе."""
         import subprocess

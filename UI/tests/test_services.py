@@ -132,6 +132,33 @@ class TestDocumentService:
         label = doc_service.get_document_label("unknown")
         assert label == "unknown"
 
+    def test_load_pdf_thumbnail(self, doc_service, test_docs_dir):
+        """Миниатюра первой страницы PDF генерируется."""
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            from reportlab.pdfgen import canvas
+            pdf_path = test_docs_dir / "test.pdf"
+            c = canvas.Canvas(str(pdf_path))
+            c.setFont("Helvetica", 24)
+            c.drawString(50, 750, "Hello PDF")
+            c.showPage()
+            c.save()
+
+            thumb = doc_service.load_pdf_thumbnail(pdf_path, (120, 120))
+            assert thumb is not None
+            assert thumb.width() > 0
+            assert thumb.height() > 0
+        finally:
+            root.destroy()
+
+    def test_load_pdf_thumbnail_invalid(self, doc_service, test_docs_dir):
+        """Битый PDF -> None, без исключения."""
+        bad = test_docs_dir / "bad.pdf"
+        bad.write_bytes(b"not a pdf")
+        assert doc_service.load_pdf_thumbnail(bad, (120, 120)) is None
+
 
 class TestTelegramService:
     """Тесты TelegramService."""

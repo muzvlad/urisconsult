@@ -2,7 +2,12 @@
 
 ## v1.14 (03.08.2026)
 
-## v1.14 (03.08.2026)
+### Миниатюры PDF в UI
+- Для PDF-документов вместо кнопки «открыть» теперь рендерится миниатюра первой страницы через PyMuPDF (`fitz`), клик открывает файл как у изображений
+- `DocumentService.load_pdf_thumbnail()` с кэшированием (тот же кэш, что и у изображений), `DocumentViewer._build_thumbnail()`
+- Зависимость `pymupdf` добавлена в `UI/requirements.txt` и в `build_exe.py` (hidden-import fitz)
+- Битый/невалидный PDF аккуратно откатывается к кнопке «открыть»
+- Добавлены тесты `test_load_pdf_thumbnail` и `test_load_pdf_thumbnail_invalid`
 
 ### Резервирование ID без лишних `__reserved__`
 - `db_saver.py:save_worker_data()` использовал `data.get('id', await db.get_next_id())` — аргумент по умолчанию в `dict.get()` вычисляется сразу, поэтому `get_next_id()` (создающий `__reserved__`) вызывался при каждом сохранении, даже когда `id` уже есть. Резервы плодились впустую при исправлениях/переподачах. Заменено на явную проверку `if data.get('id')`

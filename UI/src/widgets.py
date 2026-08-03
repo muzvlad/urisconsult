@@ -328,9 +328,25 @@ class DocumentViewer(tk.Frame):
                     img_label.pack(side=tk.RIGHT, padx=(10, 0))
                     img_label.bind('<Button-1>', lambda e: self._on_click())
                 except Exception:
-                    self._build_placeholder(main)
+                    self._build_thumbnail(main)
+            elif suffix == '.pdf':
+                self._build_thumbnail(main)
             else:
                 self._build_placeholder(main)
+
+    def _build_thumbnail(self, parent: tk.Widget) -> None:
+        """Миниатюра PDF (первая страница) — кликабельная, как у изображений."""
+        thumb = self.doc_service.load_pdf_thumbnail(
+            self.doc_info.full_path, self.config.small_thumbnail_size
+        )
+        if thumb is None:
+            self._build_placeholder(parent)
+            return
+        img_label = tk.Label(parent, image=thumb, bg='white', cursor='hand2',
+                             relief=tk.SOLID, bd=1)
+        img_label.image = thumb
+        img_label.pack(side=tk.RIGHT, padx=(10, 0))
+        img_label.bind('<Button-1>', lambda e: self._on_click())
 
     def _build_placeholder(self, parent: tk.Widget) -> None:
         """Плейсхолдер для не-изображений (PDF и др.) — кликабельный."""

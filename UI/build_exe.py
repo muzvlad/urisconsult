@@ -102,6 +102,7 @@ def create_executable() -> bool:
             '--hidden-import=src.splash',
             '--hidden-import=src.logging_config',
             '--hidden-import=shared',
+            '--hidden-import=fitz',
             db_viewer
         ]
 
