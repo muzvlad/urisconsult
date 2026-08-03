@@ -30,7 +30,10 @@ class DBSaver:
         Returns:
             tuple: (worker_id, name)
         """
-        worker_id = data.get('id', await db.get_next_id())
+        if data.get('id'):
+            worker_id = data['id']
+        else:
+            worker_id = await db.get_next_id()
         data['id'] = worker_id
 
         # Определяем статус: если было исправление — ставим 'pending'

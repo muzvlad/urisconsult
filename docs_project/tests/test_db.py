@@ -236,6 +236,31 @@ class TestWorkerCRUD:
         )
         assert all(w['name'] != '__reserved__' for w in search_results)
 
+    def test_save_worker_with_existing_id_no_extra_reserved(self, fresh_db, sample_personal_data):
+        """Сохранение с уже заданным id НЕ должно плодить новые __reserved__ строки."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        import services.db as real_db_module
+        from services.db_saver import DBSaver
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+
+        # DBSaver использует тот же services.db (пропатченный на временные пути)
+        for _ in range(3):
+            asyncio.get_event_loop().run_until_complete(
+                DBSaver.save_worker_data(
+                    user_id=999, data=sample_personal_data.copy()
+                )
+            )
+
+        all_workers = asyncio.get_event_loop().run_until_complete(
+            db_module.get_all_workers()
+        )
+        # id уже есть в данных — get_next_id не должен вызываться, резервов нет
+        assert len(all_workers) == 1
+        assert all(w['name'] != '__reserved__' for w in all_workers)
+
     def test_save_documents_replaces_old(self, fresh_db, sample_personal_data):
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)
