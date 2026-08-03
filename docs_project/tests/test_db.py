@@ -210,6 +210,32 @@ class TestWorkerCRUD:
         )
         assert len(results_empty) == 0
 
+    def test_reserved_not_in_list(self, fresh_db, sample_personal_data):
+        """__reserved__ заглушки не попадают в список всех и поиск."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_worker(sample_personal_data)
+        )
+        # get_next_id создаёт строку-заглушку __reserved__
+        reserved_id = asyncio.get_event_loop().run_until_complete(
+            db_module.get_next_id()
+        )
+        assert reserved_id == '00002'
+
+        all_workers = asyncio.get_event_loop().run_until_complete(
+            db_module.get_all_workers()
+        )
+        assert any(w['id'] == '00001' for w in all_workers)
+        assert not any(w['name'] == '__reserved__' for w in all_workers)
+
+        search_results = asyncio.get_event_loop().run_until_complete(
+            db_module.search_workers('Иванов')
+        )
+        assert all(w['name'] != '__reserved__' for w in search_results)
+
     def test_save_documents_replaces_old(self, fresh_db, sample_personal_data):
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)

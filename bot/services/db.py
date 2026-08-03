@@ -555,7 +555,9 @@ async def get_worker(worker_id: str) -> dict | None:
 async def get_all_workers() -> list[dict]:
     """Получить всех работников (без документов для производительности)."""
     async with _get_conn() as db:
-        cursor = await db.execute("SELECT * FROM workers ORDER BY id")
+        cursor = await db.execute(
+            "SELECT * FROM workers WHERE name != '__reserved__' ORDER BY id"
+        )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -575,7 +577,7 @@ async def search_workers(query: str) -> list[dict]:
     """Поиск работников по ФИО."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE name LIKE ? ORDER BY id",
+            "SELECT * FROM workers WHERE name LIKE ? AND name != '__reserved__' ORDER BY id",
             (f"%{query}%",)
         )
         rows = await cursor.fetchall()
