@@ -313,21 +313,30 @@ class DocumentViewer(tk.Frame):
 
         # Миниатюра справа (кликабельная)
         if self.doc_info.exists and self.doc_info.full_path:
-            try:
-                image = Image.open(self.doc_info.full_path)
-                display_image = image.copy()
-                thumb_size = self.config.small_thumbnail_size
-                display_image.thumbnail(thumb_size, Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(display_image)
+            suffix = self.doc_info.full_path.suffix.lower()
+            if suffix in self.config.image_extensions:
+                try:
+                    image = Image.open(self.doc_info.full_path)
+                    display_image = image.copy()
+                    thumb_size = self.config.small_thumbnail_size
+                    display_image.thumbnail(thumb_size, Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(display_image)
 
-                img_label = tk.Label(main, image=photo, bg='white', cursor='hand2',
-                                     relief=tk.SOLID, bd=1)
-                img_label.image = photo
-                img_label.pack(side=tk.RIGHT, padx=(10, 0))
-                img_label.bind('<Button-1>', lambda e: self._on_click())
-            except Exception:
-                tk.Label(main, text="Ошибка загрузки",
-                         font=('Arial', 9), bg='white', fg='red').pack(side=tk.RIGHT)
+                    img_label = tk.Label(main, image=photo, bg='white', cursor='hand2',
+                                         relief=tk.SOLID, bd=1)
+                    img_label.image = photo
+                    img_label.pack(side=tk.RIGHT, padx=(10, 0))
+                    img_label.bind('<Button-1>', lambda e: self._on_click())
+                except Exception:
+                    self._build_placeholder(main)
+            else:
+                self._build_placeholder(main)
+
+    def _build_placeholder(self, parent: tk.Widget) -> None:
+        """Плейсхолдер для не-изображений (PDF и др.) — кликабельный."""
+        btn = tk.Button(parent, text="открыть", font=('Arial', 9), bg='#f0f0f0',
+                        cursor='hand2', command=self._on_click)
+        btn.pack(side=tk.RIGHT, padx=(10, 0))
 
     def _on_click(self) -> None:
         if self.on_open and self.doc_info.full_path:

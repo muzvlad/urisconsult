@@ -603,20 +603,31 @@ class DBViewerApp:
             db_docs = self.api.get_documents(worker.id)
             citizenship = worker.citizenship
 
-            # Показываем все документы из БД у которых есть файл
             from src.services import DocumentInfo
+            from src.logging_config import diagnostic_log
+
             existing_docs = []
+            missing_docs: list[tuple[str, str, str, str]] = []
             for doc_type, filename in db_docs.items():
                 if not filename or doc_type == 'photo':
                     continue
+                label = self.doc_service.get_document_label(doc_type)
                 full_path = self.api.download_file(worker.id, filename)
-                if full_path and full_path.exists():
-                    label = self.doc_service.get_document_label(doc_type)
+                if full_path and full_path.exists() and full_path.stat().st_size > 0:
                     existing_docs.append(DocumentInfo(
                         doc_type=doc_type, label=label,
                         prefix='', filename=filename,
                         exists=True, full_path=full_path,
                     ))
+                else:
+                    if not full_path:
+                        reason = 'not_found_on_server'
+                    elif not full_path.exists():
+                        reason = 'cache_file_deleted'
+                    else:
+                        reason = 'empty_file_in_cache'
+                    diagnostic_log(f"docs missing: worker={worker.id} type={doc_type} file={filename} reason={reason}")
+                    missing_docs.append((doc_type, label, filename, reason))
 
             if existing_docs:
                 docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
@@ -629,6 +640,18 @@ class DBViewerApp:
                     DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
                         fill=tk.X, padx=5, pady=3
                     )
+
+            if missing_docs:
+                miss_frame = tk.Frame(self.scrollable_frame, bg='#fff3cd', relief=tk.RAISED, borderwidth=1)
+                miss_frame.pack(fill=tk.X, padx=5, pady=5)
+                tk.Label(miss_frame, text=f"Не загружено ({len(missing_docs)}):",
+                         font=('Arial', 11, 'bold'), bg='#fff3cd', anchor='w'
+                         ).pack(anchor=tk.W, padx=10, pady=(8, 3))
+                for doc_type, label, filename, reason in missing_docs:
+                    tk.Label(miss_frame,
+                             text=f"  • {label} — {reason} (файл: {filename})",
+                             font=('Arial', 9), bg='#fff3cd', fg='#856404', anchor='w'
+                             ).pack(anchor=tk.W, padx=20, pady=1)
         except Exception as e:
             import traceback
             print(f"DOCS ERROR: {e}")
