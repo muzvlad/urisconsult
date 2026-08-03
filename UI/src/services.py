@@ -75,7 +75,7 @@ class DocumentService:
         """Найти файл документа по префиксу и ID."""
         from src.api_client import get_db_service
         api = get_db_service()
-        for ext in self.config.image_extensions:
+        for ext in self.config.image_extensions + ['.pdf']:
             path = api.download_file(worker_id, f"{prefix}{ext}")
             if path:
                 return path
