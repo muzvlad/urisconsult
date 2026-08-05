@@ -27,21 +27,21 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     worker_id = data.get('id', '')
 
     # Формируем сообщение с данными
-    text = "📋 **Проверьте введенные данные:**\n\n"
-    text += f"📝 **ФИО:** {data.get('name', 'Не указано')}\n"
-    text += f"🌍 **Категория:** {citizenship}\n"
-    text += f"⚥ **Пол:** {data.get('gender', 'Не указано')}\n"
-    text += f"📅 **Дата рождения:** {data.get('date', 'Не указано')}\n"
-    text += f"👤 **Менеджер:** {data.get('manager', 'Не указано')}\n"
-    text += f"🏢 **Объект:** {data.get('object', 'Не указано')}\n"
-    text += f"📍 **Адрес:** {data.get('object_address', 'Не указано')}\n"
-    text += f"💼 **Должность:** {data.get('position', 'Не указано')}\n"
-    text += f"📞 **Основной тел.:** {data.get('phone_main', 'Не указано')}\n"
-    text += f"📞 **Доп. тел.:** {data.get('phone_additional', 'Не указано')}\n"
-    text += f"📧 **Email:** {data.get('email', 'Не указано')}\n\n"
+    text = "📋 Проверьте введенные данные:\n\n"
+    text += f"📝 ФИО: {data.get('name', 'Не указано')}\n"
+    text += f"🌍 Категория: {citizenship}\n"
+    text += f"⚥ Пол: {data.get('gender', 'Не указано')}\n"
+    text += f"📅 Дата рождения: {data.get('date', 'Не указано')}\n"
+    text += f"👤 Менеджер: {data.get('manager', 'Не указано')}\n"
+    text += f"🏢 Объект: {data.get('object', 'Не указано')}\n"
+    text += f"📍 Адрес: {data.get('object_address', 'Не указано')}\n"
+    text += f"💼 Должность: {data.get('position', 'Не указано')}\n"
+    text += f"📞 Основной тел.: {data.get('phone_main', 'Не указано')}\n"
+    text += f"📞 Доп. тел.: {data.get('phone_additional', 'Не указано')}\n"
+    text += f"📧 Email: {data.get('email', 'Не указано')}\n\n"
 
     # Документы — проверяем temp_path ИЛИ существующий файл в БД
-    text += "📎 **Загруженные файлы:**\n"
+    text += "📎 Загруженные файлы:\n"
 
     # Получаем существующие документы из БД если это исправление
     existing_docs = {}
@@ -63,20 +63,20 @@ async def show_confirmation(message: types.Message, state: FSMContext):
 
     # Дополнительные поля для России
     if citizenship == 'Россия':
-        text += "\n👤 **Дополнительная информация:**\n"
-        text += f"💍 **Семейное положение:** {data.get('russia_marital_status', 'Не указано')}\n"
+        text += "\n👤 Дополнительная информация:\n"
+        text += f"💍 Семейное положение: {data.get('russia_marital_status', 'Не указано')}\n"
 
         relatives = data.get('russia_relatives_list', [])
         if relatives:
-            text += "👨‍👩‍👧‍👦 **Родственники:**\n"
+            text += "👨‍👩‍👧‍👦 Родственники:\n"
             for i, rel in enumerate(relatives, 1):
                 text += f"  {i}. {rel.get('name', '')}, {rel.get('birth_year', '')}, {rel.get('phone', '')}\n"
         else:
-            text += "👨‍👩‍👧‍👦 **Родственники:** Не указаны\n"
+            text += "👨‍👩‍👧‍👦 Родственники: Не указаны\n"
 
     text += "\nВсе верно?"
 
-    await message.answer(text, parse_mode="Markdown", reply_markup=get_confirmation_keyboard())
+    await message.answer(text, reply_markup=get_confirmation_keyboard())
     await state.set_state(get_worker_form().confirmation)
 
 
@@ -120,11 +120,10 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
             logger.info("Сохранен работник: %s (ID: %s)", data.get('name', ''), worker_id)
 
             await callback.message.edit_text(
-                f"✅ **Данные успешно сохранены!**\n\n"
-                f"🆔 **ID работника:** {worker_id}\n"
-                f"📝 **ФИО:** {data.get('name', 'Не указано')}\n\n"
-                f"Благодарим за заполнение анкеты!",
-                parse_mode="Markdown"
+                f"✅ Данные успешно сохранены!\n\n"
+                f"🆔 ID: {worker_id}\n"
+                f"📝 ФИО: {data.get('name', 'Не указано')}\n\n"
+                f"Благодарим за заполнение анкеты!"
             )
         except Exception as e:
             logger.error("Ошибка сохранения в БД: %s", e, exc_info=True)
@@ -200,7 +199,11 @@ async def process_edit_value(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    await state.update_data(**{field: message.text.strip()})
+    value = message.text.strip()
+    if field in ('name', 'manager'):
+        from handlers.registration import normalize_full_name
+        value = normalize_full_name(value)
+    await state.update_data(**{field: value})
     await show_confirmation(message, state)
 
 

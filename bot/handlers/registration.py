@@ -86,8 +86,16 @@ def validate_date(date: str) -> bool:
 
 # ─── Обработчики состояний ──────────────────────────────────────────
 
+def normalize_full_name(value: str) -> str:
+    """Привести каждое слово к формату с заглавной буквы."""
+    return ' '.join(
+        '-'.join(part[:1].upper() + part[1:].lower() for part in word.split('-'))
+        for word in value.split()
+    )
+
+
 async def process_name(message: types.Message, state: FSMContext):
-    name = message.text.strip()
+    name = normalize_full_name(message.text.strip())
     if len(name.split()) < 2:
         await message.answer("❌ Пожалуйста, введите ФИО полностью (минимум 2 слова)")
         return
@@ -105,7 +113,7 @@ async def process_name(message: types.Message, state: FSMContext):
 async def process_citizenship_callback(callback: types.CallbackQuery, state: FSMContext):
     citizenship = callback.data.replace("citizenship_", "")
     await state.update_data(citizenship=citizenship)
-    await callback.message.edit_text(f"🌍 **Категория:** {citizenship}")
+    await callback.message.edit_text(f"🌍 Категория: {citizenship}")
     await callback.message.answer("⚥ Выберите ваш пол:", reply_markup=get_gender_keyboard())
     await state.set_state(get_worker_form().gender)
     await callback.answer()
@@ -133,7 +141,7 @@ async def process_date(message: types.Message, state: FSMContext):
 
 
 async def process_manager(message: types.Message, state: FSMContext):
-    await state.update_data(manager=message.text.strip())
+    await state.update_data(manager=normalize_full_name(message.text.strip()))
     await message.answer("🏢 Введите название объекта/компании:")
     await state.set_state(get_worker_form().object)
 
@@ -281,7 +289,7 @@ async def process_russia_relatives(message: types.Message, state: FSMContext):
     data = await state.get_data()
     relatives = data.get('russia_relatives_list', [])
     relatives.append({
-        'name': parts[0],
+        'name': normalize_full_name(parts[0]),
         'birth_year': parts[1],
         'phone': parts[2],
     })
