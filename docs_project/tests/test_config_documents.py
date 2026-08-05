@@ -58,8 +58,8 @@ class TestDocFlows:
             keys = [d.key for d in docs]
             assert len(keys) == len(set(keys))
 
-    def test_patent_has_17_docs(self):
-        assert len(DOC_FLOWS['Патент']) == 17
+    def test_patent_has_26_docs(self):
+        assert len(DOC_FLOWS['Патент']) == 26
 
     def test_student_has_10_docs(self):
         assert len(DOC_FLOWS['Студент']) == 10
@@ -133,7 +133,7 @@ class TestHelperFunctions:
     def test_get_doc_flow_valid(self):
         flow = get_doc_flow('Патент')
         assert isinstance(flow, list)
-        assert len(flow) == 17
+        assert len(flow) == 26
 
     def test_get_doc_flow_invalid_returns_patent(self):
         flow = get_doc_flow('Несуществующая категория')
@@ -142,7 +142,35 @@ class TestHelperFunctions:
     def test_get_next_doc_middle(self):
         next_doc = get_next_doc('patent_snils', 'Патент')
         assert next_doc is not None
-        assert next_doc.key == 'patent_registration'
+        assert next_doc.key == 'patent_bank_details'
+
+    def test_patent_flow_order(self):
+        """Порядок патентного потока соответствует ТЗ."""
+        keys = [d.key for d in DOC_FLOWS['Патент']]
+        expected = [
+            'photo', 'passport',
+            'patent_passport_translation', 'patent_migration_card',
+            'patent_registration', 'patent_registration_back',
+            'patent_fingerprint_front', 'patent_fingerprint_back',
+            'patent_dms', 'patent_patent_front', 'patent_patent_back',
+            *[f'patent_receipt_{i}' for i in range(1, 12)],
+            'patent_language_cert', 'patent_inn', 'patent_snils',
+            'patent_bank_details',
+        ]
+        assert keys == expected
+
+    def test_patent_receipts_all_skippable(self):
+        """Все чеки патента можно пропустить."""
+        for i in range(1, 12):
+            doc = get_doc_by_key(f'patent_receipt_{i}')
+            assert doc is not None, f"Чек {i} отсутствует"
+            assert doc.can_skip, f"Чек {i} должен быть пропускаемым"
+
+    def test_patent_registration_back_skippable(self):
+        """Оборотная сторона регистрации пропускается (скрин Амина — одно фото)."""
+        doc = get_doc_by_key('patent_registration_back')
+        assert doc is not None
+        assert doc.can_skip is True
 
     def test_get_next_doc_last(self):
         last_doc = DOC_FLOWS['Патент'][-1]

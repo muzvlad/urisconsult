@@ -117,12 +117,23 @@ async def process_gender(message: types.Message, state: FSMContext):
         await message.answer("❌ Пожалуйста, выберите пол из клавиатуры", reply_markup=get_gender_keyboard())
         return
     await state.update_data(gender=gender)
-    await message.answer("💼 Введите вашу должность:", reply_markup=ReplyKeyboardRemove())
-    await state.set_state(get_worker_form().position)
+    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):",
+                         reply_markup=ReplyKeyboardRemove())
+    await state.set_state(get_worker_form().date)
 
 
-async def process_position(message: types.Message, state: FSMContext):
-    await state.update_data(position=message.text.strip())
+async def process_date(message: types.Message, state: FSMContext):
+    date = message.text.strip()
+    if not validate_date(date):
+        await message.answer("❌ Пожалуйста, введите дату в формате ДД.ММ.ГГГГ")
+        return
+    await state.update_data(date=date)
+    await message.answer("👤 Введите ФИО вашего менеджера/руководителя:")
+    await state.set_state(get_worker_form().manager)
+
+
+async def process_manager(message: types.Message, state: FSMContext):
+    await state.update_data(manager=message.text.strip())
     await message.answer("🏢 Введите название объекта/компании:")
     await state.set_state(get_worker_form().object)
 
@@ -135,12 +146,12 @@ async def process_object(message: types.Message, state: FSMContext):
 
 async def process_object_address(message: types.Message, state: FSMContext):
     await state.update_data(object_address=message.text.strip())
-    await message.answer("👤 Введите ФИО вашего менеджера/руководителя:")
-    await state.set_state(get_worker_form().manager)
+    await message.answer("💼 Введите вашу должность:")
+    await state.set_state(get_worker_form().position)
 
 
-async def process_manager(message: types.Message, state: FSMContext):
-    await state.update_data(manager=message.text.strip())
+async def process_position(message: types.Message, state: FSMContext):
+    await state.update_data(position=message.text.strip())
     await message.answer(
         "📞 Введите основной номер телефона (в формате +79999999999):",
         reply_markup=get_cancel_keyboard()
@@ -177,26 +188,6 @@ async def process_phone_additional(message: types.Message, state: FSMContext):
         await message.answer("❌ Пожалуйста, введите номер телефона или нажмите 'Пропустить'")
         return
     await state.update_data(phone_additional=phone)
-    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
-    await state.set_state(get_worker_form().date)
-
-
-async def process_email(message: types.Message, state: FSMContext):
-    email = message.text.strip()
-    if not validate_email(email):
-        await message.answer("❌ Пожалуйста, введите корректный email (пример: name@domain.com)")
-        return
-    await state.update_data(email=email)
-    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
-    await state.set_state(get_worker_form().date)
-
-
-async def process_date(message: types.Message, state: FSMContext):
-    date = message.text.strip()
-    if not validate_date(date):
-        await message.answer("❌ Пожалуйста, введите дату в формате ДД.ММ.ГГГГ")
-        return
-    await state.update_data(date=date)
 
     # Переходим к первому документу из потока
     data = await state.get_data()
@@ -221,6 +212,16 @@ async def process_date(message: types.Message, state: FSMContext):
         reply_markup=get_skip_keyboard()
     )
     await state.set_state(getattr(get_worker_form(), first_doc.key))
+
+
+async def process_email(message: types.Message, state: FSMContext):
+    email = message.text.strip()
+    if not validate_email(email):
+        await message.answer("❌ Пожалуйста, введите корректный email (пример: name@domain.com)")
+        return
+    await state.update_data(email=email)
+    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
+    await state.set_state(get_worker_form().date)
 
 
 # ─── Дополнительные поля для России ─────────────────────────────────

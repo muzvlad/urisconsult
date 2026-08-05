@@ -84,10 +84,10 @@ class RejectDialog:
 
         fields = [
             ('name', 'ФИО'), ('citizenship', 'Гражданство'), ('gender', 'Пол'),
-            ('position', 'Должность'), ('object', 'Объект'), ('object_address', 'Адрес'),
-            ('manager', 'Менеджер'), ('phone_main', 'Основной телефон'),
-            ('phone_additional', 'Доп. телефон'), ('email', 'Email'),
-            ('date', 'Дата рождения'), ('registration', 'Регистрация'),
+            ('date', 'Дата рождения'), ('manager', 'Менеджер'), ('object', 'Объект'),
+            ('object_address', 'Адрес'), ('position', 'Должность'),
+            ('phone_main', 'Основной телефон'), ('phone_additional', 'Доп. телефон'),
+            ('email', 'Email'), ('registration', 'Регистрация'),
         ]
 
         # Добавляем документы из конфига для данной категории
@@ -355,14 +355,14 @@ class EditDialog:
             ('name', 'ФИО'),
             ('citizenship', 'Гражданство'),
             ('gender', 'Пол'),
-            ('position', 'Должность'),
+            ('date', 'Дата рождения'),
+            ('manager', 'Менеджер'),
             ('object', 'Объект'),
             ('object_address', 'Адрес объекта'),
-            ('manager', 'Менеджер'),
+            ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
             ('email', 'Email'),
-            ('date', 'Дата рождения'),
             ('registration', 'Регистрация'),
         ]
 

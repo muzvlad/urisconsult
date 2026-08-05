@@ -526,13 +526,13 @@ class DBViewerApp:
         fields = [
             ('citizenship', 'Гражданство'),
             ('gender', 'Пол'),
-            ('position', 'Должность'),
+            ('date', 'Дата рождения'),
+            ('manager', 'Менеджер'),
             ('object', 'Объект'),
             ('object_address', 'Адрес объекта'),
-            ('manager', 'Менеджер'),
+            ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
-            ('date', 'Дата рождения'),
             ('registration', 'Регистрация'),
             ('marital_status', 'Семейное положение'),
         ]

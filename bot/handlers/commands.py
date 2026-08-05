@@ -54,9 +54,9 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         )
 
         worker_data = {'id': worker_id}
-        for k in ['name', 'citizenship', 'gender', 'position', 'object',
-                   'object_address', 'manager', 'phone_main', 'phone_additional',
-                   'email', 'date', 'registration']:
+        for k in ['name', 'citizenship', 'gender', 'date', 'manager',
+                   'object', 'object_address', 'position', 'phone_main',
+                   'phone_additional', 'email', 'registration']:
             worker_data[k] = worker.get(k)
         await state.update_data(**worker_data)
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
@@ -184,9 +184,9 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
         worker = await db.get_worker(rejected_worker_id)
         if worker:
             worker_data = {}
-            for k in ['name', 'citizenship', 'gender', 'position', 'object',
-                       'object_address', 'manager', 'phone_main', 'phone_additional',
-                       'email', 'date', 'registration']:
+            for k in ['name', 'citizenship', 'gender', 'date', 'manager',
+                       'object', 'object_address', 'position', 'phone_main',
+                       'phone_additional', 'email', 'registration']:
                 worker_data[k] = worker.get(k)
             await state.update_data(**worker_data)
             await state.update_data(editing_rejected=True, rejection_reasons=reasons)

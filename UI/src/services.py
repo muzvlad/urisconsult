@@ -307,11 +307,11 @@ class PDFExportService:
 
         # Основные поля
         profile = [
-            ('gender', 'Пол'), ('position', 'Должность'),
-            ('object', 'Объект'), ('object_address', 'Адрес'),
-            ('manager', 'Менеджер'), ('phone_main', 'Телефон'),
-            ('phone_additional', 'Доп. телефон'), ('email', 'Email'),
-            ('date', 'Дата рождения'), ('registration', 'Регистрация'),
+            ('gender', 'Пол'), ('date', 'Дата рождения'),
+            ('manager', 'Менеджер'), ('object', 'Объект'),
+            ('object_address', 'Адрес'), ('position', 'Должность'),
+            ('phone_main', 'Телефон'), ('phone_additional', 'Доп. телефон'),
+            ('email', 'Email'), ('registration', 'Регистрация'),
         ]
         for key, label in profile:
             val = getattr(worker, key, '')

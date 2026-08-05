@@ -29,7 +29,8 @@ _PASSPORT = DocumentType(key='passport', label='Паспорт', prefix='pas', r
 # Патент
 _PATENT_PASSPORT_TRANSLATION = DocumentType(key='patent_passport_translation', label='Перевод паспорта', prefix='pas_trans')
 _PATENT_SNILS = DocumentType(key='patent_snils', label='СНИЛС', prefix='snils')
-_PATENT_REGISTRATION = DocumentType(key='patent_registration', label='Регистрация', prefix='reg')
+_PATENT_REGISTRATION = DocumentType(key='patent_registration', label='Регистрация (лицевая) / скрин Амина', prefix='reg')
+_PATENT_REGISTRATION_BACK = DocumentType(key='patent_registration_back', label='Регистрация (оборотная)', prefix='reg_back', can_skip=True)
 _PATENT_MIGRATION_CARD = DocumentType(key='patent_migration_card', label='Миграционная карта', prefix='mig')
 _PATENT_DMS = DocumentType(key='patent_dms', label='ДМС', prefix='dms')
 _PATENT_PATENT_FRONT = DocumentType(key='patent_patent_front', label='Патент (лицевая)', prefix='pat_front')
@@ -38,6 +39,14 @@ _PATENT_INN = DocumentType(key='patent_inn', label='ИНН', prefix='inn', can_s
 _PATENT_RECEIPT_1 = DocumentType(key='patent_receipt_1', label='Чек по патенту 1', prefix='chek1')
 _PATENT_RECEIPT_2 = DocumentType(key='patent_receipt_2', label='Чек по патенту 2', prefix='chek2')
 _PATENT_RECEIPT_3 = DocumentType(key='patent_receipt_3', label='Чек по патенту 3', prefix='chek3')
+_PATENT_RECEIPT_4 = DocumentType(key='patent_receipt_4', label='Чек по патенту 4', prefix='chek4')
+_PATENT_RECEIPT_5 = DocumentType(key='patent_receipt_5', label='Чек по патенту 5', prefix='chek5')
+_PATENT_RECEIPT_6 = DocumentType(key='patent_receipt_6', label='Чек по патенту 6', prefix='chek6')
+_PATENT_RECEIPT_7 = DocumentType(key='patent_receipt_7', label='Чек по патенту 7', prefix='chek7')
+_PATENT_RECEIPT_8 = DocumentType(key='patent_receipt_8', label='Чек по патенту 8', prefix='chek8')
+_PATENT_RECEIPT_9 = DocumentType(key='patent_receipt_9', label='Чек по патенту 9', prefix='chek9')
+_PATENT_RECEIPT_10 = DocumentType(key='patent_receipt_10', label='Чек по патенту 10', prefix='chek10')
+_PATENT_RECEIPT_11 = DocumentType(key='patent_receipt_11', label='Чек по патенту 11', prefix='chek11')
 _PATENT_LANGUAGE_CERT = DocumentType(key='patent_language_cert', label='Сертификат о знании языка', prefix='lang')
 _PATENT_BANK_DETAILS = DocumentType(key='patent_bank_details', label='Реквизиты банковской карты', prefix='bank')
 _PATENT_FINGERPRINT_FRONT = DocumentType(key='patent_fingerprint_front', label='Дактилоскопия (лицевая)', prefix='dactyl_front')
@@ -92,12 +101,16 @@ _RUSSIA_MILITARY_DOC = DocumentType(key='russia_military_doc', label='Военн
 DOC_FLOWS: Dict[str, List[DocumentType]] = {
     'Патент': [
         _PHOTO, _PASSPORT,
-        _PATENT_PASSPORT_TRANSLATION, _PATENT_SNILS,
-        _PATENT_REGISTRATION, _PATENT_MIGRATION_CARD,
-        _PATENT_DMS, _PATENT_PATENT_FRONT, _PATENT_PATENT_BACK,
-        _PATENT_INN, _PATENT_RECEIPT_1, _PATENT_RECEIPT_2, _PATENT_RECEIPT_3,
-        _PATENT_LANGUAGE_CERT, _PATENT_BANK_DETAILS,
+        _PATENT_PASSPORT_TRANSLATION, _PATENT_MIGRATION_CARD,
+        _PATENT_REGISTRATION, _PATENT_REGISTRATION_BACK,
         _PATENT_FINGERPRINT_FRONT, _PATENT_FINGERPRINT_BACK,
+        _PATENT_DMS, _PATENT_PATENT_FRONT, _PATENT_PATENT_BACK,
+        _PATENT_RECEIPT_1, _PATENT_RECEIPT_2, _PATENT_RECEIPT_3,
+        _PATENT_RECEIPT_4, _PATENT_RECEIPT_5, _PATENT_RECEIPT_6,
+        _PATENT_RECEIPT_7, _PATENT_RECEIPT_8, _PATENT_RECEIPT_9,
+        _PATENT_RECEIPT_10, _PATENT_RECEIPT_11,
+        _PATENT_LANGUAGE_CERT, _PATENT_INN, _PATENT_SNILS,
+        _PATENT_BANK_DETAILS,
     ],
     'Студент': [
         _PHOTO, _PASSPORT,
@@ -183,15 +196,24 @@ DOC_PROMPTS: Dict[str, str] = {
     'passport': '🪪 Отправьте паспорт в развороте:',
     'patent_passport_translation': '📄 Отправьте перевод паспорта:',
     'patent_snils': '📄 Отправьте СНИЛС:',
-    'patent_registration': '📋 Отправьте регистрацию:',
+    'patent_registration': '📋 Отправьте регистрацию (лицевая сторона) или скрин из приложения Амина:',
+    'patent_registration_back': '📋 Отправьте регистрацию (оборотная сторона) (или пропустите):',
     'patent_migration_card': '🎫 Отправьте миграционную карту:',
     'patent_dms': '🏥 Отправьте ДМС:',
     'patent_patent_front': '📝 Отправьте патент (лицевая сторона):',
     'patent_patent_back': '📝 Отправьте патент (разворот):',
     'patent_inn': '🔢 Отправьте ИНН (можно пропустить):',
-    'patent_receipt_1': '🧾 Отправьте чек по патенту 1:',
-    'patent_receipt_2': '🧾 Отправьте чек по патенту 2 (или пропустите):',
-    'patent_receipt_3': '🧾 Отправьте чек по патенту 3 (или пропустите):',
+    'patent_receipt_1': '🧾 Прикрепите чек по патенту 1:',
+    'patent_receipt_2': '🧾 Прикрепите чек по патенту 2 или пропустите:',
+    'patent_receipt_3': '🧾 Прикрепите чек по патенту 3 или пропустите:',
+    'patent_receipt_4': '🧾 Прикрепите чек по патенту 4 или пропустите:',
+    'patent_receipt_5': '🧾 Прикрепите чек по патенту 5 или пропустите:',
+    'patent_receipt_6': '🧾 Прикрепите чек по патенту 6 или пропустите:',
+    'patent_receipt_7': '🧾 Прикрепите чек по патенту 7 или пропустите:',
+    'patent_receipt_8': '🧾 Прикрепите чек по патенту 8 или пропустите:',
+    'patent_receipt_9': '🧾 Прикрепите чек по патенту 9 или пропустите:',
+    'patent_receipt_10': '🧾 Прикрепите чек по патенту 10 или пропустите:',
+    'patent_receipt_11': '🧾 Прикрепите чек по патенту 11 или пропустите:',
     'patent_language_cert': '🎓 Отправьте сертификат о знании языка:',
     'patent_bank_details': '💳 Отправьте реквизиты банковской карты:',
     'patent_fingerprint_front': '🖐 Отправьте дактилоскопию (лицевая сторона):',
