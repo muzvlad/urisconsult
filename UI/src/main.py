@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
-from src.config import get_config, get_paths, center_window
+from src.config import get_config, get_paths, center_window, get_document_config
 from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
@@ -524,7 +524,7 @@ class DBViewerApp:
         info_inner.pack(fill=tk.X, padx=10, pady=10)
 
         fields = [
-            ('citizenship', 'Гражданство'),
+            ('citizenship', 'Категория'),
             ('gender', 'Пол'),
             ('date', 'Дата рождения'),
             ('manager', 'Менеджер'),
@@ -628,6 +628,16 @@ class DBViewerApp:
                         reason = 'empty_file_in_cache'
                     diagnostic_log(f"docs missing: worker={worker.id} type={doc_type} file={filename} reason={reason}")
                     missing_docs.append((doc_type, label, filename, reason))
+
+            if existing_docs or missing_docs:
+                # Порядок документов — из конфига бота (как в анкете), а не из БД
+                flows, _, _ = get_document_config()
+                citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
+                normalized = citizenship_map.get(citizenship, citizenship)
+                flow_keys = [d.key for d in flows.get(normalized, flows.get('Патент', []))]
+                order = {k: i for i, k in enumerate(flow_keys)}
+                existing_docs.sort(key=lambda d: order.get(d.doc_type, 9999))
+                missing_docs.sort(key=lambda m: order.get(m[0], 9999))
 
             if existing_docs:
                 docs_header = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)

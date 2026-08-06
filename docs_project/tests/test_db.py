@@ -21,9 +21,15 @@ def reset_db_singleton():
     """Сброс синглтона БД перед каждым тестом."""
     import services.db as db_module
     db_module._db = None
+    # pytest-asyncio (bot/tests) очищает event loop потока после себя —
+    # гарантируем свежий loop на время теста
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     yield
     # Cleanup после теста
-    asyncio.get_event_loop().run_until_complete(db_module.close_db())
+    loop.run_until_complete(db_module.close_db())
+    loop.close()
+    asyncio.set_event_loop(None)
     db_module._db = None
 
 

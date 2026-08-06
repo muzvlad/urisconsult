@@ -51,7 +51,9 @@ class TestDocFlows:
 
     def test_passport_is_second_in_all_flows(self):
         for cat, docs in DOC_FLOWS.items():
-            assert docs[1].key == 'passport'
+            # ЕАЭС использует свой тип паспорта (паспорт или ID-карта)
+            expected = 'eaeas_passport' if cat == 'ЕАЭС' else 'passport'
+            assert docs[1].key == expected, f"Второй документ '{cat}' ≠ {expected}"
 
     def test_unique_keys_per_category(self):
         for cat, docs in DOC_FLOWS.items():
@@ -64,8 +66,8 @@ class TestDocFlows:
     def test_student_has_10_docs(self):
         assert len(DOC_FLOWS['Студент']) == 10
 
-    def test_eaeas_has_9_docs(self):
-        assert len(DOC_FLOWS['ЕАЭС']) == 9
+    def test_eaeas_has_13_docs(self):
+        assert len(DOC_FLOWS['ЕАЭС']) == 13
 
     def test_rvp_has_7_docs(self):
         assert len(DOC_FLOWS['РВП']) == 7
@@ -171,6 +173,47 @@ class TestHelperFunctions:
         doc = get_doc_by_key('patent_registration_back')
         assert doc is not None
         assert doc.can_skip is True
+
+    def test_eaeas_flow_order(self):
+        """Порядок ЕАЭС-потока соответствует ТЗ."""
+        keys = [d.key for d in DOC_FLOWS['ЕАЭС']]
+        expected = [
+            'photo',
+            'eaeas_passport', 'eaeas_passport_back',
+            'eaeas_passport_translation',
+            'eaeas_migration_card',
+            'eaeas_registration', 'eaeas_registration_back',
+            'eaeas_fingerprint_card', 'eaeas_fingerprint_back',
+            'eaeas_dms',
+            'eaeas_inn', 'eaeas_snils', 'eaeas_bank_details',
+        ]
+        assert keys == expected
+
+    def test_eaeas_passport_back_skippable(self):
+        """Разворот ID-карты пропускается (паспорт — одно фото)."""
+        doc = get_doc_by_key('eaeas_passport_back')
+        assert doc is not None
+        assert doc.can_skip is True
+
+    def test_eaeas_registration_back_skippable(self):
+        """Оборотная сторона регистрации пропускается (скрин Амина — одно фото)."""
+        doc = get_doc_by_key('eaeas_registration_back')
+        assert doc is not None
+        assert doc.can_skip is True
+
+    def test_eaeas_labels(self):
+        """Метки ЕАЭС-документов соответствуют ТЗ."""
+        assert get_doc_by_key('eaeas_passport').label == 'Паспорт или идентификационная карта (лицевая)'
+        assert get_doc_by_key('eaeas_passport_back').label == 'Идентификационная карта (разворот)'
+        assert get_doc_by_key('eaeas_passport_translation').label == 'Перевод паспорта'
+        assert get_doc_by_key('eaeas_registration').label == 'Регистрация (лицевая) / скрин Амина'
+        assert get_doc_by_key('eaeas_registration_back').label == 'Регистрация (оборотная)'
+        assert get_doc_by_key('eaeas_dms').label == 'Полис ДМС или ОМС'
+        assert get_doc_by_key('eaeas_fingerprint_card').label == 'Дактилоскопия (лицевая)'
+        assert get_doc_by_key('eaeas_fingerprint_back').label == 'Дактилоскопия (разворот)'
+        assert get_doc_by_key('eaeas_passport').prefix == 'pas'
+        assert get_doc_by_key('eaeas_passport_back').prefix == 'pas_back'
+        assert get_doc_by_key('eaeas_fingerprint_back').prefix == 'dactyl_back'
 
     def test_get_next_doc_last(self):
         last_doc = DOC_FLOWS['Патент'][-1]

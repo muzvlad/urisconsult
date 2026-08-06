@@ -196,7 +196,7 @@ class TelegramService:
 
         # Русские названия полей
         field_labels = {
-            'name': 'ФИО', 'citizenship': 'Гражданство', 'gender': 'Пол',
+            'name': 'ФИО', 'citizenship': 'Категория', 'gender': 'Пол',
             'position': 'Должность', 'object': 'Объект', 'object_address': 'Адрес',
             'manager': 'Менеджер', 'phone_main': 'Основной телефон',
             'phone_additional': 'Доп. телефон', 'email': 'Email',
@@ -301,7 +301,7 @@ class PDFExportService:
         c.drawString(50, y, f"ИД: {worker.id}")
         update_progress()
         y -= 20
-        c.drawString(50, y, f"Гражданство: {worker.citizenship}")
+        c.drawString(50, y, f"Категория: {worker.citizenship}")
         update_progress()
         y -= 20
 

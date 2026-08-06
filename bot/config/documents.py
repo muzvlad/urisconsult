@@ -63,12 +63,17 @@ _STUDENT_UNIVERSITY_CERT = DocumentType(key='student_university_cert', label='С
 _STUDENT_BANK_DETAILS = DocumentType(key='student_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
 # ЕАЭС
-_EAEAS_REGISTRATION = DocumentType(key='eaeas_registration', label='Регистрация', prefix='reg')
+_EAEAS_PASSPORT = DocumentType(key='eaeas_passport', label='Паспорт или идентификационная карта (лицевая)', prefix='pas', required=True)
+_EAEAS_PASSPORT_BACK = DocumentType(key='eaeas_passport_back', label='Идентификационная карта (разворот)', prefix='pas_back', can_skip=True)
+_EAEAS_PASSPORT_TRANSLATION = DocumentType(key='eaeas_passport_translation', label='Перевод паспорта', prefix='pas_trans')
+_EAEAS_REGISTRATION = DocumentType(key='eaeas_registration', label='Регистрация (лицевая) / скрин Амина', prefix='reg')
+_EAEAS_REGISTRATION_BACK = DocumentType(key='eaeas_registration_back', label='Регистрация (оборотная)', prefix='reg_back', can_skip=True)
 _EAEAS_MIGRATION_CARD = DocumentType(key='eaeas_migration_card', label='Миграционная карта', prefix='mig')
-_EAEAS_DMS = DocumentType(key='eaeas_dms', label='ДМС', prefix='dms')
+_EAEAS_DMS = DocumentType(key='eaeas_dms', label='Полис ДМС или ОМС', prefix='dms')
 _EAEAS_INN = DocumentType(key='eaeas_inn', label='ИНН', prefix='inn')
 _EAEAS_SNILS = DocumentType(key='eaeas_snils', label='СНИЛС', prefix='snils')
-_EAEAS_FINGERPRINT_CARD = DocumentType(key='eaeas_fingerprint_card', label='Дактилоскопическая карта', prefix='dactyl')
+_EAEAS_FINGERPRINT_CARD = DocumentType(key='eaeas_fingerprint_card', label='Дактилоскопия (лицевая)', prefix='dactyl')
+_EAEAS_FINGERPRINT_BACK = DocumentType(key='eaeas_fingerprint_back', label='Дактилоскопия (разворот)', prefix='dactyl_back')
 _EAEAS_BANK_DETAILS = DocumentType(key='eaeas_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
 # РВП
@@ -119,10 +124,14 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
         _STUDENT_UNIVERSITY_CERT, _STUDENT_BANK_DETAILS,
     ],
     'ЕАЭС': [
-        _PHOTO, _PASSPORT,
-        _EAEAS_REGISTRATION, _EAEAS_MIGRATION_CARD, _EAEAS_DMS,
-        _EAEAS_INN, _EAEAS_SNILS, _EAEAS_FINGERPRINT_CARD,
-        _EAEAS_BANK_DETAILS,
+        _PHOTO,
+        _EAEAS_PASSPORT, _EAEAS_PASSPORT_BACK,
+        _EAEAS_PASSPORT_TRANSLATION,
+        _EAEAS_MIGRATION_CARD,
+        _EAEAS_REGISTRATION, _EAEAS_REGISTRATION_BACK,
+        _EAEAS_FINGERPRINT_CARD, _EAEAS_FINGERPRINT_BACK,
+        _EAEAS_DMS,
+        _EAEAS_INN, _EAEAS_SNILS, _EAEAS_BANK_DETAILS,
     ],
     'РВП': [
         _PHOTO, _PASSPORT,
@@ -226,12 +235,17 @@ DOC_PROMPTS: Dict[str, str] = {
     'student_fingerprint_card': '🖐 Отправьте дактилоскопическую карту:',
     'student_university_cert': '🎓 Отправьте справку из ВУЗа:',
     'student_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
-    'eaeas_registration': '📋 Отправьте регистрацию:',
+    'eaeas_passport': '🪪 Отправьте паспорт (разворот) или идентификационную карту (лицевая сторона):',
+    'eaeas_passport_back': '🪪 Если отправляете ID-карту — пришлите разворот (или пропустите):',
+    'eaeas_passport_translation': '📄 Отправьте перевод паспорта:',
+    'eaeas_registration': '📋 Отправьте регистрацию (лицевая сторона) или скрин из приложения Амина:',
+    'eaeas_registration_back': '📋 Отправьте регистрацию (оборотная сторона) (или пропустите):',
     'eaeas_migration_card': '🎫 Отправьте миграционную карту:',
-    'eaeas_dms': '🏥 Отправьте ДМС:',
+    'eaeas_dms': '🏥 Отправьте полис ДМС или ОМС:',
     'eaeas_inn': '🔢 Отправьте ИНН:',
     'eaeas_snils': '📄 Отправьте СНИЛС:',
-    'eaeas_fingerprint_card': '🖐 Отправьте дактилоскопическую карту:',
+    'eaeas_fingerprint_card': '🖐 Отправьте дактилоскопию (лицевая сторона):',
+    'eaeas_fingerprint_back': '🖐 Отправьте дактилоскопию (разворот):',
     'eaeas_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
     'rvp_migration_card': '🎫 Отправьте миграционную карту:',
     'rvp_dms_oms': '🏥 Отправьте ДМС или ОМС:',

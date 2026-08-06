@@ -83,7 +83,7 @@ class RejectDialog:
         self.vars: Dict[str, tk.BooleanVar] = {}
 
         fields = [
-            ('name', 'ФИО'), ('citizenship', 'Гражданство'), ('gender', 'Пол'),
+            ('name', 'ФИО'), ('citizenship', 'Категория'), ('gender', 'Пол'),
             ('date', 'Дата рождения'), ('manager', 'Менеджер'), ('object', 'Объект'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Основной телефон'), ('phone_additional', 'Доп. телефон'),
@@ -353,7 +353,7 @@ class EditDialog:
         # Поля для редактирования
         fields = [
             ('name', 'ФИО'),
-            ('citizenship', 'Гражданство'),
+            ('citizenship', 'Категория'),
             ('gender', 'Пол'),
             ('date', 'Дата рождения'),
             ('manager', 'Менеджер'),

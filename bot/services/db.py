@@ -488,21 +488,22 @@ async def save_worker(data: dict) -> str:
             list(personal.values())
         )
 
-        await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
+        if 'meetings' in data:
+            await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
 
-        meetings = data.get('meetings', [])
-        if isinstance(meetings, str):
-            try:
-                meetings = json.loads(meetings)
-            except (json.JSONDecodeError, TypeError):
-                meetings = []
-        if meetings:
-            for m in (meetings or []):
-                if isinstance(m, dict):
-                    await db.execute(
-                        "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-                        (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
-                    )
+            meetings = data.get('meetings')
+            if isinstance(meetings, str):
+                try:
+                    meetings = json.loads(meetings)
+                except (json.JSONDecodeError, TypeError):
+                    meetings = []
+            if meetings:
+                for m in (meetings or []):
+                    if isinstance(m, dict):
+                        await db.execute(
+                            "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+                            (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+                        )
 
         await db.commit()
         return worker_id

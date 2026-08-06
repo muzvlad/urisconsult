@@ -151,6 +151,8 @@ class DatabaseConnection:
                 'pas_trans': 'patent_passport_translation',
                 'snils': 'patent_snils',
                 'reg': 'patent_registration',
+                'pas': 'passport',
+                'pas_back': 'eaeas_passport_back',
                 'reg_back': 'patent_registration_back',
                 'mig': 'patent_migration_card',
                 'dms': 'patent_dms',
