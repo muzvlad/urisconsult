@@ -3,8 +3,9 @@
 """
 from __future__ import annotations
 import os
+import shutil
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog, messagebox
 from typing import Optional, Callable, List
 from pathlib import Path
 
@@ -311,6 +312,16 @@ class DocumentViewer(tk.Frame):
         tk.Label(main, text=self.doc_info.label,
                  font=('Arial', 10, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
 
+        # Кнопка «Скачать» под документом (если файл есть)
+        if self.doc_info.exists and self.doc_info.full_path:
+            btn_frame = tk.Frame(self, bg='white')
+            btn_frame.pack(fill=tk.X, padx=8, pady=(0, 5))
+            tk.Button(btn_frame, text="⬇ Скачать",
+                      command=self._download,
+                      bg='#3498db', fg='white', font=('Arial', 9),
+                      padx=10, relief=tk.FLAT, cursor='hand2'
+                      ).pack(side=tk.RIGHT)
+
         # Миниатюра справа (кликабельная)
         if self.doc_info.exists and self.doc_info.full_path:
             suffix = self.doc_info.full_path.suffix.lower()
@@ -357,3 +368,30 @@ class DocumentViewer(tk.Frame):
     def _on_click(self) -> None:
         if self.on_open and self.doc_info.full_path:
             self.on_open(self.doc_info.full_path)
+
+    def _download(self) -> None:
+        """Сохранить документ в выбранную пользователем директорию."""
+        if not self.doc_info.full_path:
+            return
+        source = self.doc_info.full_path
+        initial = self.doc_info.filename or os.path.basename(str(source))
+        target = filedialog.asksaveasfilename(
+            parent=self.winfo_toplevel(),
+            title="Сохранить документ",
+            initialfile=initial,
+            defaultextension=os.path.splitext(initial)[1],
+            filetypes=[("Все файлы", "*.*")],
+        )
+        if not target:
+            return
+        try:
+            shutil.copy2(source, target)
+            messagebox.showinfo(
+                "Готово", f"Файл сохранён:\n{target}",
+                parent=self.winfo_toplevel()
+            )
+        except Exception as e:
+            messagebox.showerror(
+                "Ошибка", f"Не удалось сохранить файл:\n{e}",
+                parent=self.winfo_toplevel()
+            )
