@@ -200,7 +200,7 @@ class TelegramService:
             'position': 'Должность', 'object': 'Объект', 'object_address': 'Адрес',
             'manager': 'Менеджер', 'phone_main': 'Основной телефон',
             'phone_additional': 'Доп. телефон', 'email': 'Email',
-            'date': 'Дата рождения', 'registration': 'Регистрация',
+            'date': 'Дата рождения',
         }
         doc_labels = get_document_config()[1]
         field_labels.update(doc_labels)
@@ -311,7 +311,7 @@ class PDFExportService:
             ('manager', 'Менеджер'), ('object', 'Объект'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Телефон'), ('phone_additional', 'Доп. телефон'),
-            ('email', 'Email'), ('registration', 'Регистрация'),
+            ('email', 'Email'),
         ]
         for key, label in profile:
             val = getattr(worker, key, '')

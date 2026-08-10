@@ -179,7 +179,6 @@ async def process_edit(callback: types.CallbackQuery, state: FSMContext):
         'email': '📧 Email',
         'photo': '📸 Фото',
         'passport': '🪪 Паспорт',
-        'registration': '📋 Регистрация',
     }
 
     field_name = field_names.get(field, field)

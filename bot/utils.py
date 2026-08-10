@@ -82,7 +82,6 @@ _FIELD_PROMPTS = {
     'phone_main': "Введите основной телефон:",
     'phone_additional': "Введите доп. телефон (или 'пропустить'):",
     'email': "Введите email:",
-    'registration': "Введите регистрацию:",
     'marital_status': "Введите семейное положение:",
 }
 

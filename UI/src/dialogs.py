@@ -87,7 +87,7 @@ class RejectDialog:
             ('date', 'Дата рождения'), ('manager', 'Менеджер'), ('object', 'Объект'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Основной телефон'), ('phone_additional', 'Доп. телефон'),
-            ('email', 'Email'), ('registration', 'Регистрация'),
+            ('email', 'Email'),
         ]
 
         # Добавляем документы из конфига для данной категории
@@ -363,7 +363,6 @@ class EditDialog:
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
             ('email', 'Email'),
-            ('registration', 'Регистрация'),
         ]
 
         self.entries: Dict[str, tk.Entry] = {}

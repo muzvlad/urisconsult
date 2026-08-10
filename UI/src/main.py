@@ -533,7 +533,6 @@ class DBViewerApp:
             ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
-            ('registration', 'Регистрация'),
             ('marital_status', 'Семейное положение'),
         ]
 

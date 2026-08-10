@@ -56,7 +56,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         worker_data = {'id': worker_id}
         for k in ['name', 'citizenship', 'gender', 'date', 'manager',
                    'object', 'object_address', 'position', 'phone_main',
-                   'phone_additional', 'email', 'registration']:
+                   'phone_additional', 'email']:
             worker_data[k] = worker.get(k)
         await state.update_data(**worker_data)
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
@@ -186,7 +186,7 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
             worker_data = {}
             for k in ['name', 'citizenship', 'gender', 'date', 'manager',
                        'object', 'object_address', 'position', 'phone_main',
-                       'phone_additional', 'email', 'registration']:
+                       'phone_additional', 'email']:
                 worker_data[k] = worker.get(k)
             await state.update_data(**worker_data)
             await state.update_data(editing_rejected=True, rejection_reasons=reasons)
@@ -223,6 +223,13 @@ async def process_fix_value(message: types.Message, state: FSMContext):
     if not field:
         return
 
+    # Файл/фото вместо текста — просим текст (у файла нет .text)
+    if not message.text:
+        await message.answer(
+            f"Это поле заполняется текстом. {get_field_prompt(field)}"
+        )
+        return
+
     # Сохраняем исправленное значение
     await state.update_data(**{field: message.text.strip()})
 
@@ -244,6 +251,43 @@ async def any_message(message: types.Message):
         "Для начала работы нажмите кнопку ниже",
         reply_markup=get_start_keyboard()
     )
+
+
+async def any_document(message: types.Message):
+    """Ответ на файл/фото вне состояния (default_state)."""
+    rejected = await _find_rejected_worker(message.from_user.id)
+
+    if rejected:
+        reasons = rejected.get('rejection_reasons', '[]')
+        if isinstance(reasons, str):
+            try:
+                reasons = json.loads(reasons)
+            except (json.JSONDecodeError, TypeError):
+                reasons = []
+        reasons_text = '\n'.join(
+            f"  {FIELD_LABELS.get(r, r)}" for r in reasons
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Исправить анкету",
+                                     callback_data=f"fix_rejected:{rejected['id']}"),
+                InlineKeyboardButton(text="Новая анкета",
+                                     callback_data=f"new_rejected:{rejected['id']}"),
+            ]
+        ])
+        await message.answer(
+            f"📎 Файл не прикреплён к анкете.\n\n"
+            f"У вас есть отклонённая анкета #{rejected['id']}.\n"
+            f"Необходимо исправить:\n{reasons_text}\n\n"
+            f"Нажмите «Исправить анкету», чтобы приложить документы:",
+            reply_markup=keyboard
+        )
+    else:
+        await message.answer(
+            "📎 Файл получен, но загрузка документов идёт внутри анкеты.\n"
+            "Нажмите кнопку ниже, чтобы начать регистрацию:",
+            reply_markup=get_start_keyboard()
+        )
 
 
 async def _ask_rejected_field(message, state, field, reasons, index):
@@ -299,3 +343,4 @@ def register_commands(dp, form_class):
     dp.message.register(process_fix_value, form_class.fix_value)
 
     dp.message.register(any_message, default_state, F.text)
+    dp.message.register(any_document, default_state, F.document | F.photo)

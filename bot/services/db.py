@@ -359,9 +359,6 @@ async def _migrate_from_json(db: aiosqlite.Connection):
                         value = data.get('Паспорт', '')
                     if not value and doc.key == 'patent_patent_front':
                         value = data.get('Патент', '')
-                    if not value and doc.key == 'registration':
-                        value = data.get('Регистрация', '')
-
                     if value:
                         await db.execute(
                             "INSERT OR IGNORE INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
