@@ -77,6 +77,8 @@ _EAEAS_FINGERPRINT_BACK = DocumentType(key='eaeas_fingerprint_back', label='Да
 _EAEAS_BANK_DETAILS = DocumentType(key='eaeas_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
 # РВП
+_RVP_PASSPORT_RVP = DocumentType(key='rvp_passport_rvp', label='Паспорт (разворот с РВП)', prefix='pas_rvp')
+_RVP_PASSPORT_PROPISKA = DocumentType(key='rvp_passport_propiska', label='Паспорт (разворот с пропиской)', prefix='pas_prop')
 _RVP_MIGRATION_CARD = DocumentType(key='rvp_migration_card', label='Миграционная карта', prefix='mig')
 _RVP_DMS_OMS = DocumentType(key='rvp_dms_oms', label='ДМС/ОМС', prefix='dms')
 _RVP_INN = DocumentType(key='rvp_inn', label='ИНН', prefix='inn')
@@ -135,6 +137,7 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
     ],
     'РВП': [
         _PHOTO, _PASSPORT,
+        _RVP_PASSPORT_RVP, _RVP_PASSPORT_PROPISKA,
         _RVP_MIGRATION_CARD, _RVP_DMS_OMS, _RVP_INN,
         _RVP_SNILS, _RVP_BANK_DETAILS,
     ],
@@ -247,6 +250,8 @@ DOC_PROMPTS: Dict[str, str] = {
     'eaeas_fingerprint_card': '🖐 Отправьте дактилоскопию (лицевая сторона):',
     'eaeas_fingerprint_back': '🖐 Отправьте дактилоскопию (разворот):',
     'eaeas_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
+    'rvp_passport_rvp': '🪪 Отправьте разворот паспорта с РВП:',
+    'rvp_passport_propiska': '🪪 Отправьте разворот паспорта с пропиской:',
     'rvp_migration_card': '🎫 Отправьте миграционную карту:',
     'rvp_dms_oms': '🏥 Отправьте ДМС или ОМС:',
     'rvp_inn': '🔢 Отправьте ИНН:',

@@ -69,8 +69,14 @@ class TestDocFlows:
     def test_eaeas_has_13_docs(self):
         assert len(DOC_FLOWS['ЕАЭС']) == 13
 
-    def test_rvp_has_7_docs(self):
-        assert len(DOC_FLOWS['РВП']) == 7
+    def test_rvp_has_9_docs(self):
+        assert len(DOC_FLOWS['РВП']) == 9
+
+    def test_rvp_passport_spread_docs_after_passport(self):
+        """Разворот с РВП и пропиской идут сразу после паспорта."""
+        keys = [d.key for d in DOC_FLOWS['РВП']]
+        assert keys[2] == 'rvp_passport_rvp'
+        assert keys[3] == 'rvp_passport_propiska'
 
     def test_vnzh_has_9_docs(self):
         assert len(DOC_FLOWS['ВНЖ']) == 9
