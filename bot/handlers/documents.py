@@ -44,11 +44,28 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
 
         ext = os.path.splitext(file_path)[1] or '.jpg'
         data = await state.get_data()
+        doc = get_doc_by_key(doc_key)
+        is_multi = bool(doc and doc.multi_file)
+
         temp_path = os.path.join(DOCS_DIR, f"temp_{doc_key}_{message.from_user.id}{ext}")
 
         await bot.download_file(file_path, temp_path)
 
         temp_files = data.get('temp_files', [])
+
+        if is_multi:
+            # multi_file документ: копим список файлов, не переходим дальше
+            paths = data.get(f'{doc_key}_temp_paths', [])
+            paths.append(temp_path)
+            temp_files.extend(paths)
+            await state.update_data(**{f'{doc_key}_temp_paths': paths, 'temp_files': temp_files})
+            await message.answer(
+                "✅ Файл получен!\n"
+                "Пришлите ещё файл или нажмите 'Пропустить', чтобы завершить:",
+                reply_markup=get_skip_keyboard()
+            )
+            return True
+
         temp_files.append(temp_path)
         await state.update_data(**{f'{doc_key}_temp_path': temp_path, 'temp_files': temp_files})
 
@@ -83,10 +100,17 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
 
 async def _skip_document(message: types.Message, state: FSMContext, doc_key: str):
     """Пропустить документ и перейти к следующему."""
-    await state.update_data(**{f'{doc_key}_temp_path': None})
+    data = await state.get_data()
+
+    doc = get_doc_by_key(doc_key)
+    is_multi = bool(doc and doc.multi_file)
+    multi_paths = data.get(f'{doc_key}_temp_paths', []) if is_multi else []
+
+    # multi_file с загруженными файлами — «Пропустить» = завершить сбор
+    if not (is_multi and multi_paths):
+        await state.update_data(**{f'{doc_key}_temp_path': None})
 
     # Если estamos в режиме исправления — переходим к следующему отклонённому полю
-    data = await state.get_data()
     fix_reasons = data.get('fix_reasons', [])
     fix_index = data.get('fix_index', -1)
     if fix_reasons and fix_index >= 0:

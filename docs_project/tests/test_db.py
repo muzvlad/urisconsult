@@ -138,9 +138,9 @@ class TestWorkerCRUD:
         assert worker['citizenship'] == 'Патент'
 
         docs = worker['documents']
-        assert docs['photo'] == 'photo_00001.jpg'
-        assert docs['passport'] == 'pas_00001.jpg'
-        assert docs['patent_snils'] == 'snils_00001.jpg'
+        assert docs['photo'] == ['photo_00001.jpg']
+        assert docs['passport'] == ['pas_00001.jpg']
+        assert docs['patent_snils'] == ['snils_00001.jpg']
 
     def test_get_nonexistent_worker(self, fresh_db):
         db_path, users_dir, docs_dir = fresh_db
@@ -285,7 +285,25 @@ class TestWorkerCRUD:
         docs = asyncio.get_event_loop().run_until_complete(
             db_module.get_worker_documents('00001')
         )
-        assert docs['photo'] == 'photo_v2.jpg'
+        assert docs['photo'] == ['photo_v2.jpg']
+
+    def test_save_documents_multi_file(self, fresh_db, sample_personal_data):
+        """Несколько файлов одного документа сохраняются и читаются."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_worker(sample_personal_data)
+        )
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_documents('00001', {'vnzh_work_book': ['trud.jpg', 'trud_2.jpg']})
+        )
+
+        docs = asyncio.get_event_loop().run_until_complete(
+            db_module.get_worker_documents('00001')
+        )
+        assert docs['vnzh_work_book'] == ['trud.jpg', 'trud_2.jpg']
 
 
 class TestWorkerMeetings:

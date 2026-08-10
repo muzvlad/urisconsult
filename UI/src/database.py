@@ -400,11 +400,14 @@ class DocumentRepository:
     def __init__(self, db: Optional[DatabaseConnection] = None):
         self.db = db or DatabaseConnection()
 
-    def get_by_worker(self, worker_id: str) -> Dict[str, str]:
-        """Получить все документы сотрудника: {doc_type: filename}."""
-        sql = f"SELECT doc_type, filename FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ?"
+    def get_by_worker(self, worker_id: str) -> Dict[str, List[str]]:
+        """Получить все документы сотрудника: {doc_type: [filename, ...]}."""
+        sql = f"SELECT doc_type, filename FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ? ORDER BY id"
         rows = self.db.fetchall(sql, (worker_id,))
-        return {row["doc_type"]: row["filename"] for row in rows}
+        result: Dict[str, List[str]] = {}
+        for row in rows:
+            result.setdefault(row["doc_type"], []).append(row["filename"])
+        return result
 
     def get_document(self, worker_id: str, doc_type: str) -> Optional[str]:
         sql = f"SELECT filename FROM {WORKER_DOCUMENTS_TABLE} WHERE worker_id = ? AND doc_type = ?"

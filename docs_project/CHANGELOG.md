@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.18.1 (10.08.2026)
+
+### Фикс: бот молчал при исправлении анкеты после отклонения по документу
+
+**Проблема:** после отклонения анкеты с причиной «ИНН» (или любым документом) бот отправлял
+«Начинаем исправление анкеты…» и молчал — не запрашивал файл. Текстовые поля исправлялись нормально.
+
+**Причина:** `bot/handlers/commands.py` вызывал `get_skip_keyboard()` в `_ask_rejected_field` для
+документов, но не импортировал его — `NameError` в ветке документа.
+
+**Исправления:**
+- `bot/handlers/commands.py`: добавлен импорт `get_skip_keyboard`
+- `docs_project/tests/test_commands_fix_rejection.py`: регресс-тесты — документ запрашивает файл,
+  текстовое поле запрашивает ввод, все doc-ключи имеют FSM-состояние
+
+### Документация
+
+- Спека `005-fix-rejection-doc-crash.md` завершена
+
+## v1.18 (10.08.2026)
+
+### Регистрация в потоке ВНЖ + несколько файлов на документ
+
+- `bot/config/documents.py`: новый документ `vnzh_registration` (prefix `reg`) сразу после `vnzh_vnzh` в потоке ВНЖ (9 → 10 слотов); флаг `multi_file` у `vnzh_work_book` и `russia_work_book`
+- `bot/services/db.py`: миграция v3 → v4 (снят `UNIQUE(worker_id, doc_type)` в `worker_documents`); `save_documents`/`get_worker_documents`/`documents` работают со списками файлов
+- `bot/services/file_saver.py`: `save_document(..., index=1)` — первый файл без суффикса, далее `_2`, `_3`...
+- `bot/handlers/documents.py`: multi-file приём — несколько файлов подряд с кнопкой «Пропустить» для завершения
+- `bot/handlers/confirmation.py`: показ `(N файла)` и сохранение списка файлов
+- `UI`: контракт документов `{doc_type: [filename, ...]}` в `database.py`, `api_client.py`, `services.py`; main.py отображает каждый файл отдельно
+
+### Документация
+
+- Спека `004-vnzh-registration-multifile.md` завершена
+
 ## v1.17 (10.08.2026)
 
 ### Фикс: отклонение анкеты по «Регистрации» ломало исправление

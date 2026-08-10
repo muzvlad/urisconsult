@@ -52,11 +52,15 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     if citizenship in DOC_FLOWS:
         for doc in DOC_FLOWS[citizenship]:
             temp_key = f'{doc.key}_temp_path'
-            has_temp = bool(data.get(temp_key))
+            has_temp = bool(data.get(temp_key)) or bool(data.get(f'{doc.key}_temp_paths'))
             has_existing = bool(existing_docs.get(doc.key))
             has_file = has_temp or has_existing
             status = '✅' if has_file else '❌'
             label = doc.label
+            if doc.multi_file:
+                n = len(data.get(f'{doc.key}_temp_paths', []))
+                if n > 1:
+                    label += f" ({n} файла)"
             if has_existing and not has_temp:
                 label += " (ранее загружен)"
             text += f"{label}: {status}\n"
@@ -99,6 +103,23 @@ async def process_confirmation(callback: types.CallbackQuery, state: FSMContext)
             saved_files = {}
             if citizenship in DOC_FLOWS:
                 for doc in DOC_FLOWS[citizenship]:
+                    if doc.multi_file:
+                        paths = data.get(f'{doc.key}_temp_paths', [])
+                        if not paths:
+                            continue
+                        filenames = []
+                        for i, temp_path in enumerate(paths, 1):
+                            if temp_path and os.path.exists(temp_path):
+                                try:
+                                    filenames.append(FileSaver.save_document(
+                                        temp_path, worker_id, doc.key, index=i
+                                    ))
+                                except Exception as e:
+                                    logger.error("Ошибка сохранения %s: %s", doc.key, e)
+                        if filenames:
+                            saved_files[doc.key] = filenames
+                        continue
+
                     temp_path = data.get(f'{doc.key}_temp_path')
                     if temp_path and os.path.exists(temp_path):
                         try:

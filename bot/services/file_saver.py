@@ -54,7 +54,7 @@ class FileSaver:
         return True, ""
 
     @staticmethod
-    def save_document(temp_path: str, worker_id: str, doc_type: str) -> str:
+    def save_document(temp_path: str, worker_id: str, doc_type: str, index: int = 1) -> str:
         """
         Сохранить документ в папку docs с правильным именем.
 
@@ -62,6 +62,7 @@ class FileSaver:
             temp_path: путь к временному файлу
             worker_id: ID работника
             doc_type: тип документа (ключ из DOC_FLOWS)
+            index: номер файла для multi_file документов (1 = без суффикса)
 
         Returns:
             Имя сохраненного файла
@@ -86,7 +87,7 @@ class FileSaver:
         worker_dir = os.path.join(DOCS_DIR, worker_id)
         os.makedirs(worker_dir, exist_ok=True)
 
-        new_filename = f"{prefix}{ext}"
+        new_filename = f"{prefix}{ext}" if index <= 1 else f"{prefix}_{index}{ext}"
         new_path = os.path.join(worker_dir, new_filename)
 
         try:

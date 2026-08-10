@@ -23,7 +23,7 @@ from config.documents import DOC_FLOWS, DOC_PREFIXES
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
@@ -81,6 +81,7 @@ async def init_db():
         """)
 
         # Таблица документов
+        # multi_file документы (трудовая книжка) хранят НЕСКОЛЬКО записей с одним doc_type
         await db.execute("""
             CREATE TABLE IF NOT EXISTS worker_documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,8 +89,7 @@ async def init_db():
                 doc_type TEXT NOT NULL,
                 filename TEXT NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (worker_id) REFERENCES workers(id),
-                UNIQUE(worker_id, doc_type)
+                FOREIGN KEY (worker_id) REFERENCES workers(id)
             )
         """)
 
@@ -138,6 +138,8 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v1_to_v2(db)
     if from_version < 3:
         await _migrate_v2_to_v3(db)
+    if from_version < 4:
+        await _migrate_v3_to_v4(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -300,7 +302,30 @@ async def _migrate_v2_to_v3(db: aiosqlite.Connection):
     await db.commit()
 
 
-# ─── Миграция из JSON ────────────────────────────────────────────────
+# ─── Миграция v3 → v4: снять UNIQUE(worker_id, doc_type) ─────────────
+
+async def _migrate_v3_to_v4(db: aiosqlite.Connection):
+    """Миграция v3→v4: worker_documents без UNIQUE — документ может иметь несколько файлов."""
+    await db.execute("""
+        CREATE TABLE worker_documents_v4 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+    await db.execute("""
+        INSERT INTO worker_documents_v4 (id, worker_id, doc_type, filename, created_at)
+        SELECT id, worker_id, doc_type, filename, created_at FROM worker_documents
+    """)
+    await db.execute("DROP TABLE worker_documents")
+    await db.execute("ALTER TABLE worker_documents_v4 RENAME TO worker_documents")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
+    await db.commit()
+    logger.info("Миграция v3→v4: снят UNIQUE(worker_id, doc_type) в worker_documents")
 
 async def _migrate_from_json(db: aiosqlite.Connection):
     """Миграция существующих JSON-файлов в БД."""
@@ -506,20 +531,22 @@ async def save_worker(data: dict) -> str:
         return worker_id
 
 
-async def save_documents(worker_id: str, doc_files: dict[str, str]):
-    """Сохранить документы работника. doc_files = {doc_type: filename}."""
+async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
+    """Сохранить документы работника. doc_files = {doc_type: filename | [filename, ...]}."""
     async with _get_conn() as db:
         for doc_type in doc_files:
             await db.execute(
                 "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ?",
                 (worker_id, doc_type)
             )
-        for doc_type, filename in doc_files.items():
-            if filename:
-                await db.execute(
-                    "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                    (worker_id, doc_type, filename)
-                )
+        for doc_type, value in doc_files.items():
+            filenames = value if isinstance(value, list) else [value]
+            for filename in filenames:
+                if filename:
+                    await db.execute(
+                        "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
+                        (worker_id, doc_type, filename)
+                    )
         await db.commit()
 
 
@@ -534,11 +561,14 @@ async def get_worker(worker_id: str) -> dict | None:
         result = dict(row)
 
         cursor = await db.execute(
-            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ? ORDER BY id",
             (worker_id,)
         )
         docs = await cursor.fetchall()
-        result['documents'] = {row[0]: row[1] for row in docs}
+        doc_map: dict[str, list[str]] = {}
+        for row in docs:
+            doc_map.setdefault(row[0], []).append(row[1])
+        result['documents'] = doc_map
 
         cursor = await db.execute(
             "SELECT date, note FROM worker_meetings WHERE worker_id = ? ORDER BY id",
@@ -560,15 +590,18 @@ async def get_all_workers() -> list[dict]:
         return [dict(row) for row in rows]
 
 
-async def get_worker_documents(worker_id: str) -> dict[str, str]:
-    """Получить документы работника: {doc_type: filename}."""
+async def get_worker_documents(worker_id: str) -> dict[str, list[str]]:
+    """Получить документы работника: {doc_type: [filename, ...]}."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ?",
+            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ? ORDER BY id",
             (worker_id,)
         )
         rows = await cursor.fetchall()
-        return {row[0]: row[1] for row in rows}
+        result: dict[str, list[str]] = {}
+        for row in rows:
+            result.setdefault(row[0], []).append(row[1])
+        return result
 
 
 async def search_workers(query: str) -> list[dict]:

@@ -21,6 +21,7 @@ from config.documents import DOC_FLOWS, DOC_LABELS, FIELD_LABELS, get_doc_flow
 from handlers.registration import get_worker_form
 from services import db
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from keyboards.reply_kb import get_skip_keyboard
 from utils import get_document_state, get_all_doc_keys, get_field_prompt
 
 logger = logging.getLogger(__name__)

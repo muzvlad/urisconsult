@@ -100,7 +100,7 @@ class APIClient:
         w._meetings = data.get("_meetings") or []
         return w
 
-    def get_documents(self, worker_id: str) -> Dict[str, str]:
+    def get_documents(self, worker_id: str) -> Dict[str, List[str]]:
         data = self._get(f"/api/workers/{worker_id}/documents")
         return data if isinstance(data, dict) else {}
 

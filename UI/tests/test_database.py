@@ -302,8 +302,8 @@ class TestDocumentRepository:
 
         docs = doc_repo.get_by_worker("TEST001")
         assert docs == {
-            "passport": "pas_TEST001.jpg",
-            "photo": "photo_TEST001.jpg",
+            "passport": ["pas_TEST001.jpg"],
+            "photo": ["photo_TEST001.jpg"],
         }
 
     def test_update_document(self, doc_repo):

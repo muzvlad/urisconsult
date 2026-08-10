@@ -58,23 +58,36 @@ class DocumentService:
 
         result = []
         for doc in flow:
-            filename = db_docs.get(doc.key, "")
-            info = DocumentInfo(
-                doc_type=doc.key,
-                label=doc.label,
-                prefix=doc.prefix,
-                filename=filename,
-            )
-            if filename:
-                info.full_path = self._find_document_file(worker.id, doc.prefix)
+            filenames = db_docs.get(doc.key, [])
+            if isinstance(filenames, str):
+                filenames = [filenames]
+            if not filenames:
+                result.append(DocumentInfo(
+                    doc_type=doc.key, label=doc.label, prefix=doc.prefix,
+                ))
+                continue
+            for i, filename in enumerate(filenames, 1):
+                label = doc.label + (f" ({i})" if len(filenames) > 1 else "")
+                info = DocumentInfo(
+                    doc_type=doc.key,
+                    label=label,
+                    prefix=doc.prefix,
+                    filename=filename,
+                )
+                info.full_path = self._find_document_file(worker.id, doc.prefix, filename)
                 info.exists = info.full_path is not None
-            result.append(info)
+                result.append(info)
         return result
 
-    def _find_document_file(self, worker_id: str, prefix: str) -> Optional[Path]:
-        """Найти файл документа по префиксу и ID."""
+    def _find_document_file(self, worker_id: str, prefix: str,
+                            filename: str | None = None) -> Optional[Path]:
+        """Найти файл документа по префиксу и ID (или по точному имени)."""
         from src.api_client import get_db_service
         api = get_db_service()
+        if filename:
+            path = api.download_file(worker_id, filename)
+            if path:
+                return path
         for ext in self.config.image_extensions + ['.pdf']:
             path = api.download_file(worker_id, f"{prefix}{ext}")
             if path:
@@ -357,12 +370,17 @@ class PDFExportService:
                     c.setFont(self._font_name, 10)
                     update_progress()
 
-                filename_doc = db_docs.get(doc.key, '')
-                if filename_doc and worker.id:
-                    doc_path = self.doc_service._find_document_file(worker.id, doc.prefix)
+                filenames_doc = db_docs.get(doc.key, [])
+                if isinstance(filenames_doc, str):
+                    filenames_doc = [filenames_doc]
+                if filenames_doc and worker.id:
+                    filename_doc = filenames_doc[0]
+                    doc_path = self.doc_service._find_document_file(worker.id, doc.prefix, filename_doc)
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
                     update_progress()
+                    if len(filenames_doc) > 1:
+                        c.drawString(70, y - 12, f"  + ещё {len(filenames_doc) - 1} файл(а)")
                     if doc_path:
                         try:
                             img = ImageReader(str(doc_path))

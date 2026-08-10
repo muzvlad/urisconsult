@@ -78,8 +78,22 @@ class TestDocFlows:
         assert keys[2] == 'rvp_passport_rvp'
         assert keys[3] == 'rvp_passport_propiska'
 
-    def test_vnzh_has_9_docs(self):
-        assert len(DOC_FLOWS['ВНЖ']) == 9
+    def test_vnzh_has_10_docs(self):
+        assert len(DOC_FLOWS['ВНЖ']) == 10
+
+    def test_vnzh_registration_after_vnzh(self):
+        """Регистрация в ВНЖ идёт сразу после документа ВНЖ."""
+        keys = [d.key for d in DOC_FLOWS['ВНЖ']]
+        assert keys[3] == 'vnzh_vnzh'
+        assert keys[4] == 'vnzh_registration'
+
+    def test_work_book_multi_file(self):
+        """Трудовая книжка ВНЖ и России допускает несколько файлов."""
+        assert get_doc_by_key('vnzh_work_book').multi_file is True
+        assert get_doc_by_key('russia_work_book').multi_file is True
+
+    def test_vnzh_registration_prefix(self):
+        assert get_doc_by_key('vnzh_registration').prefix == 'reg'
 
     def test_russia_has_8_docs(self):
         assert len(DOC_FLOWS['Россия']) == 8

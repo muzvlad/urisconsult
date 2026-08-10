@@ -18,6 +18,7 @@ class DocumentType:
     required: bool = False
     can_skip: bool = True
     category: str = ''    # Категория гражданства (заполняется автоматически)
+    multi_file: bool = False  # Документ может состоять из нескольких файлов
 
 
 # ─── Определяем все типы документов ────────────────────────────
@@ -88,10 +89,11 @@ _RVP_BANK_DETAILS = DocumentType(key='rvp_bank_details', label='Реквизит
 # ВНЖ
 _VNZH_MIGRATION_CARD = DocumentType(key='vnzh_migration_card', label='Миграционная карта', prefix='mig', can_skip=True)
 _VNZH_VNZH = DocumentType(key='vnzh_vnzh', label='ВНЖ', prefix='vnzh')
+_VNZH_REGISTRATION = DocumentType(key='vnzh_registration', label='Регистрация', prefix='reg')
 _VNZH_DMS_OMS = DocumentType(key='vnzh_dms_oms', label='ДМС/ОМС', prefix='dms')
 _VNZH_INN = DocumentType(key='vnzh_inn', label='ИНН', prefix='inn')
 _VNZH_SNILS = DocumentType(key='vnzh_snils', label='СНИЛС', prefix='snils')
-_VNZH_WORK_BOOK = DocumentType(key='vnzh_work_book', label='Трудовая книжка/ЭТК', prefix='trud')
+_VNZH_WORK_BOOK = DocumentType(key='vnzh_work_book', label='Трудовая книжка/ЭТК', prefix='trud', multi_file=True)
 _VNZH_BANK_DETAILS = DocumentType(key='vnzh_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
 # Россия
@@ -99,7 +101,7 @@ _RUSSIA_PASSPORT_PROPISKA = DocumentType(key='russia_passport_propiska', label='
 _RUSSIA_INN = DocumentType(key='russia_inn', label='ИНН', prefix='inn')
 _RUSSIA_SNILS = DocumentType(key='russia_snils', label='СНИЛС', prefix='snils')
 _RUSSIA_EDUCATION_DOC = DocumentType(key='russia_education_doc', label='Документ об образовании', prefix='edu', can_skip=True)
-_RUSSIA_WORK_BOOK = DocumentType(key='russia_work_book', label='Трудовая книжка/ЭТК', prefix='trud')
+_RUSSIA_WORK_BOOK = DocumentType(key='russia_work_book', label='Трудовая книжка/ЭТК', prefix='trud', multi_file=True)
 _RUSSIA_MILITARY_DOC = DocumentType(key='russia_military_doc', label='Военный билет/Приписное', prefix='voen', can_skip=True)
 
 
@@ -143,7 +145,7 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
     ],
     'ВНЖ': [
         _PHOTO, _PASSPORT,
-        _VNZH_MIGRATION_CARD, _VNZH_VNZH, _VNZH_DMS_OMS,
+        _VNZH_MIGRATION_CARD, _VNZH_VNZH, _VNZH_REGISTRATION, _VNZH_DMS_OMS,
         _VNZH_INN, _VNZH_SNILS, _VNZH_WORK_BOOK, _VNZH_BANK_DETAILS,
     ],
     'Россия': [
@@ -258,6 +260,7 @@ DOC_PROMPTS: Dict[str, str] = {
     'rvp_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
     'vnzh_migration_card': '🎫 Отправьте миграционную карту (желательно):',
     'vnzh_vnzh': '🪪 Отправьте ВНЖ:',
+    'vnzh_registration': '📋 Приложите скан или фото регистрации:',
     'vnzh_dms_oms': '🏥 Отправьте ДМС или ОМС:',
     'vnzh_inn': '🔢 Отправьте ИНН:',
     'vnzh_snils': '📄 Отправьте СНИЛС:',

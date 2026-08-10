@@ -607,26 +607,30 @@ class DBViewerApp:
 
             existing_docs = []
             missing_docs: list[tuple[str, str, str, str]] = []
-            for doc_type, filename in db_docs.items():
-                if not filename or doc_type == 'photo':
+            for doc_type, filenames in db_docs.items():
+                if isinstance(filenames, str):
+                    filenames = [filenames]
+                if not filenames or doc_type == 'photo':
                     continue
                 label = self.doc_service.get_document_label(doc_type)
-                full_path = self.api.download_file(worker.id, filename)
-                if full_path and full_path.exists() and full_path.stat().st_size > 0:
-                    existing_docs.append(DocumentInfo(
-                        doc_type=doc_type, label=label,
-                        prefix='', filename=filename,
-                        exists=True, full_path=full_path,
-                    ))
-                else:
-                    if not full_path:
-                        reason = 'not_found_on_server'
-                    elif not full_path.exists():
-                        reason = 'cache_file_deleted'
+                for i, filename in enumerate(filenames, 1):
+                    full_path = self.api.download_file(worker.id, filename)
+                    if full_path and full_path.exists() and full_path.stat().st_size > 0:
+                        existing_docs.append(DocumentInfo(
+                            doc_type=doc_type,
+                            label=label + (f" ({i})" if len(filenames) > 1 else ""),
+                            prefix='', filename=filename,
+                            exists=True, full_path=full_path,
+                        ))
                     else:
-                        reason = 'empty_file_in_cache'
-                    diagnostic_log(f"docs missing: worker={worker.id} type={doc_type} file={filename} reason={reason}")
-                    missing_docs.append((doc_type, label, filename, reason))
+                        if not full_path:
+                            reason = 'not_found_on_server'
+                        elif not full_path.exists():
+                            reason = 'cache_file_deleted'
+                        else:
+                            reason = 'empty_file_in_cache'
+                        diagnostic_log(f"docs missing: worker={worker.id} type={doc_type} file={filename} reason={reason}")
+                        missing_docs.append((doc_type, label, filename, reason))
 
             if existing_docs or missing_docs:
                 # Порядок документов — из конфига бота (как в анкете), а не из БД
