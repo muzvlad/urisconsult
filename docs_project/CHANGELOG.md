@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.18.2 (10.08.2026)
+
+### Фикс: исправленная анкета не возвращалась в pending и не появлялась в UI
+
+**Проблема:** после исправления отклонённой анкеты бот подтверждал сохранение, но анкета не
+попадала в список ожидающих обработки (колокольчик в UI) — специалист не видел исправления.
+
+**Причина:** `docs_project` → `bot/services/db.py` `save_worker` обновляет только `personal_keys`,
+куда не входят `status`/`rejection_reasons`/`notified_at`. `DBSaver.save_worker_data` вычислял
+`status='pending'` при исправлении, но UPDATE его игнорировал — анкета оставалась `rejected`.
+
+**Исправления:**
+- `bot/services/db_saver.py`: при `editing_rejected=True` вызывается `db.resubmit_worker(worker_id)` —
+  возвращает `status='pending'`, очищает причины, сбрасывает `notified_at`
+- `docs_project/tests/test_db.py`: регресс-тест `test_resubmit_rejected_returns_pending`
+
+### Документация
+
+- Спека `006-fix-rejected-resubmit-status.md` завершена
+
 ## v1.18.1 (10.08.2026)
 
 ### Фикс: бот молчал при исправлении анкеты после отклонения по документу

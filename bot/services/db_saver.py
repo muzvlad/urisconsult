@@ -69,6 +69,11 @@ class DBSaver:
         # Сохраняем работника
         await db.save_worker(save_data)
 
+        # При исправлении отклонённой анкеты — вернуть статус 'pending'
+        # (save_worker не трогает служебные колонки status/rejection_reasons)
+        if editing_rejected:
+            await db.resubmit_worker(worker_id)
+
         # Сохраняем документы (из saved_files — финальные имена файлов)
         doc_files = {}
         if 'saved_files' in data:

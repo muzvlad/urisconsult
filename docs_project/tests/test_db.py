@@ -267,6 +267,40 @@ class TestWorkerCRUD:
         assert len(all_workers) == 1
         assert all(w['name'] != '__reserved__' for w in all_workers)
 
+    def test_resubmit_rejected_returns_pending(self, fresh_db, sample_personal_data):
+        """Исправление отклонённой анкеты возвращает её в статус pending."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        from services.db_saver import DBSaver
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+
+        data = sample_personal_data.copy()
+        data['id'] = '00042'
+
+        asyncio.get_event_loop().run_until_complete(
+            DBSaver.save_worker_data(user_id=999, data=data.copy())
+        )
+        asyncio.get_event_loop().run_until_complete(
+            db_module.reject_worker('00042', ['patent_inn'])
+        )
+        worker = asyncio.get_event_loop().run_until_complete(db_module.get_worker('00042'))
+        assert worker['status'] == 'rejected'
+
+        # Клиент исправляет анкету и подтверждает
+        data['editing_rejected'] = True
+        asyncio.get_event_loop().run_until_complete(
+            DBSaver.save_worker_data(user_id=999, data=data.copy())
+        )
+
+        worker = asyncio.get_event_loop().run_until_complete(db_module.get_worker('00042'))
+        assert worker['status'] == 'pending'
+        assert worker['rejection_reasons'] == '[]'
+
+        pending = asyncio.get_event_loop().run_until_complete(db_module.get_pending_workers())
+        assert any(w['id'] == '00042' for w in pending)
+
     def test_save_documents_replaces_old(self, fresh_db, sample_personal_data):
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)
