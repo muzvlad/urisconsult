@@ -54,12 +54,16 @@ _PATENT_FINGERPRINT_FRONT = DocumentType(key='patent_fingerprint_front', label='
 _PATENT_FINGERPRINT_BACK = DocumentType(key='patent_fingerprint_back', label='Дактилоскопия (разворот)', prefix='dactyl_back')
 
 # Студент
+_STUDENT_PASSPORT_TRANSLATION = DocumentType(key='student_passport_translation', label='Перевод паспорта', prefix='pas_trans')
+_STUDENT_VISA = DocumentType(key='student_visa', label='Виза', prefix='visa')
 _STUDENT_SNILS = DocumentType(key='student_snils', label='СНИЛС', prefix='snils')
-_STUDENT_REGISTRATION = DocumentType(key='student_registration', label='Регистрация', prefix='reg')
+_STUDENT_REGISTRATION = DocumentType(key='student_registration', label='Регистрация (лицевая)', prefix='reg')
+_STUDENT_REGISTRATION_BACK = DocumentType(key='student_registration_back', label='Регистрация (оборотная)', prefix='reg_back', can_skip=True)
 _STUDENT_MIGRATION_CARD = DocumentType(key='student_migration_card', label='Миграционная карта', prefix='mig')
 _STUDENT_DMS = DocumentType(key='student_dms', label='ДМС', prefix='dms')
 _STUDENT_INN = DocumentType(key='student_inn', label='ИНН', prefix='inn')
-_STUDENT_FINGERPRINT_CARD = DocumentType(key='student_fingerprint_card', label='Дактилоскопическая карта', prefix='dactyl')
+_STUDENT_FINGERPRINT_CARD = DocumentType(key='student_fingerprint_card', label='Дактилоскопия (лицевая)', prefix='dactyl')
+_STUDENT_FINGERPRINT_BACK = DocumentType(key='student_fingerprint_back', label='Дактилоскопия (разворот)', prefix='dactyl_back')
 _STUDENT_UNIVERSITY_CERT = DocumentType(key='student_university_cert', label='Справка из ВУЗа', prefix='spravka')
 _STUDENT_BANK_DETAILS = DocumentType(key='student_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
@@ -123,8 +127,10 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
     ],
     'Студент': [
         _PHOTO, _PASSPORT,
-        _STUDENT_SNILS, _STUDENT_REGISTRATION, _STUDENT_MIGRATION_CARD,
-        _STUDENT_DMS, _STUDENT_INN, _STUDENT_FINGERPRINT_CARD,
+        _STUDENT_PASSPORT_TRANSLATION, _STUDENT_VISA, _STUDENT_MIGRATION_CARD,
+        _STUDENT_REGISTRATION, _STUDENT_REGISTRATION_BACK,
+        _STUDENT_FINGERPRINT_CARD, _STUDENT_FINGERPRINT_BACK,
+        _STUDENT_DMS, _STUDENT_SNILS, _STUDENT_INN,
         _STUDENT_UNIVERSITY_CERT, _STUDENT_BANK_DETAILS,
     ],
     'ЕАЭС': [
@@ -231,12 +237,16 @@ DOC_PROMPTS: Dict[str, str] = {
     'patent_bank_details': '💳 Отправьте реквизиты банковской карты:',
     'patent_fingerprint_front': '🖐 Отправьте дактилоскопию (лицевая сторона):',
     'patent_fingerprint_back': '🖐 Отправьте дактилоскопию (разворот):',
-    'student_snils': '📄 Отправьте СНИЛС (или перевод паспорта):',
-    'student_registration': '📋 Приложите скан или фото регистрации:',
+    'student_passport_translation': '📄 Отправьте перевод паспорта:',
+    'student_visa': '🛂 Отправьте визу:',
+    'student_snils': '📄 Отправьте СНИЛС:',
+    'student_registration': '📋 Приложите скан или фото регистрации (лицевая сторона):',
+    'student_registration_back': '📋 Приложите скан или фото регистрации (оборотная сторона) (или пропустите):',
     'student_migration_card': '🎫 Отправьте миграционную карту:',
     'student_dms': '🏥 Отправьте ДМС:',
     'student_inn': '🔢 Отправьте ИНН:',
-    'student_fingerprint_card': '🖐 Отправьте дактилоскопическую карту:',
+    'student_fingerprint_card': '🖐 Отправьте дактилоскопию (лицевая сторона):',
+    'student_fingerprint_back': '🖐 Отправьте дактилоскопию (разворот):',
     'student_university_cert': '🎓 Отправьте справку из ВУЗа:',
     'student_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
     'eaeas_passport': '🪪 Отправьте паспорт (разворот) или идентификационную карту (лицевая сторона):',

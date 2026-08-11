@@ -63,8 +63,29 @@ class TestDocFlows:
     def test_patent_has_26_docs(self):
         assert len(DOC_FLOWS['Патент']) == 26
 
-    def test_student_has_10_docs(self):
-        assert len(DOC_FLOWS['Студент']) == 10
+    def test_student_has_14_docs(self):
+        assert len(DOC_FLOWS['Студент']) == 14
+
+    def test_student_flow_order(self):
+        """Порядок потока «Студент» соответствует ТЗ."""
+        keys = [d.key for d in DOC_FLOWS['Студент']]
+        expected = [
+            'photo', 'passport',
+            'student_passport_translation', 'student_visa', 'student_migration_card',
+            'student_registration', 'student_registration_back',
+            'student_fingerprint_card', 'student_fingerprint_back',
+            'student_dms', 'student_snils', 'student_inn',
+            'student_university_cert', 'student_bank_details',
+        ]
+        assert keys == expected
+
+    def test_student_new_doc_prefixes(self):
+        """Новые документы студента имеют корректные префиксы."""
+        assert get_doc_by_key('student_passport_translation').prefix == 'pas_trans'
+        assert get_doc_by_key('student_visa').prefix == 'visa'
+        assert get_doc_by_key('student_registration_back').prefix == 'reg_back'
+        assert get_doc_by_key('student_fingerprint_back').prefix == 'dactyl_back'
+        assert get_doc_by_key('student_registration_back').can_skip is True
 
     def test_eaeas_has_13_docs(self):
         assert len(DOC_FLOWS['ЕАЭС']) == 13
