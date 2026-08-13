@@ -116,8 +116,24 @@ class TestDocFlows:
     def test_vnzh_registration_prefix(self):
         assert get_doc_by_key('vnzh_registration').prefix == 'reg'
 
-    def test_russia_has_8_docs(self):
-        assert len(DOC_FLOWS['Россия']) == 8
+    def test_russia_has_9_docs(self):
+        assert len(DOC_FLOWS['Россия']) == 9
+
+    def test_russia_flow_order(self):
+        """Порядок потока «Россия»: реквизиты последним."""
+        keys = [d.key for d in DOC_FLOWS['Россия']]
+        expected = [
+            'photo', 'passport',
+            'russia_passport_propiska', 'russia_inn', 'russia_snils',
+            'russia_education_doc', 'russia_work_book', 'russia_military_doc',
+            'russia_bank_details',
+        ]
+        assert keys == expected
+
+    def test_russia_military_multi_file(self):
+        """Военный билет России принимает несколько файлов."""
+        assert get_doc_by_key('russia_military_doc').multi_file is True
+        assert get_doc_by_key('russia_bank_details').prefix == 'bank'
 
 
 class TestDocPrefixes:

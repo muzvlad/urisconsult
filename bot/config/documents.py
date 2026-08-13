@@ -106,7 +106,8 @@ _RUSSIA_INN = DocumentType(key='russia_inn', label='ИНН', prefix='inn')
 _RUSSIA_SNILS = DocumentType(key='russia_snils', label='СНИЛС', prefix='snils')
 _RUSSIA_EDUCATION_DOC = DocumentType(key='russia_education_doc', label='Документ об образовании', prefix='edu', can_skip=True)
 _RUSSIA_WORK_BOOK = DocumentType(key='russia_work_book', label='Трудовая книжка/ЭТК', prefix='trud', multi_file=True)
-_RUSSIA_MILITARY_DOC = DocumentType(key='russia_military_doc', label='Военный билет/Приписное', prefix='voen', can_skip=True)
+_RUSSIA_MILITARY_DOC = DocumentType(key='russia_military_doc', label='Военный билет/Приписное (все страницы с записями)', prefix='voen', can_skip=True, multi_file=True)
+_RUSSIA_BANK_DETAILS = DocumentType(key='russia_bank_details', label='Реквизиты банковской карты', prefix='bank')
 
 
 # ─── Порядок документов по категориям (порядок = порядок запроса) ──────
@@ -158,6 +159,7 @@ DOC_FLOWS: Dict[str, List[DocumentType]] = {
         _PHOTO, _PASSPORT,
         _RUSSIA_PASSPORT_PROPISKA, _RUSSIA_INN, _RUSSIA_SNILS,
         _RUSSIA_EDUCATION_DOC, _RUSSIA_WORK_BOOK, _RUSSIA_MILITARY_DOC,
+        _RUSSIA_BANK_DETAILS,
     ],
 }
 
@@ -282,7 +284,8 @@ DOC_PROMPTS: Dict[str, str] = {
     'russia_snils': '📄 Отправьте СНИЛС:',
     'russia_education_doc': '🎓 Отправьте документ об образовании (или пропустите):',
     'russia_work_book': '📖 Отправьте трудовую книжку или ЭТК с Госуслуг:',
-    'russia_military_doc': '🎖 Отправьте военный билет или приписное (или пропустите):',
+    'russia_military_doc': '🎖 Добавьте военный билет или приписное (фото всех страниц, где есть какие-либо записи):',
+    'russia_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
 }
 
 
