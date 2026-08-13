@@ -3,6 +3,7 @@ import os
 import sys
 import shutil
 import asyncio
+import tempfile
 import mimetypes
 import logging
 from flask import Flask, jsonify, request, send_from_directory
@@ -66,6 +67,52 @@ def get_worker_documents(worker_id):
         return jsonify(docs)
     except Exception as e:
         _logger.error("get_worker_documents(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/documents', methods=['POST'])
+def upload_document(worker_id):
+    """Загрузка/перезаливка документа из UI. multipart: doc_type, file, old_filename(optional)."""
+    try:
+        from datetime import datetime
+        from services.file_saver import FileSaver
+
+        doc_type = request.form.get('doc_type', '')
+        old_filename = request.form.get('old_filename', '') or None
+        file_storage = request.files.get('file')
+        if not file_storage:
+            return jsonify({"error": "No file"}), 400
+
+        tmp_dir = tempfile.mkdtemp(prefix='ui_doc_')
+        try:
+            src_ext = os.path.splitext(file_storage.filename or '')[-1].lower()
+            tmp_path = os.path.join(tmp_dir, 'upload' + (src_ext or '.jpg'))
+            file_storage.save(tmp_path)
+
+            is_valid, err = FileSaver.validate_file(tmp_path)
+            if not is_valid:
+                return jsonify({"error": err}), 400
+
+            if old_filename:
+                # Перезаливка: перезаписываем файл под старым именем
+                worker_dir = os.path.join(DOCS_DIR, worker_id)
+                os.makedirs(worker_dir, exist_ok=True)
+                new_path = os.path.join(worker_dir, os.path.basename(old_filename))
+                shutil.copy2(tmp_path, new_path)
+                run_async(db.replace_document(worker_id, doc_type, old_filename))
+            else:
+                FileSaver.save_document(tmp_path, worker_id, doc_type)
+
+            # Обновляем дату редактирования анкеты
+            worker = run_async(db.get_worker(worker_id))
+            if worker:
+                run_async(db.save_worker({**worker, 'updated_at': datetime.now().isoformat()}))
+
+            return jsonify({"ok": True})
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception as e:
+        _logger.error("upload_document(%s) error: %s", worker_id, e)
         return jsonify({"error": "Internal error"}), 500
 
 

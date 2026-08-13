@@ -295,14 +295,28 @@ class DocumentViewer(tk.Frame):
 
     def __init__(self, parent: tk.Widget,
                  doc_info: DocumentInfo,
-                 on_open: Optional[Callable[[Path], None]] = None):
+                 on_open: Optional[Callable[[Path], None]] = None,
+                 on_replace: Optional[Callable[[], None]] = None):
         super().__init__(parent, bg='white', relief=tk.GROOVE, borderwidth=1)
         self.doc_info = doc_info
         self.on_open = on_open
+        self.on_replace = on_replace
         self.doc_service = get_document_service()
         self.config = get_config()
 
         self._build_ui()
+
+    @staticmethod
+    def _format_date(value: str) -> str:
+        """Отформатировать дату из ISO в ДД.ММ.ГГГГ ЧЧ:ММ."""
+        if not value:
+            return ''
+        try:
+            from datetime import datetime
+            dt = value[:16].replace('T', ' ')
+            return datetime.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
+        except Exception:
+            return value[:16]
 
     def _build_ui(self) -> None:
         main = tk.Frame(self, bg='white')
@@ -312,10 +326,24 @@ class DocumentViewer(tk.Frame):
         tk.Label(main, text=self.doc_info.label,
                  font=('Arial', 10, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
 
-        # Кнопка «Скачать» под документом (если файл есть)
+        # Дата заливки документа под названием
+        if self.doc_info.uploaded_at:
+            fmt = self._format_date(self.doc_info.uploaded_at)
+            if fmt:
+                tk.Label(self, text=f"Залит: {fmt}",
+                         font=('Arial', 8), bg='white', fg='#888', anchor='w'
+                         ).pack(fill=tk.X, padx=8, pady=(0, 2))
+
+        # Кнопки «Скачать» и «Заменить» под документом (если файл есть)
         if self.doc_info.exists and self.doc_info.full_path:
             btn_frame = tk.Frame(self, bg='white')
             btn_frame.pack(fill=tk.X, padx=8, pady=(0, 5))
+            if self.on_replace:
+                tk.Button(btn_frame, text="📤 Заменить",
+                          command=self._replace,
+                          bg='#f39c12', fg='white', font=('Arial', 9),
+                          padx=10, relief=tk.FLAT, cursor='hand2'
+                          ).pack(side=tk.RIGHT, padx=(5, 0))
             tk.Button(btn_frame, text="⬇ Скачать",
                       command=self._download,
                       bg='#3498db', fg='white', font=('Arial', 9),
@@ -368,6 +396,11 @@ class DocumentViewer(tk.Frame):
     def _on_click(self) -> None:
         if self.on_open and self.doc_info.full_path:
             self.on_open(self.doc_info.full_path)
+
+    def _replace(self) -> None:
+        """Вызвать колбэк перезаливки документа."""
+        if self.on_replace:
+            self.on_replace()
 
     def _download(self) -> None:
         """Сохранить документ в выбранную пользователем директорию."""

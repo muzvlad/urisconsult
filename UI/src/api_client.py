@@ -100,9 +100,37 @@ class APIClient:
         w._meetings = data.get("_meetings") or []
         return w
 
-    def get_documents(self, worker_id: str) -> Dict[str, List[str]]:
+    def get_documents(self, worker_id: str) -> Dict[str, List[Dict[str, str]]]:
         data = self._get(f"/api/workers/{worker_id}/documents")
         return data if isinstance(data, dict) else {}
+
+    def replace_document(self, worker_id: str, doc_type: str,
+                         old_filename: str, file_path: Path) -> bool:
+        """Перезалить документ: заменить файл с тем же именем."""
+        url = self.base_url + f"/api/workers/{worker_id}/documents"
+        try:
+            boundary = "----urisconsult" + str(id(file_path))
+            parts = []
+            parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"doc_type\"\r\n\r\n{doc_type}\r\n")
+            parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"old_filename\"\r\n\r\n{old_filename}\r\n")
+            filename = file_path.name
+            parts.append(
+                f"--{boundary}\r\n"
+                f"Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+                f"Content-Type: application/octet-stream\r\n\r\n"
+            )
+            head = "".join(parts).encode()
+            tail = f"\r\n--{boundary}--\r\n".encode()
+            body = head + file_path.read_bytes() + tail
+
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                result = json.loads(resp.read().decode())
+            return bool(result.get("ok"))
+        except Exception as e:
+            logger.warning("replace_document %s failed: %s", url, e)
+            return False
 
     def get_meetings(self, worker_id: str) -> List[dict]:
         data = self._get(f"/api/workers/{worker_id}/meetings")

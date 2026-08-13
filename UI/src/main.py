@@ -424,6 +424,31 @@ class DBViewerApp:
             log_error(f"Error deleting worker {worker.id}: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка: {e}")
 
+    def _replace_document(self, worker: Worker, doc: DocumentInfo) -> None:
+        """Перезалить документ анкеты из UI."""
+        from tkinter import filedialog
+
+        file_path = filedialog.askopenfilename(
+            title=f"Выберите файл для замены: {doc.label}",
+            filetypes=[("Изображения и PDF", "*.jpg *.jpeg *.png *.bmp *.gif *.pdf"),
+                       ("Все файлы", "*.*")]
+        )
+        if not file_path:
+            return
+
+        path = Path(file_path)
+        try:
+            if self.doc_service.replace_document(worker, doc.doc_type, doc.filename, path):
+                log_info(f"Document {doc.doc_type} replaced for worker {worker.id}")
+                self._refresh_current_worker()
+            else:
+                show_error(self.root, "Ошибка", "Не удалось заменить документ")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+        except Exception as e:
+            log_error(f"Error replacing document {doc.doc_type}: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
     def _refresh_current_worker(self) -> None:
         """Обновить отображение текущего сотрудника."""
         if self.current_worker:
@@ -489,23 +514,18 @@ class DBViewerApp:
         # Даты
         dates_frame = tk.Frame(left_col, bg='white')
         dates_frame.pack(anchor=tk.W, pady=(8, 0))
-        if worker.created_at:
-            try:
-                dt = worker.created_at[:16].replace('T', ' ')
-                from datetime import datetime as _dt
-                dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
-            except Exception:
-                dt = worker.created_at[:16]
-            tk.Label(dates_frame, text=f"Дата заведения: {dt}",
-                     font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
-        if worker.updated_at:
-            try:
-                dt = worker.updated_at[:16].replace('T', ' ')
-                from datetime import datetime as _dt
-                dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
-            except Exception:
-                dt = worker.updated_at[:16]
-            tk.Label(dates_frame, text=f"Последнее редактирование: {dt}",
+        for field, label in (('created_at', 'Дата заведения'), ('updated_at', 'Последнее редактирование')):
+            raw = getattr(worker, field, '') or ''
+            if raw:
+                try:
+                    dt = raw[:16].replace('T', ' ')
+                    from datetime import datetime as _dt
+                    dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    dt = raw[:16]
+            else:
+                dt = '—'
+            tk.Label(dates_frame, text=f"{label}: {dt}",
                      font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
 
         tk.Label(right_col, text=f"ИД: {worker.id}",
@@ -607,20 +627,25 @@ class DBViewerApp:
 
             existing_docs = []
             missing_docs: list[tuple[str, str, str, str]] = []
-            for doc_type, filenames in db_docs.items():
-                if isinstance(filenames, str):
-                    filenames = [filenames]
-                if not filenames or doc_type == 'photo':
+            for doc_type, entries in db_docs.items():
+                if isinstance(entries, str):
+                    entries = [{'filename': entries, 'created_at': ''}]
+                elif isinstance(entries, dict):
+                    entries = [entries]
+                if not entries or doc_type == 'photo':
                     continue
                 label = self.doc_service.get_document_label(doc_type)
-                for i, filename in enumerate(filenames, 1):
+                for i, entry in enumerate(entries, 1):
+                    filename = entry.get('filename', '') if isinstance(entry, dict) else str(entry)
+                    uploaded_at = entry.get('created_at', '') if isinstance(entry, dict) else ''
                     full_path = self.api.download_file(worker.id, filename)
                     if full_path and full_path.exists() and full_path.stat().st_size > 0:
                         existing_docs.append(DocumentInfo(
                             doc_type=doc_type,
-                            label=label + (f" ({i})" if len(filenames) > 1 else ""),
+                            label=label + (f" ({i})" if len(entries) > 1 else ""),
                             prefix='', filename=filename,
                             exists=True, full_path=full_path,
+                            uploaded_at=uploaded_at,
                         ))
                     else:
                         if not full_path:
@@ -650,9 +675,11 @@ class DBViewerApp:
                          font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
 
                 for doc in existing_docs:
-                    DocumentViewer(self.scrollable_frame, doc, self.doc_service.open_file).pack(
-                        fill=tk.X, padx=5, pady=3
-                    )
+                    DocumentViewer(
+                        self.scrollable_frame, doc,
+                        self.doc_service.open_file,
+                        on_replace=lambda d=doc: self._replace_document(worker, d),
+                    ).pack(fill=tk.X, padx=5, pady=3)
 
             if missing_docs:
                 miss_frame = tk.Frame(self.scrollable_frame, bg='#fff3cd', relief=tk.RAISED, borderwidth=1)

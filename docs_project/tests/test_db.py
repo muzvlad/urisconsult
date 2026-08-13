@@ -138,9 +138,9 @@ class TestWorkerCRUD:
         assert worker['citizenship'] == 'Патент'
 
         docs = worker['documents']
-        assert docs['photo'] == ['photo_00001.jpg']
-        assert docs['passport'] == ['pas_00001.jpg']
-        assert docs['patent_snils'] == ['snils_00001.jpg']
+        assert docs['photo'][0]['filename'] == 'photo_00001.jpg'
+        assert docs['passport'][0]['filename'] == 'pas_00001.jpg'
+        assert docs['patent_snils'][0]['filename'] == 'snils_00001.jpg'
 
     def test_get_nonexistent_worker(self, fresh_db):
         db_path, users_dir, docs_dir = fresh_db
@@ -319,7 +319,7 @@ class TestWorkerCRUD:
         docs = asyncio.get_event_loop().run_until_complete(
             db_module.get_worker_documents('00001')
         )
-        assert docs['photo'] == ['photo_v2.jpg']
+        assert [d['filename'] for d in docs['photo']] == ['photo_v2.jpg']
 
     def test_save_documents_multi_file(self, fresh_db, sample_personal_data):
         """Несколько файлов одного документа сохраняются и читаются."""
@@ -337,7 +337,44 @@ class TestWorkerCRUD:
         docs = asyncio.get_event_loop().run_until_complete(
             db_module.get_worker_documents('00001')
         )
-        assert docs['vnzh_work_book'] == ['trud.jpg', 'trud_2.jpg']
+        assert [d['filename'] for d in docs['vnzh_work_book']] == ['trud.jpg', 'trud_2.jpg']
+
+    def test_replace_document(self, fresh_db, sample_personal_data):
+        """Перезаливка документа удаляет старую запись."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_worker(sample_personal_data)
+        )
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_documents('00001', {'photo': 'photo_v1.jpg'})
+        )
+        asyncio.get_event_loop().run_until_complete(
+            db_module.replace_document('00001', 'photo', 'photo_v1.jpg')
+        )
+
+        docs = asyncio.get_event_loop().run_until_complete(
+            db_module.get_worker_documents('00001')
+        )
+        assert docs.get('photo') in (None, [])
+
+    def test_save_worker_fills_dates(self, fresh_db, sample_personal_data):
+        """save_worker гарантирует created_at/updated_at."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+
+        data = sample_personal_data.copy()
+        data.pop('created_at', None)
+        data.pop('updated_at', None)
+        asyncio.get_event_loop().run_until_complete(db_module.save_worker(data))
+
+        worker = asyncio.get_event_loop().run_until_complete(db_module.get_worker('00001'))
+        assert worker['created_at']
+        assert worker['updated_at']
 
 
 class TestWorkerMeetings:

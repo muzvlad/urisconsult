@@ -31,6 +31,7 @@ class DocumentInfo:
     filename: str = ""
     exists: bool = False
     full_path: Optional[Path] = None
+    uploaded_at: str = ""
 
 
 class DocumentService:
@@ -58,21 +59,24 @@ class DocumentService:
 
         result = []
         for doc in flow:
-            filenames = db_docs.get(doc.key, [])
-            if isinstance(filenames, str):
-                filenames = [filenames]
-            if not filenames:
+            entries = db_docs.get(doc.key, [])
+            if isinstance(entries, dict):
+                entries = [entries]
+            if not entries:
                 result.append(DocumentInfo(
                     doc_type=doc.key, label=doc.label, prefix=doc.prefix,
                 ))
                 continue
-            for i, filename in enumerate(filenames, 1):
-                label = doc.label + (f" ({i})" if len(filenames) > 1 else "")
+            for i, entry in enumerate(entries, 1):
+                filename = entry.get('filename', '') if isinstance(entry, dict) else str(entry)
+                uploaded_at = entry.get('created_at', '') if isinstance(entry, dict) else ''
+                label = doc.label + (f" ({i})" if len(entries) > 1 else "")
                 info = DocumentInfo(
                     doc_type=doc.key,
                     label=label,
                     prefix=doc.prefix,
                     filename=filename,
+                    uploaded_at=uploaded_at,
                 )
                 info.full_path = self._find_document_file(worker.id, doc.prefix, filename)
                 info.exists = info.full_path is not None
@@ -97,6 +101,13 @@ class DocumentService:
     def find_photo(self, worker_id: str) -> Optional[Path]:
         """Найти фото сотрудника."""
         return self._find_document_file(worker_id, "photo")
+
+    def replace_document(self, worker: Worker, doc_type: str,
+                         old_filename: str, new_file_path: Path) -> bool:
+        """Перезалить документ анкеты из UI."""
+        from src.api_client import get_db_service
+        api = get_db_service()
+        return api.replace_document(worker.id, doc_type, old_filename, new_file_path)
 
     def load_thumbnail(self, path: Path, size: Optional[Tuple[int, int]] = None) -> Optional[ImageTk.PhotoImage]:
         """Загрузить и закэшировать миниатюру."""
@@ -370,17 +381,20 @@ class PDFExportService:
                     c.setFont(self._font_name, 10)
                     update_progress()
 
-                filenames_doc = db_docs.get(doc.key, [])
-                if isinstance(filenames_doc, str):
-                    filenames_doc = [filenames_doc]
-                if filenames_doc and worker.id:
-                    filename_doc = filenames_doc[0]
+                entries = db_docs.get(doc.key, [])
+                if isinstance(entries, str):
+                    entries = [{'filename': entries, 'created_at': ''}]
+                elif isinstance(entries, dict):
+                    entries = [entries]
+                if entries and worker.id:
+                    filename_doc = (entries[0].get('filename', '')
+                                    if isinstance(entries[0], dict) else str(entries[0]))
                     doc_path = self.doc_service._find_document_file(worker.id, doc.prefix, filename_doc)
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
                     update_progress()
-                    if len(filenames_doc) > 1:
-                        c.drawString(70, y - 12, f"  + ещё {len(filenames_doc) - 1} файл(а)")
+                    if len(entries) > 1:
+                        c.drawString(70, y - 12, f"  + ещё {len(entries) - 1} файл(а)")
                     if doc_path:
                         try:
                             img = ImageReader(str(doc_path))

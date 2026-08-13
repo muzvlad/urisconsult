@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.20 (10.08.2026)
+
+### Даты анкеты и документов + перезаливка документов из UI
+
+- `bot/services/db.py`: миграция v4→v5 — backfill пустых `created_at`/`updated_at` у старых анкет;
+  `save_worker` гарантирует обе даты; `get_worker_documents`/`documents` отдают подробный формат
+  `{doc_type: [{filename, created_at}]}`; новый `replace_document`
+- `bot/api_server.py`: эндпоинт `POST /api/workers/<id>/documents` — загрузка/перезаливка файла
+  (multipart), обновляет `updated_at` анкеты
+- UI: дата заливки под названием каждого документа («Залит: ДД.ММ.ГГГГ ЧЧ:ММ»), кнопка
+  «📤 Заменить» в `DocumentViewer`, `DocumentInfo.uploaded_at`, `replace_document` в API-клиенте;
+  в карточке анкеты обе даты отображаются всегда (пусто → «—»)
+- `docs_project/tests/test_db.py`: тесты backfill дат, `replace_document`, подробного контракта
+
+### Документация
+
+- Спека `009-doc-dates-and-reupload.md` завершена
+
 ## v1.19.1 (10.08.2026)
 
 ### Категория «Россия»: банковские реквизиты + multi-file военный билет

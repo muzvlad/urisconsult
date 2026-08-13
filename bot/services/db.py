@@ -23,7 +23,7 @@ from config.documents import DOC_FLOWS, DOC_PREFIXES
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
@@ -140,6 +140,8 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v2_to_v3(db)
     if from_version < 4:
         await _migrate_v3_to_v4(db)
+    if from_version < 5:
+        await _migrate_v4_to_v5(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -327,6 +329,21 @@ async def _migrate_v3_to_v4(db: aiosqlite.Connection):
     await db.commit()
     logger.info("Миграция v3→v4: снят UNIQUE(worker_id, doc_type) в worker_documents")
 
+# ─── Миграция v4 → v5: backfill дат created_at/updated_at ─────────────
+
+async def _migrate_v4_to_v5(db: aiosqlite.Connection):
+    """Миграция v4→v5: заполнить пустые created_at/updated_at у старых анкет."""
+    await db.execute("""
+        UPDATE workers SET created_at = updated_at
+        WHERE created_at IS NULL OR created_at = ''
+    """)
+    await db.execute("""
+        UPDATE workers SET updated_at = created_at
+        WHERE updated_at IS NULL OR updated_at = ''
+    """)
+    await db.commit()
+    logger.info("Миграция v4→v5: backfill дат created_at/updated_at завершён")
+
 async def _migrate_from_json(db: aiosqlite.Connection):
     """Миграция существующих JSON-файлов в БД."""
     if not os.path.exists(USERS_DIR):
@@ -488,17 +505,25 @@ async def get_next_id() -> str:
 
 async def save_worker(data: dict) -> str:
     """Сохранить работника в БД (INSERT или UPDATE по id)."""
+    from datetime import datetime
     async with _get_conn() as db:
         worker_id = data.get('id', '')
+
+        # Гарантируем даты: created_at только при INSERT, updated_at при каждом сохранении
+        now = datetime.now().isoformat()
+        created_at = data.get('created_at') or now
+        updated_at = data.get('updated_at') or now
 
         personal_keys = [
             'id', 'name', 'citizenship', 'gender', 'position', 'object',
             'object_address', 'manager', 'phone_main', 'phone_additional',
             'email', 'date', 'registration', 'marital_status', 'relatives_json',
-            'telegram_id', 'telegram_username', 'created_at', 'updated_at',
+            'telegram_id', 'telegram_username',
         ]
 
         personal = {k: data.get(k, '' if k != 'telegram_id' else None) for k in personal_keys}
+        personal['created_at'] = created_at
+        personal['updated_at'] = updated_at
 
         placeholders = ', '.join(['?'] * len(personal))
         cols = ', '.join(personal.keys())
@@ -550,6 +575,16 @@ async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
         await db.commit()
 
 
+async def replace_document(worker_id: str, doc_type: str, old_filename: str):
+    """Удалить старую запись документа (перезаливка из UI). created_at обновится при вставке."""
+    async with _get_conn() as db:
+        await db.execute(
+            "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ? AND filename = ?",
+            (worker_id, doc_type, old_filename)
+        )
+        await db.commit()
+
+
 async def get_worker(worker_id: str) -> dict | None:
     """Получить работника по ID (с документами и встречами)."""
     async with _get_conn() as db:
@@ -561,13 +596,16 @@ async def get_worker(worker_id: str) -> dict | None:
         result = dict(row)
 
         cursor = await db.execute(
-            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ? ORDER BY id",
+            "SELECT doc_type, filename, created_at FROM worker_documents WHERE worker_id = ? ORDER BY id",
             (worker_id,)
         )
         docs = await cursor.fetchall()
-        doc_map: dict[str, list[str]] = {}
+        doc_map: dict[str, list[dict]] = {}
         for row in docs:
-            doc_map.setdefault(row[0], []).append(row[1])
+            doc_map.setdefault(row[0], []).append({
+                'filename': row[1],
+                'created_at': row[2] or '',
+            })
         result['documents'] = doc_map
 
         cursor = await db.execute(
@@ -590,17 +628,20 @@ async def get_all_workers() -> list[dict]:
         return [dict(row) for row in rows]
 
 
-async def get_worker_documents(worker_id: str) -> dict[str, list[str]]:
-    """Получить документы работника: {doc_type: [filename, ...]}."""
+async def get_worker_documents(worker_id: str) -> dict[str, list[dict]]:
+    """Получить документы работника: {doc_type: [{filename, created_at}, ...]}."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT doc_type, filename FROM worker_documents WHERE worker_id = ? ORDER BY id",
+            "SELECT doc_type, filename, created_at FROM worker_documents WHERE worker_id = ? ORDER BY id",
             (worker_id,)
         )
         rows = await cursor.fetchall()
-        result: dict[str, list[str]] = {}
+        result: dict[str, list[dict]] = {}
         for row in rows:
-            result.setdefault(row[0], []).append(row[1])
+            result.setdefault(row[0], []).append({
+                'filename': row[1],
+                'created_at': row[2] or '',
+            })
         return result
 
 
