@@ -5,6 +5,7 @@
 Новые импорты: `from config.documents import DOC_FLOWS, get_doc_flow, ...`
 """
 import os
+import sys
 from dotenv import load_dotenv
 
 from config.documents import (  # noqa: F401 — re-export
@@ -17,6 +18,10 @@ from config.documents import (  # noqa: F401 — re-export
 CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CONFIG_DIR)  # bot/
 PROJECT_ROOT = os.path.dirname(BASE_DIR)  # корень проекта
+
+# Чтобы `import shared` работал при запуске из bot/
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 

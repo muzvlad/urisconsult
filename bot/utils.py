@@ -68,7 +68,6 @@ _BASE_FIELDS = [
     ('position', '💼 Должность'),
     ('phone_main', '📞 Основной телефон'),
     ('phone_additional', '📞 Доп. телефон'),
-    ('email', '📧 Email'),
 ]
 
 
@@ -102,8 +101,6 @@ _FIELD_PROMPTS = {
     'position': "Введите должность:",
     'phone_main': "Введите основной телефон:",
     'phone_additional': "Введите доп. телефон (или 'пропустить'):",
-    'email': "Введите email:",
-    'marital_status': "Введите семейное положение:",
 }
 
 

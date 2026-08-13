@@ -95,10 +95,7 @@ class APIClient:
         data = self._get(f"/api/workers/{worker_id}")
         if not data:
             return None
-        w = _dict_to_worker(data)
-        w._documents = data.get("_documents") or {}
-        w._meetings = data.get("_meetings") or []
-        return w
+        return _dict_to_worker(data)
 
     def get_documents(self, worker_id: str) -> Dict[str, List[Dict[str, str]]]:
         data = self._get(f"/api/workers/{worker_id}/documents")

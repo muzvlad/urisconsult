@@ -93,7 +93,7 @@ class TestWorkerForm:
         basic_states = [
             'name', 'citizenship', 'gender', 'position', 'object',
             'object_address', 'manager', 'phone_main', 'phone_additional',
-            'email', 'date',
+            'date',
         ]
         for state_name in basic_states:
             assert hasattr(WorkerForm, state_name), \

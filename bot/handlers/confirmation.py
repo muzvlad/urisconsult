@@ -37,8 +37,7 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     text += f"📍 Адрес: {data.get('object_address', 'Не указано')}\n"
     text += f"💼 Должность: {data.get('position', 'Не указано')}\n"
     text += f"📞 Основной тел.: {data.get('phone_main', 'Не указано')}\n"
-    text += f"📞 Доп. тел.: {data.get('phone_additional', 'Не указано')}\n"
-    text += f"📧 Email: {data.get('email', 'Не указано')}\n\n"
+    text += f"📞 Доп. тел.: {data.get('phone_additional', 'Не указано')}\n\n"
 
     # Документы — проверяем temp_path ИЛИ существующий файл в БД
     text += "📎 Загруженные файлы:\n"
@@ -197,7 +196,6 @@ async def process_edit(callback: types.CallbackQuery, state: FSMContext):
         'position': '💼 Должность',
         'phone_main': '📞 Основной телефон',
         'phone_additional': '📞 Дополнительный телефон',
-        'email': '📧 Email',
         'photo': '📸 Фото',
         'passport': '🪪 Паспорт',
     }

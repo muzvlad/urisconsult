@@ -29,10 +29,10 @@ def _build_worker_form() -> type:
     states = {
         'name', 'citizenship', 'gender', 'position', 'object',
         'object_address', 'manager', 'phone_main', 'phone_additional',
-        'email', 'date',
+        'date',
         'russia_marital_status', 'russia_relatives',
         'confirmation', 'edit',
-        'fix_choice', 'fix_value',
+        'fix_value',
     }
 
     # Добавляем состояния для документов из конфига
@@ -222,17 +222,7 @@ async def process_phone_additional(message: types.Message, state: FSMContext):
     await state.set_state(getattr(get_worker_form(), first_doc.key))
 
 
-async def process_email(message: types.Message, state: FSMContext):
-    email = message.text.strip()
-    if not validate_email(email):
-        await message.answer("❌ Пожалуйста, введите корректный email (пример: name@domain.com)")
-        return
-    await state.update_data(email=email)
-    await message.answer("📅 Введите дату рождения (в формате ДД.ММ.ГГГГ):")
-    await state.set_state(get_worker_form().date)
-
-
-# ─── Дополнительные поля для России ─────────────────────────────────
+# ─── Дополнительные поля для России ─────────────────────────────────# ─── Дополнительные поля для России ─────────────────────────────────
 
 async def process_russia_marital_status(message: types.Message, state: FSMContext):
     marital = message.text.strip()

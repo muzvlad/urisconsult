@@ -16,7 +16,7 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import messagebox
 
-from src.config import get_paths, get_config, get_bot_token, get_document_config
+from src.config import get_paths, get_config, get_bot_token, get_document_config, normalize_citizenship
 from src.models import Worker
 
 
@@ -49,12 +49,7 @@ class DocumentService:
         from src.api_client import get_db_service
         db_docs = get_db_service().get_documents(worker.id)
         citizenship = worker.citizenship
-        # Нормализация citizenship для совпадения с ключами DOC_FLOWS
-        citizenship_map = {
-            'Российская Федерация': 'Россия',
-            'РФ': 'Россия',
-        }
-        normalized = citizenship_map.get(citizenship, citizenship)
+        normalized = normalize_citizenship(citizenship)
         flow = self._doc_flows.get(normalized, self._doc_flows.get("Патент", []))
 
         result = []
@@ -223,7 +218,7 @@ class TelegramService:
             'name': 'ФИО', 'citizenship': 'Категория', 'gender': 'Пол',
             'position': 'Должность', 'object': 'Объект', 'object_address': 'Адрес',
             'manager': 'Менеджер', 'phone_main': 'Основной телефон',
-            'phone_additional': 'Доп. телефон', 'email': 'Email',
+            'phone_additional': 'Доп. телефон',
             'date': 'Дата рождения',
         }
         doc_labels = get_document_config()[1]
@@ -344,7 +339,6 @@ class PDFExportService:
             ('manager', 'Менеджер'), ('object', 'Объект'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Телефон'), ('phone_additional', 'Доп. телефон'),
-            ('email', 'Email'),
         ]
         for key, label in profile:
             val = getattr(worker, key, '')
@@ -371,8 +365,7 @@ class PDFExportService:
         update_progress()
         y -= 20
         citizenship = worker.citizenship
-        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
-        normalized = citizenship_map.get(citizenship, citizenship)
+        normalized = normalize_citizenship(citizenship)
         if normalized in self.doc_service._doc_flows:
             c.setFont(self._font_name, 14)
             c.drawString(50, y, f"Документы ({citizenship}):")
@@ -383,7 +376,7 @@ class PDFExportService:
             from src.api_client import get_db_service
             db_docs = get_db_service().get_documents(worker.id)
 
-            for doc in self.doc_service._doc_flows[citizenship]:
+            for doc in self.doc_service._doc_flows[normalized]:
                 if y < 50:
                     c.showPage()
                     y = height - 50
@@ -465,8 +458,7 @@ class PDFExportService:
         if self.doc_service.find_photo(worker.id):
             count += 1
         citizenship = worker.citizenship
-        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
-        normalized = citizenship_map.get(citizenship, citizenship)
+        normalized = normalize_citizenship(citizenship)
         if normalized in self.doc_service._doc_flows:
             db_docs = get_db_service().get_documents(worker.id)
             for doc in self.doc_service._doc_flows[normalized]:

@@ -6,13 +6,13 @@
 import os
 import sys
 import asyncio
-import sqlite3
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from config import DB_PATH, USERS_DIR, DOCS_DIR
-from services.db import init_db, get_db
+from services.db import init_db, _get_conn
 
 
 TEST_WORKERS = [
@@ -27,7 +27,6 @@ TEST_WORKERS = [
         'manager': 'Иванов И.И.',
         'phone_main': '+79991112233',
         'phone_additional': '+79993334455',
-        'email': 'testovyi.alexey@mail.ru',
         'date': '15.03.1992',
         'registration': 'Регистрация до 31.12.2026',
         'status': 'pending',
@@ -43,7 +42,6 @@ TEST_WORKERS = [
         'manager': 'Петров П.П.',
         'phone_main': '+79992223344',
         'phone_additional': 'Не указана',
-        'email': 'testovaya.maria@gmail.com',
         'date': '22.07.1998',
         'registration': 'Регистрация до 01.09.2027',
         'status': 'accepted',
@@ -59,7 +57,6 @@ TEST_WORKERS = [
         'manager': 'Козлов К.К.',
         'phone_main': '+79994445566',
         'phone_additional': 'Не указан',
-        'email': 'testovyi.dmitry@yandex.ru',
         'date': '10.11.1988',
         'registration': 'Регистрация до 15.06.2026',
         'status': 'pending',
@@ -75,11 +72,10 @@ TEST_WORKERS = [
         'manager': 'Сидоров С.С.',
         'phone_main': '+79995556677',
         'phone_additional': '+79997778899',
-        'email': 'testovaya.elena@bk.ru',
         'date': '05.01.1995',
         'registration': 'Постоянная прописка',
         'status': 'rejected',
-        'rejection_reasons': '["email", "phone_additional"]',
+        'rejection_reasons': '["phone_additional"]',
     },
     {
         'id': '00005',
@@ -92,7 +88,6 @@ TEST_WORKERS = [
         'manager': 'Никонов Н.Н.',
         'phone_main': '+79998889900',
         'phone_additional': 'Не указан',
-        'email': 'testovyi.oleg@mail.ru',
         'date': '18.09.1990',
         'registration': 'ВНЖ до 20.03.2028',
         'status': 'pending',
@@ -108,25 +103,23 @@ async def create_test_workers():
     await init_db()
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-    db = await get_db()
 
-    for w in TEST_WORKERS:
-        await db.execute("""
-            INSERT OR REPLACE INTO workers
-            (id, name, citizenship, gender, position, object, object_address,
-             manager, phone_main, phone_additional, email, date, registration,
-             status, rejection_reasons, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            w['id'], w['name'], w['citizenship'], w['gender'], w['position'],
-            w['object'], w['object_address'], w['manager'],
-            w['phone_main'], w['phone_additional'], w['email'], w['date'],
-            w['registration'], w.get('status', 'pending'),
-            w.get('rejection_reasons', '[]'), now
-        ))
-
-    await db.commit()
-    await db.close()
+    async with _get_conn() as conn:
+        for w in TEST_WORKERS:
+            await conn.execute("""
+                INSERT OR REPLACE INTO workers
+                (id, name, citizenship, gender, position, object, object_address,
+                 manager, phone_main, phone_additional, date, registration,
+                 status, rejection_reasons, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                w['id'], w['name'], w['citizenship'], w['gender'], w['position'],
+                w['object'], w['object_address'], w['manager'],
+                w['phone_main'], w['phone_additional'], w['date'],
+                w['registration'], w.get('status', 'pending'),
+                w.get('rejection_reasons', '[]'), now
+            ))
+        await conn.commit()
     print(f"Создано {len(TEST_WORKERS)} тестовых анкет в {DB_PATH}")
 
     for w in TEST_WORKERS:

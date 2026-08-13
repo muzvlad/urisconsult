@@ -302,62 +302,12 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
     return {}, {}, {}
 
 
-# ─── Константы БД (импортируются из общего модуля) ───
-import sys as _sys
-
-def _import_shared():
-    """Импортировать shared модуль с поиском по нескольким путям."""
-    # Вариант 1: уже есть в sys.path (dev режим)
-    try:
-        import shared
-        return shared
-    except ImportError:
-        pass
-
-    # Вариант 2: PyInstaller — ищем в _MEIPASS
-    if getattr(_sys, "frozen", False):
-        meipass = Path(_sys._MEIPASS)
-        for name in ["shared", "Shared"]:
-            p = meipass / name
-            if p.exists() and str(p) not in _sys.path:
-                _sys.path.insert(0, str(p))
-            try:
-                import shared
-                return shared
-            except ImportError:
-                pass
-        # Также пробуем импортировать как пакет из _MEIPASS
-        try:
-            sys.path.insert(0, str(meipass))
-            import shared
-            return shared
-        except ImportError:
-            pass
-
-    # Вариант 3: корень проекта
-    root = Path(__file__).parent.parent.parent
-    for name in ["shared", "Shared"]:
-        p = root / name
-        if p.exists() and str(p) not in _sys.path:
-            _sys.path.insert(0, str(p))
-    try:
-        import shared
-        return shared
-    except ImportError:
-        raise ImportError("Cannot find 'shared' module. Checked: sys.path, _MEIPASS, project root")
-
-_shared = _import_shared()
-
-WORKERS_TABLE = _shared.WORKERS_TABLE
-WORKER_DOCUMENTS_TABLE = _shared.WORKER_DOCUMENTS_TABLE
-WORKER_MEETINGS_TABLE = _shared.WORKER_MEETINGS_TABLE
-WORKER_SCHEMA = _shared.WORKER_SCHEMA
-WORKER_DOCUMENTS_SCHEMA = _shared.WORKER_DOCUMENTS_SCHEMA
-WORKER_MEETINGS_SCHEMA = _shared.WORKER_MEETINGS_SCHEMA
-MIGRATIONS = _shared.MIGRATIONS
-
-
 # ─── Вспомогательные функции ───
+
+def normalize_citizenship(citizenship: str) -> str:
+    """Привести значение гражданства к ключам DOC_FLOWS (легаси-значения → «Россия»)."""
+    return {'Российская Федерация': 'Россия', 'РФ': 'Россия'}.get(citizenship, citizenship)
+
 
 def center_window(window: "tk.Tk | tk.Toplevel", width: int, height: int) -> None:
     """Центрировать окно на экране."""

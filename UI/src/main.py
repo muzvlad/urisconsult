@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
-from src.config import get_config, get_paths, center_window, get_document_config, FONT_FAMILY
+from src.config import get_config, get_paths, center_window, get_document_config, normalize_citizenship, FONT_FAMILY
 from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
@@ -567,27 +567,18 @@ class DBViewerApp:
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # Родственники
-        try:
-            relatives = getattr(worker, 'relatives_json', '[]')
-            if isinstance(relatives, str):
-                try:
-                    import json
-                    relatives = json.loads(relatives)
-                except (json.JSONDecodeError, TypeError):
-                    relatives = []
-            if relatives:
-                rel_text = "Родственники:\n"
-                for i, rel in enumerate(relatives, 1):
-                    if isinstance(rel, dict):
-                        name = rel.get('name', '')
-                        year = rel.get('birth_year', '')
-                        phone = rel.get('phone', '')
-                        rel_text += f"  {i}. {name}, {year}, {phone}\n"
-                tk.Label(info_inner, text=rel_text.strip(),
-                         font=(FONT_FAMILY, 10), bg='white', anchor='w',
-                         wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
-        except Exception as e:
-            pass
+        relatives = getattr(worker, 'relatives', None) or []
+        if relatives:
+            rel_text = "Родственники:\n"
+            for i, rel in enumerate(relatives, 1):
+                if isinstance(rel, dict):
+                    name = rel.get('name', '')
+                    year = rel.get('birth_year', '')
+                    phone = rel.get('phone', '')
+                    rel_text += f"  {i}. {name}, {year}, {phone}\n"
+            tk.Label(info_inner, text=rel_text.strip(),
+                     font=(FONT_FAMILY, 10), bg='white', anchor='w',
+                     wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # ── Встречи ──
         meetings = self.api.get_meetings(worker.id)
@@ -660,8 +651,7 @@ class DBViewerApp:
             if existing_docs or missing_docs:
                 # Порядок документов — из конфига бота (как в анкете), а не из БД
                 flows, _, _ = get_document_config()
-                citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
-                normalized = citizenship_map.get(citizenship, citizenship)
+                normalized = normalize_citizenship(citizenship)
                 flow_keys = [d.key for d in flows.get(normalized, flows.get('Патент', []))]
                 order = {k: i for i, k in enumerate(flow_keys)}
                 existing_docs.sort(key=lambda d: order.get(d.doc_type, 9999))

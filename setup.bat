@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title URIS Consult Setup
 
 echo ========================================

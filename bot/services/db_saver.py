@@ -52,7 +52,6 @@ class DBSaver:
             'manager': data.get('manager', ''),
             'phone_main': data.get('phone_main', ''),
             'phone_additional': data.get('phone_additional', ''),
-            'email': data.get('email', ''),
             'date': data.get('date', ''),
             'registration': data.get('registration', ''),
             'marital_status': data.get('russia_marital_status', ''),

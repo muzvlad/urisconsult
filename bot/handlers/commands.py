@@ -17,7 +17,7 @@ from aiogram.fsm.state import default_state
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 from config import DOCS_DIR
-from config.documents import DOC_FLOWS, DOC_LABELS, FIELD_LABELS, get_doc_flow
+from config.documents import DOC_LABELS, FIELD_LABELS
 from handlers.registration import get_worker_form
 from services import db
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -34,7 +34,10 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
     await callback.answer()
 
     data = callback.data
-    worker_id = data.split(":")[1]
+    parts = data.split(":")
+    if len(parts) != 2 or not parts[1]:
+        return
+    worker_id = parts[1]
 
     if data.startswith("fix_rejected:"):
         worker = await db.get_worker(worker_id)
@@ -52,7 +55,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         worker_data = {'id': worker_id}
         for k in ['name', 'citizenship', 'gender', 'date', 'manager',
                    'object', 'object_address', 'position', 'phone_main',
-                   'phone_additional', 'email']:
+                   'phone_additional']:
             worker_data[k] = worker.get(k)
         await state.update_data(**worker_data)
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
@@ -130,17 +133,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await state.set_state(get_worker_form().name)
 
 
-def _get_fix_keyboard():
-    """Клавиатура для выбора: исправить или новая анкета."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Исправить анкету")],
-            [KeyboardButton(text="Новая анкета")],
-        ],
-        resize_keyboard=True
-    )
-
-
 async def _find_rejected_worker(telegram_id: int) -> dict | None:
     """Найти отклонённую анкету по telegram_id."""
     return await db.fetch_one(
@@ -157,52 +149,6 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         "Заполнение анкеты отменено.\nЧтобы начать заново, нажмите кнопку ниже:",
         reply_markup=get_start_keyboard()
     )
-
-
-async def process_fix_choice(message: types.Message, state: FSMContext):
-    """Обработка выбора: исправить или новая анкета."""
-    data = await state.get_data()
-    rejected_worker_id = data.get('rejected_worker_id')
-    reasons = data.get('rejection_reasons', [])
-
-    if message.text == "Исправить анкету":
-        await message.answer(
-            "Начинаем исправление анкеты.\n"
-            "Будет предложено исправить только отклонённые поля.",
-            reply_markup=types.ReplyKeyboardRemove()
-        )
-
-        worker = await db.get_worker(rejected_worker_id)
-        if worker:
-            worker_data = {}
-            for k in ['name', 'citizenship', 'gender', 'date', 'manager',
-                       'object', 'object_address', 'position', 'phone_main',
-                       'phone_additional', 'email']:
-                worker_data[k] = worker.get(k)
-            await state.update_data(**worker_data)
-            await state.update_data(editing_rejected=True, rejection_reasons=reasons)
-
-        if reasons:
-            first = reasons[0]
-            await _ask_rejected_field(message, state,
-                                      first['key'] if isinstance(first, dict) else str(first),
-                                      reasons, 0)
-        else:
-            await message.answer("Введите ваше ФИО:")
-            await state.set_state(get_worker_form().name)
-
-    elif message.text == "Новая анкета":
-        await db.resubmit_worker(rejected_worker_id)
-        await state.clear()
-        await message.answer(
-            "Начинаем заполнение новой анкеты.\nВведите ваше ФИО полностью:",
-            reply_markup=types.ReplyKeyboardRemove()
-        )
-        await state.set_state(get_worker_form().name)
-
-    else:
-        await message.answer("Пожалуйста, выберите действие:",
-                             reply_markup=_get_fix_keyboard())
 
 
 # ─── Все текстовые поля в режиме исправления ловятся здесь ───────────
@@ -339,9 +285,6 @@ def register_commands(dp, form_class):
                                F.data.startswith("fix_rejected:"))
     dp.callback_query.register(handle_rejected_callback,
                                F.data.startswith("new_rejected:"))
-
-    # Обработка выбора исправления
-    dp.message.register(process_fix_choice, form_class.fix_choice)
 
     # Обработка исправленных значений — ТОЛЬКО fix_value
     dp.message.register(process_fix_value, form_class.fix_value)

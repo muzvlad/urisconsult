@@ -165,13 +165,12 @@ async def check_rejected_workers(bot: Bot):
 
                 worker_id = w['id']
 
-                reasons = w.get('rejection_reasons', '[]')
                 from utils import parse_rejection_reasons
 
-                if not reasons:
-                    continue
+                parsed = parse_rejection_reasons(w.get('rejection_reasons', '[]'))
 
-                parsed = parse_rejection_reasons(reasons)
+                if not parsed:
+                    continue
 
                 def _fmt(r):
                     key = r.get('key', '') if isinstance(r, dict) else str(r)
@@ -241,7 +240,6 @@ async def main():
                 pass
     finally:
         await storage.close()
-        await db.close_db()
         await bot.session.close()
         console_print("\nБот остановлен.", 'yellow')
 

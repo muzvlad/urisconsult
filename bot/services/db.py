@@ -14,11 +14,13 @@
 import os
 import json
 import logging
+import sqlite3
 import aiosqlite
 from contextlib import asynccontextmanager
 
 from config import DB_PATH, USERS_DIR
 from config.documents import DOC_FLOWS, DOC_PREFIXES
+from shared import WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -42,68 +44,15 @@ async def _get_conn():
         await conn.close()
 
 
-async def close_db():
-    """Ничего не делает — соединения больше не глобальные."""
-    pass
-
-
 # ─── Инициализация ──────────────────────────────────────────────────
 
 async def init_db():
     """Инициализация БД: создание таблиц и миграция по версиям."""
     async with _get_conn() as db:
-        # Таблица работников
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS workers (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                citizenship TEXT,
-                gender TEXT,
-                position TEXT,
-                object TEXT,
-                object_address TEXT,
-                manager TEXT,
-                phone_main TEXT,
-                phone_additional TEXT,
-                email TEXT,
-                date TEXT,
-                registration TEXT,
-                marital_status TEXT,
-                relatives_json TEXT DEFAULT '[]',
-                telegram_id INTEGER,
-                telegram_username TEXT,
-                created_at TEXT,
-                updated_at TEXT,
-                status TEXT DEFAULT 'pending',
-                rejection_reasons TEXT DEFAULT '[]',
-                notified_at TEXT
-            )
-        """)
-
-        # Таблица документов
-        # multi_file документы (трудовая книжка) хранят НЕСКОЛЬКО записей с одним doc_type
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS worker_documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worker_id TEXT NOT NULL,
-                doc_type TEXT NOT NULL,
-                filename TEXT NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (worker_id) REFERENCES workers(id)
-            )
-        """)
-
-        # Таблица встреч
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS worker_meetings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worker_id TEXT NOT NULL,
-                date TEXT,
-                note TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (worker_id) REFERENCES workers(id)
-            )
-        """)
+        # Таблицы — единая схема из shared
+        await db.execute(WORKER_SCHEMA)
+        await db.execute(WORKER_DOCUMENTS_SCHEMA)
+        await db.execute(WORKER_MEETINGS_SCHEMA)
 
         # Индексы
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
@@ -171,7 +120,7 @@ async def _migrate_v0_to_v1(db: aiosqlite.Connection):
             for doc in cat_docs:
                 doc_columns.add(doc.key)
 
-        meta_fields = {'id'} | doc_columns | {'meetings', 'russia_marital_status', 'russia_relatives'}
+        meta_fields = doc_columns | {'meetings', 'russia_marital_status', 'russia_relatives'}
         personal = {k: v for k, v in old_data.items() if k not in meta_fields}
 
         if 'russia_marital_status' in old_columns:
@@ -270,20 +219,20 @@ async def _migrate_v1_to_v2(db: aiosqlite.Connection):
     """Миграция v1→v2: добавление notified_at, миграция JSON, синхронизация файлов."""
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN notified_at TEXT")
-    except Exception:
+    except sqlite3.OperationalError:
         pass
 
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN status TEXT DEFAULT 'pending'")
-    except Exception:
+    except sqlite3.OperationalError:
         pass
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN rejection_reasons TEXT DEFAULT '[]'")
-    except Exception:
+    except sqlite3.OperationalError:
         pass
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN updated_at TEXT")
-    except Exception:
+    except sqlite3.OperationalError:
         pass
 
     await _migrate_from_json(db)
@@ -299,7 +248,7 @@ async def _migrate_v2_to_v3(db: aiosqlite.Connection):
     try:
         await db.execute("ALTER TABLE workers ADD COLUMN updated_at TEXT")
         logger.info("Миграция v2→v3: добавлена колонка updated_at")
-    except Exception:
+    except sqlite3.OperationalError:
         pass
     await db.commit()
 
@@ -517,7 +466,7 @@ async def save_worker(data: dict) -> str:
         personal_keys = [
             'id', 'name', 'citizenship', 'gender', 'position', 'object',
             'object_address', 'manager', 'phone_main', 'phone_additional',
-            'email', 'date', 'registration', 'marital_status', 'relatives_json',
+            'date', 'registration', 'marital_status', 'relatives_json',
             'telegram_id', 'telegram_username',
         ]
 

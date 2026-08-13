@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
 """
 
 # Схема таблицы документов
+# UNIQUE(worker_id, doc_type) снят: multi-file документы хранят несколько файлов одного типа
 WORKER_DOCUMENTS_SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS {WORKER_DOCUMENTS_TABLE} (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,8 +46,7 @@ CREATE TABLE IF NOT EXISTS {WORKER_DOCUMENTS_TABLE} (
     doc_type TEXT NOT NULL,
     filename TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id),
-    UNIQUE(worker_id, doc_type)
+    FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)
 )
 """
 

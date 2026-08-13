@@ -196,7 +196,6 @@ FIELD_LABELS: Dict[str, str] = {
     'manager': 'Менеджер',
     'phone_main': 'Основной телефон',
     'phone_additional': 'Доп. телефон',
-    'email': 'Email',
     'date': 'Дата рождения',
     'marital_status': 'Семейное положение',
 }

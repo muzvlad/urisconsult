@@ -47,17 +47,22 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
         doc = get_doc_by_key(doc_key)
         is_multi = bool(doc and doc.multi_file)
 
-        temp_path = os.path.join(DOCS_DIR, f"temp_{doc_key}_{message.from_user.id}{ext}")
-
-        await bot.download_file(file_path, temp_path)
-
         temp_files = data.get('temp_files', [])
 
         if is_multi:
-            # multi_file документ: копим список файлов, не переходим дальше
+            # multi_file документ: уникальный temp-путь на каждый файл
             paths = data.get(f'{doc_key}_temp_paths', [])
+            temp_path = os.path.join(
+                DOCS_DIR, f"temp_{doc_key}_{len(paths) + 1}_{message.from_user.id}{ext}"
+            )
+        else:
+            temp_path = os.path.join(DOCS_DIR, f"temp_{doc_key}_{message.from_user.id}{ext}")
+
+        await bot.download_file(file_path, temp_path)
+
+        if is_multi:
             paths.append(temp_path)
-            temp_files.extend(paths)
+            temp_files.append(temp_path)
             await state.update_data(**{f'{doc_key}_temp_paths': paths, 'temp_files': temp_files})
             await message.answer(
                 "✅ Файл получен!\n"

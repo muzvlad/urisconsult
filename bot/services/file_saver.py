@@ -6,7 +6,7 @@
 import os
 import shutil
 import logging
-from config import DOCS_DIR, MAX_FILE_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
+from config import DOCS_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 from config.documents import DOC_PREFIXES
 
 logger = logging.getLogger(__name__)
@@ -37,19 +37,6 @@ class FileSaver:
         ext = os.path.splitext(file_path)[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
             return False, f"Недопустимый формат: {ext}. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}"
-
-        # Проверка MIME-типа (для изображений)
-        _ext_to_mime = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.bmp': 'image/bmp',
-            '.gif': 'image/gif',
-            '.pdf': 'application/pdf',
-        }
-        mime = _ext_to_mime.get(ext)
-        if mime and mime not in ALLOWED_MIME_TYPES:
-            return False, f"Недопустимый MIME-тип: {mime}"
 
         return True, ""
 

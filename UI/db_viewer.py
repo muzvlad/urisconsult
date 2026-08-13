@@ -36,11 +36,7 @@ _log(f"=== ЗАПУСК {sys.executable} ===")
 if not getattr(sys, "frozen", False):
     src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
     sys.path.insert(0, src_dir)
-    # Корень проекта для импорта shared/
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    _log(f"Dev режим: src_dir={src_dir}, project_root={project_root}")
+    _log(f"Dev режим: src_dir={src_dir}")
 else:
     _log("Режим EXE: src упакован в бандл")
 

@@ -7,7 +7,7 @@ from tkinter import ttk, messagebox
 from typing import Callable, Optional, List, Dict, Any
 from pathlib import Path
 
-from src.config import get_config, get_paths, get_document_config, FONT_FAMILY
+from src.config import get_config, get_document_config, normalize_citizenship, FONT_FAMILY
 from src.models import Worker
 from src.services import get_telegram_service
 from src.api_client import get_db_service as get_api_client
@@ -88,13 +88,11 @@ class RejectDialog:
             ('date', 'Дата рождения'), ('manager', 'Менеджер'), ('object', 'Объект'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Основной телефон'), ('phone_additional', 'Доп. телефон'),
-            ('email', 'Email'),
         ]
 
         # Добавляем документы из конфига для данной категории
         citizenship = self.worker.citizenship
-        citizenship_map = {'Российская Федерация': 'Россия', 'РФ': 'Россия'}
-        normalized = citizenship_map.get(citizenship, citizenship)
+        normalized = normalize_citizenship(citizenship)
 
         # Документы из конфига для данной категории
         if normalized in self.doc_flows:
@@ -383,7 +381,6 @@ class EditDialog:
             ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
             ('phone_additional', 'Доп. телефон'),
-            ('email', 'Email'),
         ]
 
         self.entries: Dict[str, tk.Entry] = {}

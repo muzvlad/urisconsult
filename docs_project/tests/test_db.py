@@ -27,7 +27,6 @@ def reset_db_singleton():
     asyncio.set_event_loop(loop)
     yield
     # Cleanup после теста
-    loop.run_until_complete(db_module.close_db())
     loop.close()
     asyncio.set_event_loop(None)
     db_module._db = None

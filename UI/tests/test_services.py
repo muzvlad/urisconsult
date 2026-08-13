@@ -304,6 +304,23 @@ class TestPDFExportService:
         assert success is True
         assert output_path.exists()
 
+    def test_export_legacy_citizenship(self, pdf_service, tmp_path):
+        """Экспорт не падает для легаси-значения гражданства «Российская Федерация»."""
+        worker = Worker(
+            id="TEST004",
+            name="Иванов Иван",
+            citizenship="Российская Федерация",
+            status="pending",
+        )
+        pdf_service.doc_service._doc_flows = {
+            "Россия": [MockDocumentType(key="russia_inn", label="ИНН", prefix="inn")]
+        }
+
+        output_path = tmp_path / "test_legacy_russia.pdf"
+        success, msg = pdf_service.export(worker, output_path)
+        assert success is True
+        assert output_path.exists()
+
     def test_export_rejected_worker(self, pdf_service, tmp_path):
         """Экспорт отклоненного работника с замечаниями."""
         worker = Worker(
