@@ -603,7 +603,7 @@ class DBViewerApp:
             from src.dialogs import MeetingDialog
             MeetingDialog(self.root, worker, lambda: self._refresh_current_worker())
         tk.Button(header_row, text="+ Добавить встречу", command=_open_meeting_dialog,
-                  bg='#3498db', fg='white', font=('Arial', 9),
+                  bg=self.config.accent_blue, fg='white', font=('Arial', 9),
                   padx=8, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
 
         if meetings:

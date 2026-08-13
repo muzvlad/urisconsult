@@ -41,10 +41,10 @@ class AppConfig:
     bg_color: str = "#f0f0f0"
     header_bg: str = "#2c3e50"
     header_fg: str = "white"
-    accent_blue: str = "#3498db"
+    accent_blue: str = "#34495e"
     accent_green: str = "#27ae60"
-    accent_red: str = "#e74c3c"
-    accent_orange: str = "#e67e22"
+    accent_red: str = "#c0392b"
+    accent_orange: str = "#7f8c8d"
     accent_gray: str = "#95a5a6"
     warning_bg: str = "#ffeaa7"
 

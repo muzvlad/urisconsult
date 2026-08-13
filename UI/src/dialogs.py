@@ -143,13 +143,13 @@ class RejectDialog:
             self.on_confirm(self.worker, selected)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10),
+                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Отклонить и отправить",
                   command=do_reject,
-                  bg='#e74c3c', fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_red, fg='white', font=('Arial', 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 
@@ -201,7 +201,7 @@ class NotificationsWindow:
         self.title_label.pack(side=tk.LEFT, padx=15)
 
         tk.Button(header, text="Закрыть", command=self.window.destroy,
-                  bg='#e74c3c', fg='white', font=('Arial', 10),
+                  bg=self.config.accent_red, fg='white', font=('Arial', 10),
                   padx=10, relief=tk.FLAT).pack(side=tk.RIGHT, padx=15)
 
         # Область прокрутки
@@ -402,13 +402,13 @@ class EditDialog:
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10),
+                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Сохранить",
                   command=self._save,
-                  bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_green, fg='white', font=('Arial', 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 
@@ -431,6 +431,7 @@ class MeetingDialog:
         self.worker = worker
         self.on_added = on_added
         self.api = get_api_client()
+        self.config = get_config()
 
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(f"Новая встреча — {worker.name}")
@@ -462,13 +463,13 @@ class MeetingDialog:
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10),
+                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Добавить",
                   command=self._save,
-                  bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_green, fg='white', font=('Arial', 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 

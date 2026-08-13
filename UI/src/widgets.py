@@ -341,12 +341,12 @@ class DocumentViewer(tk.Frame):
             if self.on_replace:
                 tk.Button(btn_frame, text="📤 Заменить",
                           command=self._replace,
-                          bg='#f39c12', fg='white', font=('Arial', 9),
+                          bg=self.config.accent_blue, fg='white', font=('Arial', 9),
                           padx=10, relief=tk.FLAT, cursor='hand2'
                           ).pack(side=tk.RIGHT, padx=(5, 0))
             tk.Button(btn_frame, text="⬇ Скачать",
                       command=self._download,
-                      bg='#3498db', fg='white', font=('Arial', 9),
+                      bg=self.config.accent_blue, fg='white', font=('Arial', 9),
                       padx=10, relief=tk.FLAT, cursor='hand2'
                       ).pack(side=tk.RIGHT)
 
