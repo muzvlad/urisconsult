@@ -115,6 +115,51 @@ def _get_project_root() -> Path:
     return base
 
 
+# ─── Шрифт приложения ───
+
+FONT_FAMILY = "Lora"
+
+
+def _font_paths() -> list[Path]:
+    """Найти файлы шрифтов: EXE (бандл) → dev (UI/assets/fonts)."""
+    if getattr(sys, "frozen", False):
+        meipass = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else None
+        if meipass:
+            for sub in ("fonts", "assets/fonts"):
+                folder = meipass / sub
+                if (folder / "Lora-Regular.ttf").exists():
+                    return [folder / "Lora-Regular.ttf", folder / "Lora-Bold.ttf"]
+    # Dev: UI/assets/fonts
+    base = _get_base_path()
+    for root in (base / "UI", base):
+        folder = root / "assets" / "fonts"
+        if (folder / "Lora-Regular.ttf").exists():
+            return [folder / "Lora-Regular.ttf", folder / "Lora-Bold.ttf"]
+    return []
+
+
+def register_font(root) -> str:
+    """Зарегистрировать шрифт Lora для Tk. Возвращает имя семейства для использования.
+
+    На Windows — временная регистрация через GDI (FR_PRIVATE). Если Lora недоступна — Arial.
+    """
+    global FONT_FAMILY
+    font_files = _font_paths()
+    if font_files and os.name == "nt":
+        try:
+            import ctypes
+            # FR_PRIVATE = 0x10 — шрифт виден только текущему процессу
+            for f in font_files:
+                ctypes.windll.gdi32.AddFontResourceExW(str(f), 0x10, 0)
+            # Пересканировать семейства Tk
+            root.tk.call("font", "families")
+            return FONT_FAMILY
+        except Exception:
+            pass
+    FONT_FAMILY = "Arial"
+    return FONT_FAMILY
+
+
 # ─── API сервер ───
 def _get_api_server() -> str:
     """Прочитать адрес API сервера: env var > .env файл > hardcoded."""

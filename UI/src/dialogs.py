@@ -7,7 +7,7 @@ from tkinter import ttk, messagebox
 from typing import Callable, Optional, List, Dict, Any
 from pathlib import Path
 
-from src.config import get_config, get_paths, get_document_config
+from src.config import get_config, get_paths, get_document_config, FONT_FAMILY
 from src.models import Worker
 from src.services import get_telegram_service
 from src.api_client import get_db_service as get_api_client
@@ -49,12 +49,12 @@ class RejectDialog:
         header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
         header.pack(fill=tk.X)
         tk.Label(header, text=f"❌ Отклонить анкету #{self.worker.id}",
-                 font=('Arial', 14, 'bold'), bg='#2c3e50', fg='white').pack(pady=5)
+                 font=(FONT_FAMILY, 14, 'bold'), bg='#2c3e50', fg='white').pack(pady=5)
         tk.Label(header, text=f"{self.worker.name}",
-                 font=('Arial', 11), bg='#2c3e50', fg='#bbb').pack()
+                 font=(FONT_FAMILY, 11), bg='#2c3e50', fg='#bbb').pack()
 
         tk.Label(self.dialog, text="Выберите поля для исправления:",
-                 font=('Arial', 12, 'bold'), bg='#f0f0f0').pack(pady=(12, 2))
+                 font=(FONT_FAMILY, 12, 'bold'), bg='#f0f0f0').pack(pady=(12, 2))
 
         # Прокручиваемый список чекбоксов
         list_frame = tk.Frame(self.dialog, bg='#f0f0f0')
@@ -110,10 +110,10 @@ class RejectDialog:
             var = tk.BooleanVar()
             self.vars[key] = var
             cb = tk.Checkbutton(row, text=label, variable=var,
-                                bg='white', font=('Arial', 10), anchor='w')
+                                bg='white', font=(FONT_FAMILY, 10), anchor='w')
             cb.pack(anchor=tk.W, fill=tk.X)
 
-            entry = tk.Entry(row, bg='white', font=('Arial', 9), state='disabled',
+            entry = tk.Entry(row, bg='white', font=(FONT_FAMILY, 9), state='disabled',
                              disabledforeground='#aaa')
             entry.pack(fill=tk.X, padx=(25, 5), pady=(0, 2))
             self.comments[key] = entry
@@ -143,13 +143,13 @@ class RejectDialog:
             self.on_confirm(self.worker, selected)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
-                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=16, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Отклонить и отправить",
                   command=do_reject,
-                  bg=self.config.accent_red, fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_red, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 
@@ -197,12 +197,12 @@ class NotificationsWindow:
         header.pack(fill=tk.X)
 
         self.title_label = tk.Label(header, text="🔔 Новые анкеты",
-                                    font=('Arial', 14, 'bold'), bg='#2c3e50', fg='white')
+                                    font=(FONT_FAMILY, 14, 'bold'), bg='#2c3e50', fg='white')
         self.title_label.pack(side=tk.LEFT, padx=15)
 
         tk.Button(header, text="Закрыть", command=self.window.destroy,
-                  bg=self.config.accent_red, fg='white', font=('Arial', 10),
-                  padx=10, relief=tk.FLAT).pack(side=tk.RIGHT, padx=15)
+                  bg=self.config.accent_red, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=12, relief=tk.FLAT).pack(side=tk.RIGHT, padx=15)
 
         # Область прокрутки
         canvas = tk.Canvas(self.window, bg='#f0f0f0')
@@ -231,7 +231,7 @@ class NotificationsWindow:
 
         if not pending:
             tk.Label(self.scroll_frame, text="Нет новых анкет",
-                     font=('Arial', 12), bg='#f0f0f0', fg='#666').pack(expand=True)
+                     font=(FONT_FAMILY, 12), bg='#f0f0f0', fg='#666').pack(expand=True)
             return
 
         for worker in pending:
@@ -346,9 +346,9 @@ class EditDialog:
         header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
         header.pack(fill=tk.X)
         tk.Label(header, text=f"✏️ Редактировать анкету #{self.worker.id}",
-                 font=('Arial', 14, 'bold'), bg='#2c3e50', fg='white').pack(pady=5)
+                 font=(FONT_FAMILY, 14, 'bold'), bg='#2c3e50', fg='white').pack(pady=5)
         tk.Label(header, text=self.worker.name,
-                 font=('Arial', 11), bg='#2c3e50', fg='#bbb').pack()
+                 font=(FONT_FAMILY, 11), bg='#2c3e50', fg='#bbb').pack()
 
         # Прокручиваемая область
         canvas_frame = tk.Frame(self.dialog, bg='#f0f0f0')
@@ -390,9 +390,9 @@ class EditDialog:
         for key, label in fields:
             row = tk.Frame(inner, bg='white')
             row.pack(fill=tk.X, padx=10, pady=3)
-            tk.Label(row, text=f"{label}:", bg='white', font=('Arial', 10, 'bold'),
+            tk.Label(row, text=f"{label}:", bg='white', font=(FONT_FAMILY, 10, 'bold'),
                      width=18, anchor='w').pack(side=tk.LEFT)
-            entry = tk.Entry(row, font=('Arial', 10))
+            entry = tk.Entry(row, font=(FONT_FAMILY, 10))
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
             entry.insert(0, getattr(self.worker, key, '') or '')
             self.entries[key] = entry
@@ -402,13 +402,13 @@ class EditDialog:
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
-                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=16, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Сохранить",
                   command=self._save,
-                  bg=self.config.accent_green, fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 
@@ -454,22 +454,22 @@ class MeetingDialog:
         header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
         header.pack(fill=tk.X)
         tk.Label(header, text=f"📅 Новая встреча",
-                 font=('Arial', 13, 'bold'), bg='#2c3e50', fg='white').pack()
+                 font=(FONT_FAMILY, 13, 'bold'), bg='#2c3e50', fg='white').pack()
         tk.Label(header, text=self.worker.name,
-                 font=('Arial', 10), bg='#2c3e50', fg='#bbb').pack()
+                 font=(FONT_FAMILY, 10), bg='#2c3e50', fg='#bbb').pack()
 
         # Кнопки первыми (side=BOTTOM), чтобы заняли место
         btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
-                  bg=self.config.accent_gray, fg='white', font=('Arial', 10),
-                  padx=15, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=16, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(15, 5))
 
         tk.Button(btn_frame, text="Добавить",
                   command=self._save,
-                  bg=self.config.accent_green, fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.RIGHT, padx=(5, 15))
 
@@ -477,18 +477,18 @@ class MeetingDialog:
         form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
         form.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form, text="Дата и время:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
+        tk.Label(form, text="Дата и время:", font=(FONT_FAMILY, 10), bg='#f0f0f0').pack(anchor=tk.W)
         dt_row = tk.Frame(form, bg='#f0f0f0')
         dt_row.pack(fill=tk.X, pady=(0, 10))
-        self.date_entry = tk.Entry(dt_row, font=('Arial', 11), width=15)
+        self.date_entry = tk.Entry(dt_row, font=(FONT_FAMILY, 11), width=15)
         self.date_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.date_entry.insert(0, __import__('datetime').date.today().strftime('%d.%m.%Y'))
-        self.time_entry = tk.Entry(dt_row, font=('Arial', 11), width=8)
+        self.time_entry = tk.Entry(dt_row, font=(FONT_FAMILY, 11), width=8)
         self.time_entry.pack(side=tk.LEFT)
         self.time_entry.insert(0, __import__('datetime').datetime.now().strftime('%H:%M'))
 
-        tk.Label(form, text="Примечание:", font=('Arial', 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.note_text = tk.Text(form, font=('Arial', 11), width=30, height=3, wrap=tk.WORD)
+        tk.Label(form, text="Примечание:", font=(FONT_FAMILY, 10), bg='#f0f0f0').pack(anchor=tk.W)
+        self.note_text = tk.Text(form, font=(FONT_FAMILY, 11), width=30, height=3, wrap=tk.WORD)
         self.note_text.pack(fill=tk.X, pady=(0, 5))
 
     def _save(self) -> None:

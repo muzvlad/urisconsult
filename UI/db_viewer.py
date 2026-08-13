@@ -124,6 +124,13 @@ def main():
     root = tk.Tk()
     root.withdraw()  # Скрываем пока не готово
 
+    # Регистрируем фирменный шрифт (fallback на Arial)
+    try:
+        from src.config import register_font
+        register_font(root)
+    except Exception:
+        pass
+
     splash = None
 
     try:

@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.23 (10.08.2026)
+
+### Шрифт Lora во всём UI + жирные кнопки + кнопки под названием документа
+
+- `UI/assets/fonts/`: добавлены Lora-Regular.ttf и Lora-Bold.ttf (полный набор, латиница + кириллица)
+- `UI/src/config.py`: `FONT_FAMILY`, `_font_paths()`, `register_font(root)` — регистрация через
+  GDI (FR_PRIVATE) на Windows, fallback на Arial
+- `UI/db_viewer.py`: регистрация шрифта после создания root
+- `UI/src/{main,widgets,dialogs,splash}.py`: все `font=(...)` переведены с Arial на `FONT_FAMILY`
+- Кнопки: текст жирный (`'bold'`), увеличены `padx` — текст не вылезает за границы
+- `UI/src/widgets.py` DocumentViewer: кнопки «Скачать»/«Заменить» под названием документа (слева),
+  миниатюра справа
+- `UI/build_exe.py`: шрифты добавлены в бандл (`--add-data .../fonts`)
+
+### Документация
+
+- Спека `012-lora-font.md` завершена
+
 ## v1.22 (10.08.2026)
 
 ### Единая палитра кнопок UI в тон интерфейса

@@ -8,7 +8,7 @@ from typing import Optional, Callable
 import threading
 import time
 
-from src.config import get_config, center_window
+from src.config import get_config, center_window, FONT_FAMILY
 
 
 class SplashScreen:
@@ -53,7 +53,7 @@ class SplashScreen:
         tk.Label(
             main_frame,
             text="URIS Consult",
-            font=('Arial', 20, 'bold'),
+            font=(FONT_FAMILY, 20, 'bold'),
             bg=self.config.header_bg,
             fg=self.config.header_fg,
         ).pack(pady=(30, 5))
@@ -61,7 +61,7 @@ class SplashScreen:
         tk.Label(
             main_frame,
             text="Просмотр карточек сотрудников",
-            font=('Arial', 11),
+            font=(FONT_FAMILY, 11),
             bg=self.config.header_bg,
             fg='#bbb',
         ).pack(pady=(0, 20))
@@ -79,7 +79,7 @@ class SplashScreen:
         self._label = tk.Label(
             main_frame,
             text="Инициализация...",
-            font=('Arial', 9),
+            font=(FONT_FAMILY, 9),
             bg=self.config.header_bg,
             fg='#aaa',
         )

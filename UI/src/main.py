@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
-from src.config import get_config, get_paths, center_window, get_document_config
+from src.config import get_config, get_paths, center_window, get_document_config, FONT_FAMILY
 from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
@@ -134,19 +134,19 @@ class DBViewerApp:
 
         # Логотип
         tk.Label(top_frame, text="URIS Consult",
-                 font=('Arial', 16, 'bold'), bg=self.config.header_bg, fg=self.config.header_fg
+                 font=(FONT_FAMILY, 16, 'bold'), bg=self.config.header_bg, fg=self.config.header_fg
                  ).pack(side=tk.LEFT, padx=15)
 
         # Кнопка "Все анкеты"
         tk.Button(top_frame, text="Все анкеты", command=self._show_all_workers,
-                  bg=self.config.accent_blue, fg='white', font=('Arial', 10),
-                  padx=12, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
         # Кнопка "Экспорт в PDF"
         tk.Button(top_frame, text="PDF", command=self._export_to_pdf,
-                  bg=self.config.accent_orange, fg='white', font=('Arial', 10),
-                  padx=12, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_orange, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
         # Колокольчик уведомлений
@@ -163,15 +163,15 @@ class DBViewerApp:
         search_frame.pack(fill=tk.X, padx=10)
 
         tk.Label(search_frame, text="Поиск:", bg=self.config.bg_color,
-                 font=('Arial', 11)).pack(side=tk.LEFT)
+                 font=(FONT_FAMILY, 11)).pack(side=tk.LEFT)
 
-        self.search_entry = tk.Entry(search_frame, font=('Arial', 11), width=35)
+        self.search_entry = tk.Entry(search_frame, font=(FONT_FAMILY, 11), width=35)
         self.search_entry.pack(side=tk.LEFT, padx=(10, 5), fill=tk.X, expand=True)
         self.search_entry.bind('<Return>', lambda e: self._search_workers())
 
         tk.Button(search_frame, text="Найти", command=self._search_workers,
-                  bg=self.config.accent_blue, fg='white', font=('Arial', 10),
-                  padx=10, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
     def _create_main_area(self) -> None:
@@ -185,7 +185,7 @@ class DBViewerApp:
         main_paned.add(left_frame, weight=1)
 
         tk.Label(left_frame, text="Найденные записи:",
-                 font=('Arial', 11, 'bold')).pack(pady=5, padx=5)
+                 font=(FONT_FAMILY, 11, 'bold')).pack(pady=5, padx=5)
 
         self.list_widget = WorkerListWidget(
             left_frame,
@@ -196,7 +196,7 @@ class DBViewerApp:
 
         # Статус-бар внизу левой панели
         self.status_bar = tk.Label(left_frame, text="", bg='#ecf0f1',
-                                   font=('Arial', 9), anchor='w', padx=5)
+                                   font=(FONT_FAMILY, 9), anchor='w', padx=5)
         self.status_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         # Правая панель — детали
@@ -490,10 +490,10 @@ class DBViewerApp:
         status_text, status_color = status_config.get(status, ('?', '#999'))
 
         tk.Label(left_col, text=f"ФИО: {worker.name}",
-                 font=('Arial', 14, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, fill=tk.X)
+                 font=(FONT_FAMILY, 14, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, fill=tk.X)
 
         tk.Label(left_col, text=status_text,
-                 font=('Arial', 11, 'bold'), bg='white', fg=status_color).pack(anchor=tk.W, pady=(2, 0))
+                 font=(FONT_FAMILY, 11, 'bold'), bg='white', fg=status_color).pack(anchor=tk.W, pady=(2, 0))
 
         # Кнопки управления
         btn_frame = tk.Frame(left_col, bg='white')
@@ -501,14 +501,14 @@ class DBViewerApp:
 
         tk.Button(btn_frame, text="✏️ Редактировать",
                   command=lambda: self._edit_worker(worker),
-                  bg=self.config.accent_blue, fg='white', font=('Arial', 9),
-                  padx=10, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=12, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(0, 5))
 
         tk.Button(btn_frame, text="🗑 Удалить",
                   command=lambda: self._delete_worker(worker),
-                  bg=self.config.accent_red, fg='white', font=('Arial', 9),
-                  padx=10, relief=tk.FLAT, cursor='hand2'
+                  bg=self.config.accent_red, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=12, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT)
 
         # Даты
@@ -526,10 +526,10 @@ class DBViewerApp:
             else:
                 dt = '—'
             tk.Label(dates_frame, text=f"{label}: {dt}",
-                     font=('Arial', 9), bg='white', fg='#666').pack(anchor=tk.W)
+                     font=(FONT_FAMILY, 9), bg='white', fg='#666').pack(anchor=tk.W)
 
         tk.Label(right_col, text=f"ИД: {worker.id}",
-                 font=('Arial', 12), bg='white').pack(anchor=tk.NE)
+                 font=(FONT_FAMILY, 12), bg='white').pack(anchor=tk.NE)
 
         # Фото
         photo_frame = tk.Frame(right_col, bg='white', relief=tk.SOLID, borderwidth=2)
@@ -563,7 +563,7 @@ class DBViewerApp:
                 if len(display) > 60:
                     display = display[:57] + "..."
                 tk.Label(info_inner, text=f"{field_label}: {display}",
-                         font=('Arial', 11), bg='white', anchor='w',
+                         font=(FONT_FAMILY, 11), bg='white', anchor='w',
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
 
         # Родственники
@@ -584,7 +584,7 @@ class DBViewerApp:
                         phone = rel.get('phone', '')
                         rel_text += f"  {i}. {name}, {year}, {phone}\n"
                 tk.Label(info_inner, text=rel_text.strip(),
-                         font=('Arial', 10), bg='white', anchor='w',
+                         font=(FONT_FAMILY, 10), bg='white', anchor='w',
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
         except Exception as e:
             pass
@@ -597,25 +597,25 @@ class DBViewerApp:
         header_row = tk.Frame(meetings_frame, bg='white')
         header_row.pack(fill=tk.X, padx=10, pady=(10, 5))
         tk.Label(header_row, text="Встречи:",
-                 font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
+                 font=(FONT_FAMILY, 13, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
 
         def _open_meeting_dialog():
             from src.dialogs import MeetingDialog
             MeetingDialog(self.root, worker, lambda: self._refresh_current_worker())
         tk.Button(header_row, text="+ Добавить встречу", command=_open_meeting_dialog,
-                  bg=self.config.accent_blue, fg='white', font=('Arial', 9),
-                  padx=8, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=12, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
 
         if meetings:
             for m in meetings:
                 date = m.get('date', '')
                 note = m.get('note', '')
                 text = f"• {date} — {note}" if date else f"• {note}"
-                tk.Label(meetings_frame, text=text, font=('Arial', 10),
+                tk.Label(meetings_frame, text=text, font=(FONT_FAMILY, 10),
                          bg='white', anchor='w', wraplength=700).pack(anchor=tk.W, padx=20, pady=1)
         else:
             tk.Label(meetings_frame, text="Нет встреч",
-                     font=('Arial', 10), bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
+                     font=(FONT_FAMILY, 10), bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
 
         # ── Документы ──
         try:
@@ -672,7 +672,7 @@ class DBViewerApp:
                 docs_header.pack(fill=tk.X, padx=5, pady=5)
 
                 tk.Label(docs_header, text=f"Документы ({citizenship}):",
-                         font=('Arial', 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
+                         font=(FONT_FAMILY, 13, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, padx=10, pady=(10, 5))
 
                 for doc in existing_docs:
                     DocumentViewer(
@@ -685,19 +685,19 @@ class DBViewerApp:
                 miss_frame = tk.Frame(self.scrollable_frame, bg='#fff3cd', relief=tk.RAISED, borderwidth=1)
                 miss_frame.pack(fill=tk.X, padx=5, pady=5)
                 tk.Label(miss_frame, text=f"Не загружено ({len(missing_docs)}):",
-                         font=('Arial', 11, 'bold'), bg='#fff3cd', anchor='w'
+                         font=(FONT_FAMILY, 11, 'bold'), bg='#fff3cd', anchor='w'
                          ).pack(anchor=tk.W, padx=10, pady=(8, 3))
                 for doc_type, label, filename, reason in missing_docs:
                     tk.Label(miss_frame,
                              text=f"  • {label} — {reason} (файл: {filename})",
-                             font=('Arial', 9), bg='#fff3cd', fg='#856404', anchor='w'
+                             font=(FONT_FAMILY, 9), bg='#fff3cd', fg='#856404', anchor='w'
                              ).pack(anchor=tk.W, padx=20, pady=1)
         except Exception as e:
             import traceback
             print(f"DOCS ERROR: {e}")
             traceback.print_exc()
             tk.Label(self.scrollable_frame, text=f"Ошибка загрузки документов: {e}",
-                     font=('Arial', 10), bg='white', fg='red').pack(anchor=tk.W, padx=10, pady=5)
+                     font=(FONT_FAMILY, 10), bg='white', fg='red').pack(anchor=tk.W, padx=10, pady=5)
 
         # ── Замечания (если отклонена) ──
         if worker.is_rejected and worker.reasons:
@@ -705,17 +705,17 @@ class DBViewerApp:
             rej_frame.pack(fill=tk.X, padx=5, pady=5)
 
             tk.Label(rej_frame, text="⚠ Замечания:",
-                     font=('Arial', 12, 'bold'), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=10, pady=(8, 3))
+                     font=(FONT_FAMILY, 12, 'bold'), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=10, pady=(8, 3))
 
             for r in worker.reasons:
                 rkey = r.get('key', '') if isinstance(r, dict) else str(r)
                 rcomment = r.get('comment', '') if isinstance(r, dict) else ''
                 label = self.doc_service.get_document_label(rkey)
                 tk.Label(rej_frame, text=f"  • {label}",
-                         font=('Arial', 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
+                         font=(FONT_FAMILY, 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
                 if rcomment:
                     tk.Label(rej_frame, text=f"    📝 {rcomment}",
-                             font=('Arial', 9), bg='#ffeaa7', fg='#7d6608', anchor='w'
+                             font=(FONT_FAMILY, 9), bg='#ffeaa7', fg='#7d6608', anchor='w'
                              ).pack(anchor=tk.W, padx=35)
 
         # Обновление scrollregion

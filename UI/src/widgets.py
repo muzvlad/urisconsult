@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageTk
 
-from src.config import get_config
+from src.config import get_config, FONT_FAMILY
 from src.models import Worker
 from src.services import get_document_service, DocumentInfo
 
@@ -44,7 +44,7 @@ class NotificationBell(tk.Frame):
         )
         self.badge_canvas.create_oval(0, 0, 16, 16, fill='#7f8c8d', outline='', tags='dot')
         self.badge_text = self.badge_canvas.create_text(8, 8, text='',
-                                                         font=('Arial', 7, 'bold'),
+                                                         font=(FONT_FAMILY, 7, 'bold'),
                                                          fill='white', tags='num')
 
         self.set_count(0)
@@ -85,20 +85,20 @@ class WorkerListWidget(tk.Frame):
         header_frame.pack_propagate(False)
 
         # Кликабельные заголовки колонок
-        status_header = tk.Label(header_frame, text="Статус", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=6, cursor='hand2')
+        status_header = tk.Label(header_frame, text="Статус", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), width=6, cursor='hand2')
         status_header.pack(side=tk.LEFT, padx=2)
         status_header.bind('<Button-1>', lambda e: self._sort_by("status"))
 
-        id_header = tk.Label(header_frame, text="ID", bg='#ecf0f1', font=('Arial', 8, 'bold'), width=8, cursor='hand2')
+        id_header = tk.Label(header_frame, text="ID", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), width=8, cursor='hand2')
         id_header.pack(side=tk.LEFT, padx=2)
         id_header.bind('<Button-1>', lambda e: self._sort_by("id"))
 
-        name_header = tk.Label(header_frame, text="ФИО", bg='#ecf0f1', font=('Arial', 8, 'bold'), cursor='hand2')
+        name_header = tk.Label(header_frame, text="ФИО", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), cursor='hand2')
         name_header.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         name_header.bind('<Button-1>', lambda e: self._sort_by("name"))
 
         # Список
-        self.listbox = tk.Listbox(self, font=('Arial', 10), selectmode=tk.SINGLE, activestyle='none')
+        self.listbox = tk.Listbox(self, font=(FONT_FAMILY, 10), selectmode=tk.SINGLE, activestyle='none')
         self.listbox.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.listbox.bind('<<ListboxSelect>>', self._on_select)
         self.listbox.bind('<Double-Button-1>', self._on_double_click)
@@ -198,13 +198,13 @@ class WorkerCardWidget(tk.Frame):
         top.pack(fill=tk.X)
 
         tk.Label(top, text=f"#{self.worker.id}",
-                 font=('Arial', 10, 'bold'), bg='white', fg=self.config.accent_blue).pack(side=tk.LEFT)
+                 font=(FONT_FAMILY, 10, 'bold'), bg='white', fg=self.config.accent_blue).pack(side=tk.LEFT)
 
         tk.Label(top, text=self.worker.name,
-                 font=('Arial', 12, 'bold'), bg='white').pack(side=tk.LEFT, padx=(10, 0))
+                 font=(FONT_FAMILY, 12, 'bold'), bg='white').pack(side=tk.LEFT, padx=(10, 0))
 
         tk.Label(top, text=f"({self.worker.citizenship})",
-                 font=('Arial', 10), bg='white', fg='#666').pack(side=tk.LEFT, padx=(5, 0))
+                 font=(FONT_FAMILY, 10), bg='white', fg='#666').pack(side=tk.LEFT, padx=(5, 0))
 
         # Инфо
         info = tk.Frame(self, bg='white')
@@ -217,7 +217,7 @@ class WorkerCardWidget(tk.Frame):
         ]
         for item in info_items:
             if item.split(': ')[1]:
-                tk.Label(info, text=item, font=('Arial', 9), bg='white', fg='#555'
+                tk.Label(info, text=item, font=(FONT_FAMILY, 9), bg='white', fg='#555'
                          ).pack(anchor=tk.W)
 
         # Кнопки
@@ -226,19 +226,19 @@ class WorkerCardWidget(tk.Frame):
 
         tk.Button(btn_frame, text="✅ Принять",
                   command=lambda: self.on_accept(self.worker),
-                  bg=self.config.accent_green, fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(0, 5))
 
         tk.Button(btn_frame, text="❌ Отклонить",
                   command=lambda: self.on_reject(self.worker),
-                  bg=self.config.accent_red, fg='white', font=('Arial', 10, 'bold'),
+                  bg=self.config.accent_red, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(0, 5))
 
         tk.Button(btn_frame, text="👁 Просмотр",
                   command=lambda: self.on_view(self.worker),
-                  bg=self.config.accent_blue, fg='white', font=('Arial', 10),
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=15, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT)
 
@@ -265,7 +265,7 @@ class PhotoWidget(tk.Frame):
 
         if not photo_path:
             tk.Label(self, text="Фото не найдено",
-                     font=('Arial', 10), bg='white', fg='gray').pack(expand=True, padx=10, pady=10)
+                     font=(FONT_FAMILY, 10), bg='white', fg='gray').pack(expand=True, padx=10, pady=10)
             return
 
         try:
@@ -281,7 +281,7 @@ class PhotoWidget(tk.Frame):
             label.bind('<Button-1>', lambda e: self._on_click(photo_path))
         except Exception:
             tk.Label(self, text="Ошибка загрузки фото",
-                     font=('Arial', 9), bg='white', fg='red').pack(expand=True, padx=10, pady=10)
+                     font=(FONT_FAMILY, 9), bg='white', fg='red').pack(expand=True, padx=10, pady=10)
 
     def _on_click(self, path: Path) -> None:
         if self.on_click:
@@ -322,33 +322,37 @@ class DocumentViewer(tk.Frame):
         main = tk.Frame(self, bg='white')
         main.pack(fill=tk.X, padx=8, pady=5)
 
-        # Название документа слева
-        tk.Label(main, text=self.doc_info.label,
-                 font=('Arial', 10, 'bold'), bg='white', anchor='w').pack(side=tk.LEFT)
+        # Левая колонка: название, дата, кнопки (под названием, не под фоткой)
+        left_col = tk.Frame(main, bg='white')
+        left_col.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Название документа
+        tk.Label(left_col, text=self.doc_info.label,
+                 font=(FONT_FAMILY, 10, 'bold'), bg='white', anchor='w').pack(anchor=tk.W)
 
         # Дата заливки документа под названием
         if self.doc_info.uploaded_at:
             fmt = self._format_date(self.doc_info.uploaded_at)
             if fmt:
-                tk.Label(self, text=f"Залит: {fmt}",
-                         font=('Arial', 8), bg='white', fg='#888', anchor='w'
-                         ).pack(fill=tk.X, padx=8, pady=(0, 2))
+                tk.Label(left_col, text=f"Залит: {fmt}",
+                         font=(FONT_FAMILY, 8), bg='white', fg='#888', anchor='w'
+                         ).pack(anchor=tk.W, pady=(0, 2))
 
-        # Кнопки «Скачать» и «Заменить» под документом (если файл есть)
+        # Кнопки «Скачать» и «Заменить» под названием документа
         if self.doc_info.exists and self.doc_info.full_path:
-            btn_frame = tk.Frame(self, bg='white')
-            btn_frame.pack(fill=tk.X, padx=8, pady=(0, 5))
+            btn_frame = tk.Frame(left_col, bg='white')
+            btn_frame.pack(anchor=tk.W, pady=(2, 0))
             if self.on_replace:
                 tk.Button(btn_frame, text="📤 Заменить",
                           command=self._replace,
-                          bg=self.config.accent_blue, fg='white', font=('Arial', 9),
-                          padx=10, relief=tk.FLAT, cursor='hand2'
-                          ).pack(side=tk.RIGHT, padx=(5, 0))
+                          bg=self.config.accent_blue, fg='white',
+                          font=(FONT_FAMILY, 9, 'bold'), padx=12, relief=tk.FLAT,
+                          cursor='hand2').pack(side=tk.LEFT, padx=(0, 5))
             tk.Button(btn_frame, text="⬇ Скачать",
                       command=self._download,
-                      bg=self.config.accent_blue, fg='white', font=('Arial', 9),
-                      padx=10, relief=tk.FLAT, cursor='hand2'
-                      ).pack(side=tk.RIGHT)
+                      bg=self.config.accent_blue, fg='white',
+                      font=(FONT_FAMILY, 9, 'bold'), padx=12, relief=tk.FLAT,
+                      cursor='hand2').pack(side=tk.LEFT)
 
         # Миниатюра справа (кликабельная)
         if self.doc_info.exists and self.doc_info.full_path:
@@ -389,7 +393,7 @@ class DocumentViewer(tk.Frame):
 
     def _build_placeholder(self, parent: tk.Widget) -> None:
         """Плейсхолдер для не-изображений (PDF и др.) — кликабельный."""
-        btn = tk.Button(parent, text="открыть", font=('Arial', 9), bg='#f0f0f0',
+        btn = tk.Button(parent, text="открыть", font=(FONT_FAMILY, 9, 'bold'), bg='#f0f0f0',
                         cursor='hand2', command=self._on_click)
         btn.pack(side=tk.RIGHT, padx=(10, 0))
 
