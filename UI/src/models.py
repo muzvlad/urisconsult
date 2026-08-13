@@ -46,11 +46,19 @@ class Worker:
             return []
 
     @property
-    def reasons(self) -> List[str]:
+    def reasons(self) -> List[Dict[str, str]]:
+        """Причины отклонения: [{'key', 'comment'}, ...]. Поддерживает старый формат (строки)."""
         try:
-            return json.loads(self.rejection_reasons) if self.rejection_reasons else []
+            raw = json.loads(self.rejection_reasons) if self.rejection_reasons else []
         except (json.JSONDecodeError, TypeError):
             return []
+        result = []
+        for r in raw:
+            if isinstance(r, dict):
+                result.append({'key': r.get('key', ''), 'comment': r.get('comment', '')})
+            else:
+                result.append({'key': str(r), 'comment': ''})
+        return result
 
     @property
     def is_pending(self) -> bool:

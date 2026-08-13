@@ -16,6 +16,27 @@ if TYPE_CHECKING:
     from aiogram.fsm.state import State
 
 
+def parse_rejection_reasons(reasons) -> list[dict]:
+    """Привести rejection_reasons к единому виду: [{key, comment}, ...].
+
+    Принимает: JSON-строку, список строк, список dict'ов.
+    """
+    if isinstance(reasons, str):
+        import json
+        try:
+            reasons = json.loads(reasons)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    result = []
+    for r in reasons or []:
+        if isinstance(r, dict):
+            result.append({'key': r.get('key', ''), 'comment': r.get('comment', '')})
+        else:
+            result.append({'key': str(r), 'comment': ''})
+    return result
+
+
 # ─── FSM состояния ───────────────────────────────────────────────────
 
 def get_document_state(doc_key: str) -> Optional["State"]:

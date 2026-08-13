@@ -441,7 +441,7 @@ class TestWorkerModel:
         assert worker.id == "TEST"
         assert worker.name == "Test Worker"
         assert worker.status == "rejected"
-        assert worker.reasons == ["passport"]
+        assert worker.reasons == [{'key': 'passport', 'comment': ''}]
 
     def test_to_dict(self, sample_worker):
         """Сериализация в словарь."""
@@ -459,4 +459,7 @@ class TestWorkerModel:
         assert sample_worker_accepted.is_accepted is True
 
         assert sample_worker_rejected.is_rejected is True
-        assert sample_worker_rejected.reasons == ["passport", "photo"]
+        assert sample_worker_rejected.reasons == [
+            {'key': 'passport', 'comment': ''},
+            {'key': 'photo', 'comment': ''},
+        ]

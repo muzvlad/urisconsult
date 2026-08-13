@@ -40,6 +40,34 @@ class TestAskRejectedField:
         assert 'Отправьте исправленный файл' in args[0]
         assert 'ИНН' in args[0]
 
+    def test_document_field_shows_comment(self):
+        """Комментарий причины отображается в запросе исправления."""
+        message = MagicMock()
+        message.answer = AsyncMock()
+        state = MagicMock()
+        state.set_state = AsyncMock()
+        state.update_data = AsyncMock()
+
+        reasons = [{'key': 'patent_inn', 'comment': 'Номер не читается'}]
+        _run_async(_ask_rejected_field(message, state, 'patent_inn', reasons, 0))
+
+        args, kwargs = message.answer.await_args
+        assert 'Номер не читается' in args[0]
+
+    def test_text_field_shows_comment(self):
+        """Комментарий текстового поля отображается в запросе."""
+        message = MagicMock()
+        message.answer = AsyncMock()
+        state = MagicMock()
+        state.set_state = AsyncMock()
+        state.update_data = AsyncMock()
+
+        reasons = [{'key': 'name', 'comment': 'Опечатка в фамилии'}]
+        _run_async(_ask_rejected_field(message, state, 'name', reasons, 0))
+
+        args, kwargs = message.answer.await_args
+        assert 'Опечатка в фамилии' in args[0]
+
     def test_text_field_asks_prompt(self):
         """Текстовое поле (ФИО) запрашивает ввод."""
         message = MagicMock()
@@ -66,3 +94,22 @@ class TestAskRejectedField:
             doc = get_doc_by_key(key)
             assert doc is not None, f"Документ '{key}' отсутствует"
             assert doc.label == 'ИНН'
+
+
+class TestParseRejectionReasons:
+    def test_string_list(self):
+        from utils import parse_rejection_reasons
+        assert parse_rejection_reasons('["patent_inn", "photo"]') == [
+            {'key': 'patent_inn', 'comment': ''},
+            {'key': 'photo', 'comment': ''},
+        ]
+
+    def test_dict_list(self):
+        from utils import parse_rejection_reasons
+        assert parse_rejection_reasons([{'key': 'patent_inn', 'comment': 'Номер не читается'}]) == [
+            {'key': 'patent_inn', 'comment': 'Номер не читается'},
+        ]
+
+    def test_invalid(self):
+        from utils import parse_rejection_reasons
+        assert parse_rejection_reasons('not json') == []

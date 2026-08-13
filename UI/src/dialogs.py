@@ -81,6 +81,7 @@ class RejectDialog:
 
         # Поля для выбора
         self.vars: Dict[str, tk.BooleanVar] = {}
+        self.comments: Dict[str, tk.Entry] = {}
 
         fields = [
             ('name', 'ФИО'), ('citizenship', 'Категория'), ('gender', 'Пол'),
@@ -103,18 +104,38 @@ class RejectDialog:
             log_error(f" citizenship '{normalized}' not found in doc_flows")
 
         for key, label in fields:
+            row = tk.Frame(inner_frame, bg='white')
+            row.pack(fill=tk.X, padx=10, pady=1)
+
             var = tk.BooleanVar()
             self.vars[key] = var
-            tk.Checkbutton(inner_frame, text=label, variable=var,
-                           bg='white', font=('Arial', 10), anchor='w'
-                           ).pack(fill=tk.X, padx=10, pady=1)
+            cb = tk.Checkbutton(row, text=label, variable=var,
+                                bg='white', font=('Arial', 10), anchor='w')
+            cb.pack(anchor=tk.W, fill=tk.X)
+
+            entry = tk.Entry(row, bg='white', font=('Arial', 9), state='disabled',
+                             disabledforeground='#aaa')
+            entry.pack(fill=tk.X, padx=(25, 5), pady=(0, 2))
+            self.comments[key] = entry
+
+            var.trace_add('write', lambda *_, v=var, e=entry: _toggle_comment(v, e))
+
+        def _toggle_comment(var, entry):
+            if var.get():
+                entry.config(state='normal')
+            else:
+                entry.config(state='disabled')
 
         # Кнопки внизу (всегда видны)
         btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         def do_reject():
-            selected = [k for k, v in self.vars.items() if v.get()]
+            selected = []
+            for key, var in self.vars.items():
+                if var.get():
+                    comment = self.comments[key].get().strip() if key in self.comments else ''
+                    selected.append({'key': key, 'comment': comment})
             if not selected:
                 messagebox.showwarning("Внимание", "Выберите хотя бы одно поле!", parent=self.dialog)
                 return

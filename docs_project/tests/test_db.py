@@ -301,6 +301,24 @@ class TestWorkerCRUD:
         pending = asyncio.get_event_loop().run_until_complete(db_module.get_pending_workers())
         assert any(w['id'] == '00042' for w in pending)
 
+    def test_reject_worker_with_comments(self, fresh_db, sample_personal_data):
+        """Отклонение с комментариями сохраняет {key, comment} в rejection_reasons."""
+        db_path, users_dir, docs_dir = fresh_db
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+        asyncio.get_event_loop().run_until_complete(
+            db_module.save_worker(sample_personal_data)
+        )
+        asyncio.get_event_loop().run_until_complete(
+            db_module.reject_worker('00001', [{'key': 'patent_inn', 'comment': 'Номер не читается'}])
+        )
+
+        worker = asyncio.get_event_loop().run_until_complete(db_module.get_worker('00001'))
+        import json as _json
+        reasons = _json.loads(worker['rejection_reasons'])
+        assert reasons == [{'key': 'patent_inn', 'comment': 'Номер не читается'}]
+
     def test_save_documents_replaces_old(self, fresh_db, sample_personal_data):
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)

@@ -699,8 +699,8 @@ async def accept_worker(worker_id: str):
         await db.commit()
 
 
-async def reject_worker(worker_id: str, reasons: list[str]):
-    """Отклонить анкету с указанием причин."""
+async def reject_worker(worker_id: str, reasons: list[str] | list[dict]):
+    """Отклонить анкету с указанием причин. reasons = [str | {key, comment}]."""
     async with _get_conn() as db:
         await db.execute(
             "UPDATE workers SET status = 'rejected', rejection_reasons = ?, notified_at = NULL WHERE id = ?",

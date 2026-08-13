@@ -148,7 +148,7 @@ class APIClient:
         resp = self._put(f"/api/workers/{worker_id}/accept")
         return bool(resp)
 
-    def reject_worker(self, worker_id: str, reasons: List[str]) -> bool:
+    def reject_worker(self, worker_id: str, reasons: List[Dict[str, str]]) -> bool:
         resp = self._put(f"/api/workers/{worker_id}/reject", {"reasons": reasons})
         return bool(resp)
 

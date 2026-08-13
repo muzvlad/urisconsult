@@ -166,18 +166,22 @@ async def check_rejected_workers(bot: Bot):
                 worker_id = w['id']
 
                 reasons = w.get('rejection_reasons', '[]')
-                if isinstance(reasons, str):
-                    try:
-                        reasons = json.loads(reasons)
-                    except (json.JSONDecodeError, TypeError):
-                        reasons = []
+                from utils import parse_rejection_reasons
 
                 if not reasons:
                     continue
 
-                reasons_text = "\n".join(
-                    f"  - {FIELD_LABELS.get(r, r)}" for r in reasons
-                )
+                parsed = parse_rejection_reasons(reasons)
+
+                def _fmt(r):
+                    key = r.get('key', '') if isinstance(r, dict) else str(r)
+                    comment = r.get('comment', '') if isinstance(r, dict) else ''
+                    line = f"  - {FIELD_LABELS.get(key, key)}"
+                    if comment:
+                        line += f"\n    📝 {comment}"
+                    return line
+
+                reasons_text = "\n".join(_fmt(r) for r in parsed)
                 text = (
                     f"❌ Ваша анкета #{worker_id} отклонена.\n\n"
                     f"Необходимо исправить:\n{reasons_text}"

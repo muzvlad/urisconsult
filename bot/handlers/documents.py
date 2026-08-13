@@ -76,8 +76,10 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
             from handlers.commands import _ask_rejected_field
             next_index = fix_index + 1
             if next_index < len(fix_reasons):
-                await _ask_rejected_field(message, state, fix_reasons[next_index],
-                                         fix_reasons, next_index)
+                next_reason = fix_reasons[next_index]
+                next_field = next_reason['key'] if isinstance(next_reason, dict) else str(next_reason)
+                await _ask_rejected_field(message, state, next_field,
+                                          fix_reasons, next_index)
             else:
                 from handlers.confirmation import show_confirmation
                 await message.answer("✅ Все замечания исправлены!",
@@ -117,8 +119,10 @@ async def _skip_document(message: types.Message, state: FSMContext, doc_key: str
         from handlers.commands import _ask_rejected_field
         next_index = fix_index + 1
         if next_index < len(fix_reasons):
-            await _ask_rejected_field(message, state, fix_reasons[next_index],
-                                     fix_reasons, next_index)
+            next_reason = fix_reasons[next_index]
+            next_field = next_reason['key'] if isinstance(next_reason, dict) else str(next_reason)
+            await _ask_rejected_field(message, state, next_field,
+                                      fix_reasons, next_index)
         else:
             from handlers.confirmation import show_confirmation
             await message.answer("✅ Все замечания исправлены!",

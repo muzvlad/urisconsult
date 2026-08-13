@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.21 (10.08.2026)
+
+### Комментарий к каждому документу при отклонении анкеты
+
+- Формат `rejection_reasons`: `[str]` → `[{"key", "comment"}]`; парсеры поддерживают оба формата
+- `UI/src/dialogs.py`: поле ввода комментария под каждым чекбоксом в диалоге отклонения,
+  активное при отметке; `do_reject` собирает `[{key, comment}]`
+- `UI/src/models.py` `Worker.reasons`: парсер dict-формата (обратная совместимость со строками)
+- `UI/src/main.py`, `UI/src/services.py` (уведомление + PDF), `UI/src/api_client.py`: показ и
+  передача комментариев
+- `bot/utils.py`: `parse_rejection_reasons` — нормализация к `[{key, comment}]`
+- `bot/handlers/commands.py`, `bot/handlers/documents.py`, `bot/bot.py`: комментарий в уведомлении
+  клиенту и в запросе исправления; fix-поток адаптирован под dict-формат
+- `bot/services/db.py`, `bot/api_server.py`: приём dict-причин
+- Тесты: комментарий в fix-запросе, `parse_rejection_reasons`, сохранение `{key, comment}` в БД
+
+### Документация
+
+- Спека `010-rejection-comments.md` завершена
+
 ## v1.20 (10.08.2026)
 
 ### Даты анкеты и документов + перезаливка документов из UI

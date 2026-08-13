@@ -356,7 +356,7 @@ class DBViewerApp:
         log_info(f"Opening reject dialog for worker {worker.id}")
         RejectDialog(self.root, worker, lambda w, reasons: self._handle_reject(w, reasons))
 
-    def _handle_reject(self, worker: Worker, reasons: List[str]) -> None:
+    def _handle_reject(self, worker: Worker, reasons: List[Dict[str, str]]) -> None:
         """Обработка отклонения — бот отправит уведомление через 60 сек."""
         try:
             if self.api.reject_worker(worker.id, reasons):
@@ -708,9 +708,15 @@ class DBViewerApp:
                      font=('Arial', 12, 'bold'), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=10, pady=(8, 3))
 
             for r in worker.reasons:
-                label = self.doc_service.get_document_label(r)
+                rkey = r.get('key', '') if isinstance(r, dict) else str(r)
+                rcomment = r.get('comment', '') if isinstance(r, dict) else ''
+                label = self.doc_service.get_document_label(rkey)
                 tk.Label(rej_frame, text=f"  • {label}",
                          font=('Arial', 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
+                if rcomment:
+                    tk.Label(rej_frame, text=f"    📝 {rcomment}",
+                             font=('Arial', 9), bg='#ffeaa7', fg='#7d6608', anchor='w'
+                             ).pack(anchor=tk.W, padx=35)
 
         # Обновление scrollregion
         self._update_scroll_region()

@@ -42,12 +42,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
             await callback.message.answer("Анкета не найдена.")
             return
 
-        reasons = worker.get('rejection_reasons', '[]')
-        if isinstance(reasons, str):
-            try:
-                reasons = json.loads(reasons)
-            except (json.JSONDecodeError, TypeError):
-                reasons = []
+        reasons = parse_rejection_reasons(worker.get('rejection_reasons', '[]'))
 
         await callback.message.edit_text(
             "Начинаем исправление анкеты.\n"
@@ -63,7 +58,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
 
         if reasons:
-            await _ask_rejected_field(callback.message, state, reasons[0], reasons, 0)
+            await _ask_rejected_field(callback.message, state, reasons[0]['key'], reasons, 0)
         else:
             await callback.message.answer("Введите ваше ФИО:")
             await state.set_state(get_worker_form().name)
@@ -106,15 +101,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
     rejected = await _find_rejected_worker(telegram_id)
 
     if rejected:
-        reasons = rejected.get('rejection_reasons', '[]')
-        if isinstance(reasons, str):
-            try:
-                reasons = json.loads(reasons)
-            except (json.JSONDecodeError, TypeError):
-                reasons = []
+        reasons = parse_rejection_reasons(rejected.get('rejection_reasons', '[]'))
 
         reasons_text = '\n'.join(
-            f"  {FIELD_LABELS.get(r, r)}" for r in reasons
+            _format_reason(r) for r in reasons
         )
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -193,7 +183,10 @@ async def process_fix_choice(message: types.Message, state: FSMContext):
             await state.update_data(editing_rejected=True, rejection_reasons=reasons)
 
         if reasons:
-            await _ask_rejected_field(message, state, reasons[0], reasons, 0)
+            first = reasons[0]
+            await _ask_rejected_field(message, state,
+                                      first['key'] if isinstance(first, dict) else str(first),
+                                      reasons, 0)
         else:
             await message.answer("Введите ваше ФИО:")
             await state.set_state(get_worker_form().name)
@@ -237,7 +230,8 @@ async def process_fix_value(message: types.Message, state: FSMContext):
     # Следующее поле
     next_index = index + 1
     if next_index < len(reasons):
-        next_field = reasons[next_index]
+        next_reason = reasons[next_index]
+        next_field = next_reason['key'] if isinstance(next_reason, dict) else str(next_reason)
         await _ask_rejected_field(message, state, next_field, reasons, next_index)
     else:
         from handlers.confirmation import show_confirmation
@@ -259,14 +253,9 @@ async def any_document(message: types.Message):
     rejected = await _find_rejected_worker(message.from_user.id)
 
     if rejected:
-        reasons = rejected.get('rejection_reasons', '[]')
-        if isinstance(reasons, str):
-            try:
-                reasons = json.loads(reasons)
-            except (json.JSONDecodeError, TypeError):
-                reasons = []
+        reasons = parse_rejection_reasons(rejected.get('rejection_reasons', '[]'))
         reasons_text = '\n'.join(
-            f"  {FIELD_LABELS.get(r, r)}" for r in reasons
+            _format_reason(r) for r in reasons
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
@@ -291,14 +280,28 @@ async def any_document(message: types.Message):
         )
 
 
+def _format_reason(reason) -> str:
+    """Отформатировать причину отклонения: название + комментарий (если есть)."""
+    key = reason.get('key', '') if isinstance(reason, dict) else str(reason)
+    comment = reason.get('comment', '') if isinstance(reason, dict) else ''
+    line = f"  {FIELD_LABELS.get(key, key)}"
+    if comment:
+        line += f"\n    📝 {comment}"
+    return line
+
+
 async def _ask_rejected_field(message, state, field, reasons, index):
     """Запросить исправление конкретного отклонённого поля."""
     all_doc_keys = get_all_doc_keys()
+    reason = reasons[index] if index < len(reasons) else {}
+    comment = reason.get('comment', '') if isinstance(reason, dict) else ''
+
+    comment_text = f"\n\n📝 Комментарий: {comment}" if comment else ""
 
     if field in all_doc_keys:
         # Документ — запрашиваем отправку файла
         doc_label = DOC_LABELS.get(field, field)
-        await message.answer(f"Отправьте исправленный файл: {doc_label}",
+        await message.answer(f"Отправьте исправленный файл: {doc_label}{comment_text}",
                              reply_markup=get_skip_keyboard())
         state_obj = get_document_state(field)
         if state_obj:
@@ -315,7 +318,7 @@ async def _ask_rejected_field(message, state, field, reasons, index):
 
     # Текстовое поле — ВСЕГДА fix_value
     prompt = get_field_prompt(field)
-    await message.answer(prompt)
+    await message.answer(prompt + comment_text)
 
     await state.set_state(get_worker_form().fix_value)
     await state.update_data(

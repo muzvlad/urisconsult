@@ -228,7 +228,16 @@ class TelegramService:
         }
         doc_labels = get_document_config()[1]
         field_labels.update(doc_labels)
-        reasons_text = "\n".join(f"  - {field_labels.get(r, r)}" for r in reasons)
+
+        def _fmt(r):
+            rkey = r.get('key', '') if isinstance(r, dict) else str(r)
+            rcomment = r.get('comment', '') if isinstance(r, dict) else ''
+            line = f"  - {field_labels.get(rkey, rkey)}"
+            if rcomment:
+                line += f"\n    📝 {rcomment}"
+            return line
+
+        reasons_text = "\n".join(_fmt(r) for r in reasons)
         text = (
             f"❌ Ваша анкета #{worker.id} отклонена.\n\n"
             f"Необходимо исправить:\n{reasons_text}"
@@ -418,10 +427,16 @@ class PDFExportService:
             y -= 20
             c.setFont(self._font_name, 10)
             for r in worker.reasons:
-                label = self.doc_service.get_document_label(r)
+                rkey = r.get('key', '') if isinstance(r, dict) else str(r)
+                rcomment = r.get('comment', '') if isinstance(r, dict) else ''
+                label = self.doc_service.get_document_label(rkey)
                 c.drawString(70, y, f"• {label}")
                 update_progress()
                 y -= 16
+                if rcomment:
+                    c.drawString(85, y, f"📝 {rcomment}")
+                    update_progress()
+                    y -= 16
 
         # Встречи
         from src.api_client import get_db_service
