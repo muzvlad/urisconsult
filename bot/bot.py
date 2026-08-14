@@ -95,7 +95,8 @@ def _start_api_server():
 
         def _run():
             try:
-                app.run(host='0.0.0.0', port=API_PORT, debug=False, use_reloader=False)
+                app.run(host='0.0.0.0', port=API_PORT, debug=False, use_reloader=False,
+                        threaded=True)
             except Exception as e:
                 console_print(f"  ОШИБКА API-потока: {e}", 'red')
                 logger.error("API server thread crashed: %s", e)
