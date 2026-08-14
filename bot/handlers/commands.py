@@ -22,7 +22,7 @@ from handlers.registration import get_worker_form
 from services import db
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from keyboards.reply_kb import get_skip_keyboard
-from utils import get_document_state, get_all_doc_keys, get_field_prompt
+from utils import parse_rejection_reasons, get_document_state, get_all_doc_keys, get_field_prompt
 
 logger = logging.getLogger(__name__)
 
