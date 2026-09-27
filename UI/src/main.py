@@ -299,7 +299,7 @@ class DBViewerApp:
         if not self.list_widget:
             return
 
-        self.list_widget.listbox.delete(0, tk.END)
+        self.list_widget.tree.delete(*self.list_widget.tree.get_children())
         self.search_results = []
 
         try:

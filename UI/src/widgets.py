@@ -6,7 +6,7 @@ import os
 import shutil
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Dict
 from pathlib import Path
 
 from PIL import Image, ImageTk
@@ -66,7 +66,27 @@ class NotificationBell(tk.Frame):
 # ─── Виджет списка сотрудников ───
 
 class WorkerListWidget(tk.Frame):
-    """Виджет списка сотрудников с Listbox и сортировкой."""
+    """Виджет списка сотрудников с Treeview и фильтрацией."""
+
+    COLUMNS = ("status", "id", "name", "created_at", "citizenship", "manager", "object")
+    HEADERS = {
+        "status": "Статус",
+        "id": "ID",
+        "name": "ФИО",
+        "created_at": "Дата",
+        "citizenship": "Категория",
+        "manager": "Менеджер",
+        "object": "Объект",
+    }
+    COLUMN_WIDTHS = {
+        "status": 50,
+        "id": 70,
+        "name": 200,
+        "created_at": 100,
+        "citizenship": 90,
+        "manager": 120,
+        "object": 150,
+    }
 
     def __init__(self, parent: tk.Widget,
                  on_select: Optional[Callable[[Worker], None]] = None,
@@ -76,101 +96,139 @@ class WorkerListWidget(tk.Frame):
         self.on_double_click = on_double_click
         self.config = get_config()
         self.workers: List[Worker] = []
-        self._sort_column: str = "id"  # id, name, status, created_at
+        self._sort_column: str = "id"
         self._sort_reverse: bool = False
+        self._filter_text: str = ""
 
-        # Заголовок с кнопками сортировки
-        header_frame = tk.Frame(self, bg='#ecf0f1', height=28)
-        header_frame.pack(fill=tk.X, padx=2, pady=(2, 0))
-        header_frame.pack_propagate(False)
+        # Фильтр
+        filter_frame = tk.Frame(self, bg='#ecf0f1', height=28)
+        filter_frame.pack(fill=tk.X, padx=2, pady=(2, 0))
+        filter_frame.pack_propagate(False)
 
-        # Кликабельные заголовки колонок
-        status_header = tk.Label(header_frame, text="Статус", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), width=6, cursor='hand2')
-        status_header.pack(side=tk.LEFT, padx=2)
-        status_header.bind('<Button-1>', lambda e: self._sort_by("status"))
+        tk.Label(filter_frame, text="Фильтр:", bg='#ecf0f1',
+                 font=(FONT_FAMILY, 8)).pack(side=tk.LEFT, padx=4)
+        self._filter_var = tk.StringVar()
+        self._filter_var.trace_add("write", self._on_filter_change)
+        filter_entry = tk.Entry(filter_frame, textvariable=self._filter_var,
+                                font=(FONT_FAMILY, 9), width=20)
+        filter_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-        id_header = tk.Label(header_frame, text="ID", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), width=8, cursor='hand2')
-        id_header.pack(side=tk.LEFT, padx=2)
-        id_header.bind('<Button-1>', lambda e: self._sort_by("id"))
+        # Treeview
+        style = ttk.Style()
+        style.configure("Custom.Treeview", font=(FONT_FAMILY, 9), rowheight=24)
+        style.configure("Custom.Treeview.Heading", font=(FONT_FAMILY, 8, 'bold'))
 
-        name_header = tk.Label(header_frame, text="ФИО", bg='#ecf0f1', font=(FONT_FAMILY, 8, 'bold'), cursor='hand2')
-        name_header.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
-        name_header.bind('<Button-1>', lambda e: self._sort_by("name"))
+        tree_frame = tk.Frame(self)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-        # Список
-        self.listbox = tk.Listbox(self, font=(FONT_FAMILY, 10), selectmode=tk.SINGLE, activestyle='none')
-        self.listbox.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-        self.listbox.bind('<<ListboxSelect>>', self._on_select)
-        self.listbox.bind('<Double-Button-1>', self._on_double_click)
+        self.tree = ttk.Treeview(
+            tree_frame, columns=self.COLUMNS, show="headings",
+            selectmode="browse", style="Custom.Treeview"
+        )
 
-        # Сохраняем ссылки на заголовки для обновления стрелочек
-        self._headers = {"status": status_header, "id": id_header, "name": name_header}
+        for col in self.COLUMNS:
+            self.tree.heading(col, text=self.HEADERS[col],
+                              command=lambda c=col: self._sort_by(c))
+            self.tree.column(col, width=self.COLUMN_WIDTHS[col], minwidth=40)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
+        self.tree.bind("<Double-Button-1>", self._on_double_click)
+
+    def _on_filter_change(self, *_args) -> None:
+        self._filter_text = self._filter_var.get().strip().lower()
+        self._refresh_tree()
 
     def _sort_by(self, column: str) -> None:
-        """Сортировка по колонке."""
         if self._sort_column == column:
             self._sort_reverse = not self._sort_reverse
         else:
             self._sort_column = column
             self._sort_reverse = False
 
-        self._update_header_arrows()
+        self._update_headers()
         self._apply_sort()
 
-    def _update_header_arrows(self) -> None:
-        """Обновление стрелочек в заголовках."""
-        arrows = {"status": "", "id": "", "name": ""}
+    def _update_headers(self) -> None:
         arrow = " ▲" if not self._sort_reverse else " ▼"
-        arrows[self._sort_column] = arrow
+        for col in self.COLUMNS:
+            base = self.HEADERS[col]
+            text = base + (arrow if col == self._sort_column else "")
+            self.tree.heading(col, text=text)
 
-        for col, header in self._headers.items():
-            base_text = {"status": "Статус", "id": "ID", "name": "ФИО"}[col]
-            header.config(text=base_text + arrows[col])
+    def _get_sort_key(self, worker: Worker):
+        val = getattr(worker, self._sort_column, "")
+        if self._sort_column == "created_at":
+            return val or ""
+        if self._sort_column == "id":
+            return val
+        return (val or "").lower()
 
     def _apply_sort(self) -> None:
-        """Применить сортировку к списку."""
-        key_funcs = {
-            "id": lambda w: w.id,
-            "name": lambda w: w.name.lower(),
-            "status": lambda w: w.status,
-            "created_at": lambda w: w.created_at or "",
-        }
-        key_func = key_funcs.get(self._sort_column, lambda w: w.id)
-        self.workers.sort(key=key_func, reverse=self._sort_reverse)
-        self._refresh_listbox()
+        self.workers.sort(key=self._get_sort_key, reverse=self._sort_reverse)
+        self._refresh_tree()
 
-    def _refresh_listbox(self) -> None:
-        """Обновить отображение Listbox."""
-        self.listbox.delete(0, tk.END)
+    def _matches_filter(self, worker: Worker) -> bool:
+        if not self._filter_text:
+            return True
+        f = self._filter_text
+        fields = [
+            worker.status, worker.id, worker.name,
+            worker.created_at or "", worker.citizenship,
+            worker.manager, worker.object,
+        ]
+        return any(f in (v or "").lower() for v in fields)
+
+    def _refresh_tree(self) -> None:
+        self.tree.delete(*self.tree.get_children())
+        icon_map = self.config.status_icons
         for worker in self.workers:
-            icon = self.config.status_icons.get(worker.status, '?')
-            self.listbox.insert(tk.END, f"{icon} {worker.id} — {worker.name}")
+            if not self._matches_filter(worker):
+                continue
+            icon = icon_map.get(worker.status, "?")
+            date_short = ""
+            if worker.created_at:
+                date_short = worker.created_at[:10]
+            self.tree.insert("", tk.END, iid=worker.id, values=(
+                icon, worker.id, worker.name, date_short,
+                worker.citizenship, worker.manager, worker.object,
+            ))
 
     def set_workers(self, workers: List[Worker]) -> None:
-        """Установить список сотрудников."""
         self.workers = workers
         self._apply_sort()
 
     def _on_select(self, event) -> None:
-        selection = self.listbox.curselection()
-        if selection and self.on_select:
-            self.on_select(self.workers[selection[0]])
+        if not self.on_select:
+            return
+        sel = self.tree.selection()
+        if sel:
+            wid = sel[0]
+            for w in self.workers:
+                if w.id == wid:
+                    self.on_select(w)
+                    break
 
     def _on_double_click(self, event) -> None:
-        selection = self.listbox.curselection()
-        if selection and self.on_double_click:
-            self.on_double_click(self.workers[selection[0]])
+        if not self.on_double_click:
+            return
+        sel = self.tree.selection()
+        if sel:
+            wid = sel[0]
+            for w in self.workers:
+                if w.id == wid:
+                    self.on_double_click(w)
+                    break
 
     def select_by_id(self, worker_id: str) -> None:
-        """Выбрать сотрудника по ID."""
-        for i, worker in enumerate(self.workers):
-            if worker.id == worker_id:
-                self.listbox.selection_clear(0, tk.END)
-                self.listbox.selection_set(i)
-                self.listbox.see(i)
-                if self.on_select:
-                    self.on_select(worker)
-                break
+        if self.tree.exists(worker_id):
+            self.tree.selection_set(worker_id)
+            self.tree.see(worker_id)
 
 
 # ─── Карточка сотрудника для уведомлений ───

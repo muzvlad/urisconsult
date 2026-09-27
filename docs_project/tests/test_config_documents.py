@@ -46,22 +46,29 @@ class TestDocFlows:
             assert len(docs) > 0
 
     def test_photo_is_first_in_all_flows(self):
+        """Патентный поток не начинается с фото (убрано селфи)."""
         for cat, docs in DOC_FLOWS.items():
-            assert docs[0].key == 'photo'
+            if cat == 'Патент':
+                assert docs[0].key == 'passport'
+            else:
+                assert docs[0].key == 'photo'
 
     def test_passport_is_second_in_all_flows(self):
         for cat, docs in DOC_FLOWS.items():
-            # ЕАЭС использует свой тип паспорта (паспорт или ID-карта)
-            expected = 'eaeas_passport' if cat == 'ЕАЭС' else 'passport'
-            assert docs[1].key == expected, f"Второй документ '{cat}' ≠ {expected}"
+            if cat == 'Патент':
+                # Патент без селфи: passport первый
+                assert docs[0].key == 'passport', f"Первый документ 'Патент' != passport"
+            else:
+                expected = 'eaeas_passport' if cat == 'ЕАЭС' else 'passport'
+                assert docs[1].key == expected, f"Второй документ '{cat}' != {expected}"
 
     def test_unique_keys_per_category(self):
         for cat, docs in DOC_FLOWS.items():
             keys = [d.key for d in docs]
             assert len(keys) == len(set(keys))
 
-    def test_patent_has_26_docs(self):
-        assert len(DOC_FLOWS['Патент']) == 26
+    def test_patent_has_16_docs(self):
+        assert len(DOC_FLOWS['Патент']) == 16
 
     def test_student_has_14_docs(self):
         assert len(DOC_FLOWS['Студент']) == 14
@@ -192,7 +199,7 @@ class TestHelperFunctions:
     def test_get_doc_flow_valid(self):
         flow = get_doc_flow('Патент')
         assert isinstance(flow, list)
-        assert len(flow) == 26
+        assert len(flow) == 16
 
     def test_get_doc_flow_invalid_returns_patent(self):
         flow = get_doc_flow('Несуществующая категория')
@@ -204,23 +211,23 @@ class TestHelperFunctions:
         assert next_doc.key == 'patent_bank_details'
 
     def test_patent_flow_order(self):
-        """Порядок патентного потока соответствует ТЗ."""
+        """Порядок патентного потока соответствует ТЗ (без селфи, чеки 1 и 11)."""
         keys = [d.key for d in DOC_FLOWS['Патент']]
         expected = [
-            'photo', 'passport',
+            'passport',
             'patent_passport_translation', 'patent_migration_card',
             'patent_registration', 'patent_registration_back',
             'patent_fingerprint_front', 'patent_fingerprint_back',
             'patent_dms', 'patent_patent_front', 'patent_patent_back',
-            *[f'patent_receipt_{i}' for i in range(1, 12)],
+            'patent_receipt_1', 'patent_receipt_11',
             'patent_language_cert', 'patent_inn', 'patent_snils',
             'patent_bank_details',
         ]
         assert keys == expected
 
-    def test_patent_receipts_all_skippable(self):
-        """Все чеки патента можно пропустить."""
-        for i in range(1, 12):
+    def test_patent_receipts_skippable(self):
+        """Чеки патента (1 и 11) можно пропустить."""
+        for i in [1, 11]:
             doc = get_doc_by_key(f'patent_receipt_{i}')
             assert doc is not None, f"Чек {i} отсутствует"
             assert doc.can_skip, f"Чек {i} должен быть пропускаемым"
@@ -278,9 +285,9 @@ class TestHelperFunctions:
         assert next_doc is None
 
     def test_get_next_doc_first(self):
-        next_doc = get_next_doc('photo', 'Патент')
+        next_doc = get_next_doc('passport', 'Патент')
         assert next_doc is not None
-        assert next_doc.key == 'passport'
+        assert next_doc.key == 'patent_passport_translation'
 
     def test_get_next_doc_invalid(self):
         next_doc = get_next_doc('nonexistent', 'Патент')
