@@ -34,6 +34,7 @@ async def show_confirmation(message: types.Message, state: FSMContext):
     text += f"📅 Дата рождения: {data.get('date', 'Не указано')}\n"
     text += f"👤 Менеджер: {data.get('manager', 'Не указано')}\n"
     text += f"🏢 Объект: {data.get('object', 'Не указано')}\n"
+    text += f"🏛 Заказчик: {data.get('customer', 'Не указано')}\n"
     text += f"📍 Адрес: {data.get('object_address', 'Не указано')}\n"
     text += f"💼 Должность: {data.get('position', 'Не указано')}\n"
     text += f"📞 Основной тел.: {data.get('phone_main', 'Не указано')}\n"
@@ -192,6 +193,7 @@ async def process_edit(callback: types.CallbackQuery, state: FSMContext):
         'date': '📅 Дата рождения',
         'manager': '👤 Менеджер',
         'object': '🏢 Объект',
+        'customer': '🏛 Заказчик',
         'object_address': '📍 Адрес объекта',
         'position': '💼 Должность',
         'phone_main': '📞 Основной телефон',

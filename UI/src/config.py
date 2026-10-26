@@ -5,8 +5,10 @@
 from __future__ import annotations
 import sys
 import os
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from typing import List, Tuple, Optional, Dict
 from functools import lru_cache
 
@@ -307,6 +309,109 @@ def get_document_config() -> Tuple[Dict, Dict, Dict]:
 def normalize_citizenship(citizenship: str) -> str:
     """Привести значение гражданства к ключам DOC_FLOWS (легаси-значения → «Россия»)."""
     return {'Российская Федерация': 'Россия', 'РФ': 'Россия'}.get(citizenship, citizenship)
+
+
+# ─── HR-статусы ───
+
+HR_STATUS_LABELS: Dict[str, str] = {
+    'not_processed': 'Новый',
+    'docs_pending': 'Ожидает документы',
+    'employed': 'Трудоустроен',
+    'rejected': 'Отказ',
+    'fired': 'Уволен',
+}
+HR_STATUS_KEYS: List[str] = list(HR_STATUS_LABELS)
+HR_STATUS_STYLES: Dict[str, Dict[str, str]] = {
+    'not_processed': {'bg': '#E5E7EB', 'fg': '#374151'},
+    'docs_pending': {'bg': '#FEF3C7', 'fg': '#92400E'},
+    'employed': {'bg': '#D1FAE5', 'fg': '#065F46'},
+    'rejected': {'bg': '#FEE2E2', 'fg': '#991B1B'},
+    'fired': {'bg': '#E5E7EB', 'fg': '#6B7280'},
+}
+
+
+def hr_status_style(status: str) -> dict:
+    """Цвета плашки HR-статуса. Неизвестный статус — как «Новый»."""
+    key = status if status in HR_STATUS_STYLES else 'not_processed'
+    style = HR_STATUS_STYLES[key]
+    return {'bg': style['bg'], 'fg': style['fg'], 'label': HR_STATUS_LABELS[key]}
+
+
+# ─── Даты ───
+
+_DATE_RE = re.compile(r'^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?$')
+
+
+def format_date(value: str) -> str:
+    """Показать дату в формате дд.мм.гггг (ISO → русский формат)."""
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if not text:
+        return ''
+    if _DATE_RE.match(text):
+        return text
+    if re.match(r'^\d{4}-\d{2}-\d{2}', text):
+        try:
+            return datetime.fromisoformat(text.replace('Z', '+00:00')).strftime('%d.%m.%Y')
+        except ValueError:
+            return text
+    return text
+
+
+def format_datetime(value: str) -> str:
+    """Показать дату и время в формате дд.мм.гггг чч:мм."""
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if not text:
+        return ''
+    match = _DATE_RE.match(text)
+    if match:
+        if match.group(4):
+            return text
+        return text[:10]
+    if re.match(r'^\d{4}-\d{2}-\d{2}', text):
+        try:
+            dt = datetime.fromisoformat(text.replace('Z', '+00:00'))
+            if dt.hour or dt.minute or dt.second:
+                return dt.strftime('%d.%m.%Y %H:%M')
+            return dt.strftime('%d.%m.%Y')
+        except ValueError:
+            return text
+    return text
+
+
+def parse_user_date(text: str) -> Optional[str]:
+    """Разобрать строго дд.мм.гггг в ISO YYYY-MM-DD. None при ошибке."""
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    if not re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', text):
+        return None
+    try:
+        return datetime.strptime(text, '%d.%m.%Y').date().isoformat()
+    except ValueError:
+        return None
+
+
+def period_range(preset: str, today: Optional[date] = None) -> Tuple[Optional[str], Optional[str]]:
+    """ISO-границы периода включительно."""
+    current = today or date.today()
+    if preset == 'today':
+        start = end = current
+    elif preset == 'week':
+        start, end = current - timedelta(days=6), current
+    elif preset == 'month':
+        start, end = current.replace(day=1), current
+    elif preset == 'prev_month':
+        end = current.replace(day=1) - timedelta(days=1)
+        start = end.replace(day=1)
+    elif preset == 'year':
+        start, end = current.replace(month=1, day=1), current
+    else:
+        return None, None
+    return start.isoformat(), end.isoformat()
 
 
 def center_window(window: "tk.Tk | tk.Toplevel", width: int, height: int) -> None:

@@ -95,6 +95,42 @@ class TestDatabaseSchema:
         assert 'worker_documents' in tables
         assert 'worker_meetings' in tables
 
+    def test_v5_database_migrates_to_v6(self, fresh_db):
+        db_path, users_dir, docs_dir = fresh_db
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE workers (id TEXT PRIMARY KEY, name TEXT NOT NULL, "
+            "status TEXT DEFAULT 'pending', created_at TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE worker_meetings (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "worker_id TEXT NOT NULL, date TEXT, note TEXT, "
+            "created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+        )
+        conn.execute("INSERT INTO workers (id, name) VALUES ('00001', 'Иванов')")
+        conn.execute(
+            "INSERT INTO worker_meetings (worker_id, date) VALUES ('00001', '01.01.2027 10:00')"
+        )
+        conn.execute("PRAGMA user_version = 5")
+        conn.commit()
+        conn.close()
+
+        db_module = _patch_db_module(db_path, users_dir, docs_dir)
+        asyncio.get_event_loop().run_until_complete(db_module.init_db())
+
+        conn = sqlite3.connect(db_path)
+        worker_cols = {r[1] for r in conn.execute("PRAGMA table_info(workers)")}
+        meeting_cols = {r[1] for r in conn.execute("PRAGMA table_info(worker_meetings)")}
+        meeting = conn.execute(
+            "SELECT notified_at, reminded_at FROM worker_meetings").fetchone()
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        conn.close()
+
+        assert {'customer', 'legal_entity', 'hr_status', 'archived_at'} <= worker_cols
+        assert {'notified_at', 'reminded_at'} <= meeting_cols
+        assert meeting[0] and meeting[1]
+        assert version == 6
+
     def test_workers_table_columns(self, fresh_db):
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)

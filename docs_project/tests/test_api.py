@@ -1,0 +1,95 @@
+"""Тесты HTTP API (spec 025, 027)."""
+import asyncio
+import os
+import sys
+
+import pytest
+
+BOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), 'bot')
+sys.path.insert(0, BOT_DIR)
+
+
+@pytest.fixture
+def client(feature_db, worker_factory):
+    from api_server import app
+
+    asyncio.run(feature_db.save_worker(worker_factory()))
+    return app.test_client()
+
+
+class TestWorkersApi:
+    def test_customer_legal_entity_and_archive(self, client):
+        assert client.get('/api/workers').get_json()[0]['customer'] == 'ООО Ромашка'
+
+        resp = client.put('/api/workers/00001/legal-entity', json={'legal_entity': 'ООО Тест'})
+        assert resp.status_code == 200
+        assert client.get('/api/workers/00001').get_json()['legal_entity'] == 'ООО Тест'
+
+        assert client.post('/api/workers/00001/archive').status_code == 200
+        assert client.get('/api/workers?archived=0').get_json() == []
+        assert len(client.get('/api/workers?archived=1').get_json()) == 1
+        assert len(client.get('/api/workers?archived=all').get_json()) == 1
+        assert client.post('/api/workers/00001/unarchive').status_code == 200
+        assert len(client.get('/api/workers').get_json()) == 1
+
+    def test_date_filters_are_validated(self, client):
+        assert client.get('/api/workers?date_from=2026-01-01&date_to=2026-01-31').status_code == 200
+        assert client.get('/api/workers?date_from=01.01.2026').status_code == 400
+        assert client.get('/api/workers?date_from=2026-1-1').status_code == 400
+        assert client.get('/api/workers?date_to=2026-13-01').status_code == 400
+        assert client.get('/api/workers?archived=bad').status_code == 400
+
+
+class TestHrStatusApi:
+    def test_employed_requires_date(self, client):
+        assert client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'employed'}).status_code == 400
+        assert client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'employed',
+                                'hr_status_date': '2026-01-01'}).status_code == 400
+        assert client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'employed',
+                                'hr_status_date': '1.1.2026'}).status_code == 400
+
+        resp = client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'employed',
+                                'hr_status_date': '01.01.2026'})
+        assert resp.status_code == 200
+        worker = client.get('/api/workers/00001').get_json()
+        assert worker['hr_status'] == 'employed'
+        assert worker['hr_status_date'] == '01.01.2026'
+
+    def test_invalid_status_and_date_cleared(self, client):
+        assert client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'unknown'}).status_code == 400
+
+        resp = client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'rejected', 'hr_status_date': '01.01.2026'})
+        assert resp.status_code == 200
+        assert client.get('/api/workers/00001').get_json()['hr_status_date'] is None
+
+
+class TestNotesAndMeetingsApi:
+    def test_notes_crud(self, client):
+        created = client.post('/api/workers/00001/notes', json={'text': '  Заметка  '})
+        assert created.status_code == 200
+        note_id = created.get_json()['id']
+
+        notes = client.get('/api/workers/00001/notes').get_json()
+        assert notes[0]['text'] == 'Заметка'
+        assert client.post('/api/workers/00001/notes', json={'text': '   '}).status_code == 400
+
+        assert client.put(f'/api/workers/00001/notes/{note_id}',
+                          json={'text': 'Новая'}).status_code == 200
+        assert client.get('/api/workers/00001/notes').get_json()[0]['text'] == 'Новая'
+        assert client.delete(f'/api/workers/00001/notes/{note_id}').status_code == 200
+        assert client.get('/api/workers/00001/notes').get_json() == []
+
+    def test_meeting_date_validation(self, client):
+        assert client.post('/api/workers/00001/meetings',
+                           json={'date': '26.10.2026 14:30'}).status_code == 200
+        assert client.post('/api/workers/00001/meetings',
+                           json={'date': '26/10/2026'}).status_code == 400
+        assert client.post('/api/workers/00001/meetings',
+                           json={'date': '26.10.2026 9:30'}).status_code == 400

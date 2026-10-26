@@ -18,6 +18,7 @@ class Worker:
     gender: str = ""
     position: str = ""
     object: str = ""
+    customer: str = ""
     object_address: str = ""
     manager: str = ""
     phone_main: str = ""
@@ -33,6 +34,10 @@ class Worker:
     updated_at: str = ""
     status: str = "pending"
     rejection_reasons: str = "[]"
+    legal_entity: str = ""
+    hr_status: str = "not_processed"
+    hr_status_date: str = ""
+    archived_at: str = ""
 
     # Кэш связанных данных
     _documents: Dict[str, str] = field(default_factory=dict, init=False, repr=False)
@@ -72,6 +77,10 @@ class Worker:
     def is_rejected(self) -> bool:
         return self.status == "rejected"
 
+    @property
+    def is_archived(self) -> bool:
+        return bool(self.archived_at)
+
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "Worker":
         # Безопасное получение значений из Row (поддержка частичных строк)
@@ -89,6 +98,7 @@ class Worker:
             gender=get("gender"),
             position=get("position"),
             object=get("object"),
+            customer=get("customer"),
             object_address=get("object_address"),
             manager=get("manager"),
             phone_main=get("phone_main"),
@@ -104,6 +114,10 @@ class Worker:
             updated_at=get("updated_at"),
             status=get("status", "pending"),
             rejection_reasons=get("rejection_reasons", "[]"),
+            legal_entity=get("legal_entity"),
+            hr_status=get("hr_status", "not_processed") or "not_processed",
+            hr_status_date=get("hr_status_date"),
+            archived_at=get("archived_at"),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -114,6 +128,7 @@ class Worker:
             "gender": self.gender,
             "position": self.position,
             "object": self.object,
+            "customer": self.customer,
             "object_address": self.object_address,
             "manager": self.manager,
             "phone_main": self.phone_main,
@@ -129,6 +144,10 @@ class Worker:
             "updated_at": self.updated_at,
             "status": self.status,
             "rejection_reasons": self.rejection_reasons,
+            "legal_entity": self.legal_entity,
+            "hr_status": self.hr_status,
+            "hr_status_date": self.hr_status_date,
+            "archived_at": self.archived_at,
         }
 
 

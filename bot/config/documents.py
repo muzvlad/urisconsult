@@ -189,6 +189,7 @@ FIELD_LABELS: Dict[str, str] = {
     'gender': 'Пол',
     'position': 'Должность',
     'object': 'Объект',
+    'customer': 'Заказчик',
     'object_address': 'Адрес объекта',
     'manager': 'Менеджер',
     'phone_main': 'Основной телефон',

@@ -11,7 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageTk
 
-from src.config import get_config, FONT_FAMILY
+from src.config import (get_config, FONT_FAMILY, format_date, format_datetime,
+                        HR_STATUS_KEYS, hr_status_style)
 from src.models import Worker
 from src.services import get_document_service, DocumentInfo
 
@@ -68,24 +69,27 @@ class NotificationBell(tk.Frame):
 class WorkerListWidget(tk.Frame):
     """Виджет списка сотрудников с Treeview и фильтрацией."""
 
-    COLUMNS = ("status", "id", "name", "created_at", "citizenship", "manager", "object")
+    COLUMNS = ("status", "id", "name", "created_at", "citizenship",
+               "manager", "object", "hr_status")
     HEADERS = {
-        "status": "Статус",
+        "status": "Статус бота",
         "id": "ID",
         "name": "ФИО",
         "created_at": "Дата",
         "citizenship": "Категория",
         "manager": "Менеджер",
         "object": "Объект",
+        "hr_status": "HR-статус",
     }
     COLUMN_WIDTHS = {
-        "status": 50,
+        "status": 95,
         "id": 70,
         "name": 200,
         "created_at": 100,
         "citizenship": 90,
         "manager": 120,
         "object": 150,
+        "hr_status": 110,
     }
 
     def __init__(self, parent: tk.Widget,
@@ -137,6 +141,10 @@ class WorkerListWidget(tk.Frame):
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        for key in HR_STATUS_KEYS:
+            self.tree.tag_configure(f"hr_{key}", background=hr_status_style(key)['bg'])
+        self.tree.tag_configure("archived", foreground='#9CA3AF')
+
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         self.tree.bind("<Double-Button-1>", self._on_double_click)
 
@@ -180,7 +188,8 @@ class WorkerListWidget(tk.Frame):
         fields = [
             worker.status, worker.id, worker.name,
             worker.created_at or "", worker.citizenship,
-            worker.manager, worker.object,
+            worker.manager, worker.object, worker.customer,
+            worker.legal_entity, worker.hr_status,
         ]
         return any(f in (v or "").lower() for v in fields)
 
@@ -191,12 +200,16 @@ class WorkerListWidget(tk.Frame):
             if not self._matches_filter(worker):
                 continue
             icon = icon_map.get(worker.status, "?")
-            date_short = ""
-            if worker.created_at:
-                date_short = worker.created_at[:10]
-            self.tree.insert("", tk.END, iid=worker.id, values=(
-                icon, worker.id, worker.name, date_short,
+            hr_style = hr_status_style(worker.hr_status)
+            status_key = worker.hr_status if worker.hr_status in HR_STATUS_KEYS else 'not_processed'
+            tags = (f"hr_{status_key}",)
+            if worker.is_archived:
+                tags = tags + ("archived",)
+            self.tree.insert("", tk.END, iid=worker.id,
+                             tags=tags, values=(
+                icon, worker.id, worker.name, format_date(worker.created_at),
                 worker.citizenship, worker.manager, worker.object,
+                hr_style['label'],
             ))
 
     def set_workers(self, workers: List[Worker]) -> None:
@@ -264,6 +277,11 @@ class WorkerCardWidget(tk.Frame):
         tk.Label(top, text=f"({self.worker.citizenship})",
                  font=(FONT_FAMILY, 10), bg='white', fg='#666').pack(side=tk.LEFT, padx=(5, 0))
 
+        hr_style = hr_status_style(self.worker.hr_status)
+        tk.Label(top, text=hr_style['label'], font=(FONT_FAMILY, 9, 'bold'),
+                 bg=hr_style['bg'], fg=hr_style['fg'], padx=8, pady=2
+                 ).pack(side=tk.RIGHT)
+
         # Инфо
         info = tk.Frame(self, bg='white')
         info.pack(fill=tk.X, pady=(5, 0))
@@ -271,6 +289,7 @@ class WorkerCardWidget(tk.Frame):
         info_items = [
             f"Должность: {self.worker.position}",
             f"Объект: {self.worker.object}",
+            f"Заказчик: {self.worker.customer}",
             f"Тел: {self.worker.phone_main}",
         ]
         for item in info_items:
@@ -364,18 +383,6 @@ class DocumentViewer(tk.Frame):
 
         self._build_ui()
 
-    @staticmethod
-    def _format_date(value: str) -> str:
-        """Отформатировать дату из ISO в ДД.ММ.ГГГГ ЧЧ:ММ."""
-        if not value:
-            return ''
-        try:
-            from datetime import datetime
-            dt = value[:16].replace('T', ' ')
-            return datetime.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
-        except Exception:
-            return value[:16]
-
     def _build_ui(self) -> None:
         main = tk.Frame(self, bg='white')
         main.pack(fill=tk.X, padx=8, pady=5)
@@ -390,7 +397,7 @@ class DocumentViewer(tk.Frame):
 
         # Дата заливки документа под названием
         if self.doc_info.uploaded_at:
-            fmt = self._format_date(self.doc_info.uploaded_at)
+            fmt = format_datetime(self.doc_info.uploaded_at)
             if fmt:
                 tk.Label(left_col, text=f"Залит: {fmt}",
                          font=(FONT_FAMILY, 8), bg='white', fg='#888', anchor='w'

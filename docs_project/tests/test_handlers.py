@@ -3,6 +3,7 @@
 
 Запуск: cd docs_project && python -m pytest tests/test_handlers.py -v
 """
+import asyncio
 import os
 import sys
 import re
@@ -13,6 +14,7 @@ sys.path.insert(0, BOT_DIR)
 
 from handlers.registration import (
     validate_phone, validate_email, validate_date, get_worker_form,
+    process_object, process_customer,
 )
 
 
@@ -136,6 +138,39 @@ class TestWorkerForm:
                 assert state_id not in seen, \
                     f"Состояние '{doc.key}' дублируется с '{seen[state_id]}'"
                 seen[state_id] = doc.key
+
+
+class TestCustomerTransition:
+    def test_object_then_customer_then_address(self):
+        class FakeMessage:
+            def __init__(self, text):
+                self.text = text
+                self.answers = []
+
+            async def answer(self, text):
+                self.answers.append(text)
+
+        class FakeState:
+            def __init__(self):
+                self.data = {}
+                self.state = None
+
+            async def update_data(self, **kwargs):
+                self.data.update(kwargs)
+
+            async def set_state(self, state):
+                self.state = state
+
+        WorkerForm = get_worker_form()
+        state = FakeState()
+
+        asyncio.run(process_object(FakeMessage('Объект'), state))
+        assert state.data['object'] == 'Объект'
+        assert state.state == WorkerForm.customer
+
+        asyncio.run(process_customer(FakeMessage('ООО Ромашка'), state))
+        assert state.data['customer'] == 'ООО Ромашка'
+        assert state.state == WorkerForm.object_address
 
 
 class TestDocumentFlows:

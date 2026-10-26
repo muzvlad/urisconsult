@@ -8,6 +8,7 @@
 WORKERS_TABLE = "workers"
 WORKER_DOCUMENTS_TABLE = "worker_documents"
 WORKER_MEETINGS_TABLE = "worker_meetings"
+WORKER_NOTES_TABLE = "worker_notes"
 
 # Схема таблицы работников
 WORKER_SCHEMA = f"""
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
     gender TEXT,
     position TEXT,
     object TEXT,
+    customer TEXT,
     object_address TEXT,
     manager TEXT,
     phone_main TEXT,
@@ -33,7 +35,11 @@ CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
     updated_at TEXT,
     status TEXT DEFAULT 'pending',
     rejection_reasons TEXT DEFAULT '[]',
-    notified_at TEXT
+    notified_at TEXT,
+    legal_entity TEXT,
+    hr_status TEXT DEFAULT 'not_processed',
+    hr_status_date TEXT,
+    archived_at TEXT
 )
 """
 
@@ -58,6 +64,20 @@ CREATE TABLE IF NOT EXISTS {WORKER_MEETINGS_TABLE} (
     date TEXT,
     note TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    notified_at TEXT,
+    reminded_at TEXT,
+    FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)
+)
+"""
+
+# Схема таблицы комментариев
+WORKER_NOTES_SCHEMA = f"""
+CREATE TABLE IF NOT EXISTS {WORKER_NOTES_TABLE} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT,
+    updated_at TEXT,
     FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)
 )
 """
@@ -68,4 +88,9 @@ MIGRATIONS = [
     ("rejection_reasons", "TEXT DEFAULT '[]'"),
     ("notified_at", "TEXT"),
     ("updated_at", "TEXT"),
+    ("customer", "TEXT"),
+    ("legal_entity", "TEXT"),
+    ("hr_status", "TEXT DEFAULT 'not_processed'"),
+    ("hr_status_date", "TEXT"),
+    ("archived_at", "TEXT"),
 ]

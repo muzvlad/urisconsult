@@ -69,6 +69,51 @@ def sample_worker_data_russia():
 
 
 @pytest.fixture
+def feature_db(tmp_path):
+    """Готовая БД v6 на временных путях; операции через asyncio.run."""
+    import asyncio
+    import services.db as db_module
+
+    users_dir = tmp_path / "Users"
+    docs_dir = tmp_path / "users" / "docs"
+    users_dir.mkdir(parents=True, exist_ok=True)
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
+    db_module._db = None
+    db_module.DB_PATH = str(tmp_path / "test_users.db")
+    db_module.USERS_DIR = str(users_dir)
+    db_module.DOCS_DIR = str(docs_dir)
+    asyncio.run(db_module.init_db())
+    yield db_module
+    db_module._db = None
+
+
+@pytest.fixture
+def worker_factory():
+    """Фабрика минимальных данных анкеты для тестов."""
+    def factory(worker_id: str = '00001', name: str = 'Иванов Иван Иванович',
+                **extra) -> dict:
+        data = {
+            'id': worker_id,
+            'name': name,
+            'citizenship': 'Патент',
+            'gender': 'Мужской',
+            'position': 'Электрик',
+            'object': 'Жилой дом',
+            'customer': 'ООО Ромашка',
+            'object_address': 'ул. Пушкина, д. 10',
+            'manager': 'Петров П.П.',
+            'phone_main': '+79991234567',
+            'phone_additional': 'Не указан',
+            'email': 'ivanov@test.com',
+            'date': '01.01.1990',
+        }
+        data.update(extra)
+        return data
+    return factory
+
+
+@pytest.fixture
 def in_memory_db():
     """Создание БД в памяти для тестов."""
     import aiosqlite

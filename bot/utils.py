@@ -16,6 +16,21 @@ if TYPE_CHECKING:
     from aiogram.fsm.state import State
 
 
+def parse_meeting_datetime(value: str):
+    """Разобрать дату встречи: дд.мм.гггг[ чч:мм] или ISO. None при ошибке."""
+    from datetime import datetime
+    if not value:
+        return None
+    text = value.strip()
+    for fmt in ('%d.%m.%Y %H:%M', '%d.%m.%Y', '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 def parse_rejection_reasons(reasons) -> list[dict]:
     """Привести rejection_reasons к единому виду: [{key, comment}, ...].
 
@@ -64,6 +79,7 @@ _BASE_FIELDS = [
     ('date', '📅 Дата рождения'),
     ('manager', '👤 Менеджер'),
     ('object', '🏢 Объект'),
+    ('customer', '🏛 Заказчик'),
     ('object_address', '📍 Адрес объекта'),
     ('position', '💼 Должность'),
     ('phone_main', '📞 Основной телефон'),
@@ -97,6 +113,7 @@ _FIELD_PROMPTS = {
     'date': "Введите дату рождения (ДД.ММ.ГГГГ):",
     'manager': "Введите ФИО менеджера:",
     'object': "Введите объект:",
+    'customer': "Введите заказчика:",
     'object_address': "Введите адрес объекта:",
     'position': "Введите должность:",
     'phone_main': "Введите основной телефон:",

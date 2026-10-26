@@ -1,4 +1,4 @@
-"""
+﻿"""
 Диалоговые окна: отклонение, уведомления, подтверждения.
 """
 from __future__ import annotations
@@ -7,7 +7,9 @@ from tkinter import ttk, messagebox
 from typing import Callable, Optional, List, Dict, Any
 from pathlib import Path
 
-from src.config import get_config, get_document_config, normalize_citizenship, FONT_FAMILY
+from src.config import (get_config, get_document_config, normalize_citizenship,
+                        FONT_FAMILY, format_date, parse_user_date,
+                        HR_STATUS_KEYS, HR_STATUS_LABELS, hr_status_style)
 from src.models import Worker
 from src.services import get_telegram_service
 from src.api_client import get_db_service as get_api_client
@@ -86,7 +88,7 @@ class RejectDialog:
         fields = [
             ('name', 'ФИО'), ('citizenship', 'Категория'), ('gender', 'Пол'),
             ('date', 'Дата рождения'), ('manager', 'Менеджер'), ('object', 'Объект'),
-            ('object_address', 'Адрес'), ('position', 'Должность'),
+            ('customer', 'Заказчик'), ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Основной телефон'), ('phone_additional', 'Доп. телефон'),
         ]
 
@@ -377,6 +379,7 @@ class EditDialog:
             ('date', 'Дата рождения'),
             ('manager', 'Менеджер'),
             ('object', 'Объект'),
+            ('customer', 'Заказчик'),
             ('object_address', 'Адрес объекта'),
             ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
@@ -436,7 +439,7 @@ class MeetingDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
-        self._center_window(400, 260)
+        self._center_window(520, 430)
         self._build_ui()
 
     def _center_window(self, w: int, h: int) -> None:
@@ -474,7 +477,8 @@ class MeetingDialog:
         form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
         form.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form, text="Дата и время:", font=(FONT_FAMILY, 10), bg='#f0f0f0').pack(anchor=tk.W)
+        tk.Label(form, text="Дата и время (дд.мм.гггг чч:мм):",
+                 font=(FONT_FAMILY, 10), bg='#f0f0f0').pack(anchor=tk.W)
         dt_row = tk.Frame(form, bg='#f0f0f0')
         dt_row.pack(fill=tk.X, pady=(0, 10))
         self.date_entry = tk.Entry(dt_row, font=(FONT_FAMILY, 11), width=15)
@@ -485,20 +489,154 @@ class MeetingDialog:
         self.time_entry.insert(0, __import__('datetime').datetime.now().strftime('%H:%M'))
 
         tk.Label(form, text="Примечание:", font=(FONT_FAMILY, 10), bg='#f0f0f0').pack(anchor=tk.W)
-        self.note_text = tk.Text(form, font=(FONT_FAMILY, 11), width=30, height=3, wrap=tk.WORD)
-        self.note_text.pack(fill=tk.X, pady=(0, 5))
+        self.note_text = tk.Text(form, font=(FONT_FAMILY, 11), width=50, height=6, wrap=tk.WORD)
+        self.note_text.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
     def _save(self) -> None:
-        date = self.date_entry.get().strip()
+        date_text = self.date_entry.get().strip()
         time_str = self.time_entry.get().strip()
-        if time_str:
-            date = f"{date} {time_str}"
-        note = self.note_text.get("1.0", tk.END).strip()
-        if not note:
-            note = "Встреча"
+        iso_date = parse_user_date(date_text)
+        if not iso_date:
+            messagebox.showwarning("Внимание", "Дата должна быть в формате дд.мм.гггг",
+                                   parent=self.dialog)
+            return
+        if len(time_str) != 5 or time_str[2] != ':':
+            messagebox.showwarning("Ошибка", "Время должно быть в формате чч:мм",
+                                   parent=self.dialog)
+            return
         try:
-            self.api.add_meeting(self.worker.id, date, note)
+            from datetime import datetime
+            datetime.strptime(time_str, "%H:%M")
+        except ValueError:
+            messagebox.showwarning("Ошибка", "Время должно быть в формате чч:мм",
+                                   parent=self.dialog)
+            return
+        date_value = f"{date_text} {time_str}"
+        note = self.note_text.get("1.0", tk.END).strip()
+        try:
+            if not self.api.add_meeting(self.worker.id, date_value, note):
+                messagebox.showerror("Ошибка", "Не удалось добавить встречу",
+                                     parent=self.dialog)
+                return
             self.dialog.destroy()
             self.on_added()
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось добавить встречу:\n{e}", parent=self.dialog)
+
+# ─── Комментарий ───
+
+class NoteDialog:
+    """Диалог добавления/изменения комментария."""
+
+    def __init__(self, parent: tk.Widget, worker: Worker,
+                 on_save: Callable[[str], None],
+                 note: Optional[dict] = None):
+        self.worker = worker
+        self.on_save = on_save
+        self.note = note
+        self.config = get_config()
+
+        self.dialog = tk.Toplevel(parent)
+        title = "Изменить комментарий" if note else "Новый комментарий"
+        self.dialog.title(f"{title} — {worker.name}")
+        self.dialog.configure(bg='#f0f0f0')
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        self.dialog.after(10, lambda: self._center_window(520, 340))
+        self._build_ui()
+
+    def _center_window(self, w: int, h: int) -> None:
+        self.dialog.update_idletasks()
+        sw = self.dialog.winfo_screenwidth()
+        sh = self.dialog.winfo_screenheight()
+        self.dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    def _build_ui(self) -> None:
+        header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
+        header.pack(fill=tk.X)
+        text = "Изменить комментарий" if self.note else "Новый комментарий"
+        tk.Label(header, text=text, font=(FONT_FAMILY, 13, 'bold'),
+                 bg='#2c3e50', fg='white').pack()
+        tk.Label(header, text=self.worker.name, font=(FONT_FAMILY, 10),
+                 bg='#2c3e50', fg='#bbb').pack()
+
+        form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
+        form.pack(fill=tk.BOTH, expand=True)
+        self.text = tk.Text(form, height=6, width=50, wrap=tk.WORD, font=(FONT_FAMILY, 10))
+        self.text.pack(fill=tk.BOTH, expand=True)
+        if self.note:
+            self.text.insert('1.0', self.note.get('text', ''))
+        self.text.focus_set()
+
+        btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=16, relief=tk.FLAT, cursor='hand2').pack(side=tk.LEFT, padx=(15, 5))
+        tk.Button(btn_frame, text="Сохранить", command=self._save,
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=15, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT, padx=(5, 15))
+
+    def _save(self) -> None:
+        text = self.text.get('1.0', tk.END).strip()
+        if not text:
+            messagebox.showwarning("Внимание", "Комментарий не может быть пустым",
+                                   parent=self.dialog)
+            return
+        self.dialog.destroy()
+        self.on_save(text)
+
+
+# ─── Юридическое лицо ───
+
+class LegalEntityDialog:
+    """Диалог изменения юридического лица."""
+
+    def __init__(self, parent: tk.Widget, worker: Worker,
+                 on_save: Callable[[str], None]):
+        self.worker = worker
+        self.on_save = on_save
+        self.config = get_config()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Юр. лицо — {worker.name}")
+        self.dialog.configure(bg='#f0f0f0')
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        self.dialog.after(10, lambda: self._center_window(460, 230))
+        self._build_ui()
+
+    def _center_window(self, w: int, h: int) -> None:
+        self.dialog.update_idletasks()
+        sw = self.dialog.winfo_screenwidth()
+        sh = self.dialog.winfo_screenheight()
+        self.dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    def _build_ui(self) -> None:
+        header = tk.Frame(self.dialog, bg='#2c3e50', pady=10)
+        header.pack(fill=tk.X)
+        tk.Label(header, text="Юридическое лицо", font=(FONT_FAMILY, 13, 'bold'),
+                 bg='#2c3e50', fg='white').pack()
+        tk.Label(header, text=self.worker.name, font=(FONT_FAMILY, 10),
+                 bg='#2c3e50', fg='#bbb').pack()
+
+        form = tk.Frame(self.dialog, bg='#f0f0f0', padx=20, pady=15)
+        form.pack(fill=tk.BOTH, expand=True)
+        self.entry = tk.Entry(form, font=(FONT_FAMILY, 11))
+        self.entry.pack(fill=tk.X)
+        self.entry.insert(0, self.worker.legal_entity or '')
+        self.entry.focus_set()
+
+        btn_frame = tk.Frame(self.dialog, bg='#f0f0f0', pady=10)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Button(btn_frame, text="Отмена", command=self.dialog.destroy,
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=16, relief=tk.FLAT, cursor='hand2').pack(side=tk.LEFT, padx=(15, 5))
+        tk.Button(btn_frame, text="Сохранить", command=self._save,
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=15, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT, padx=(5, 15))
+
+    def _save(self) -> None:
+        value = self.entry.get().strip()
+        self.dialog.destroy()
+        self.on_save(value)

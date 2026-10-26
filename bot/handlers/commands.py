@@ -54,7 +54,7 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
 
         worker_data = {'id': worker_id}
         for k in ['name', 'citizenship', 'gender', 'date', 'manager',
-                   'object', 'object_address', 'position', 'phone_main',
+                   'object', 'customer', 'object_address', 'position', 'phone_main',
                    'phone_additional']:
             worker_data[k] = worker.get(k)
         await state.update_data(**worker_data)

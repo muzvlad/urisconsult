@@ -27,7 +27,7 @@ def _build_worker_form() -> type:
     """Динамически создаёт StatesGroup с состояниями для всех документов."""
     # Базовые состояния (личные данные)
     states = {
-        'name', 'citizenship', 'gender', 'position', 'object',
+        'name', 'citizenship', 'gender', 'position', 'object', 'customer',
         'object_address', 'manager', 'phone_main', 'phone_additional',
         'date',
         'russia_marital_status', 'russia_relatives',
@@ -148,6 +148,12 @@ async def process_manager(message: types.Message, state: FSMContext):
 
 async def process_object(message: types.Message, state: FSMContext):
     await state.update_data(object=message.text.strip())
+    await message.answer("🏛 Введите заказчика:")
+    await state.set_state(get_worker_form().customer)
+
+
+async def process_customer(message: types.Message, state: FSMContext):
+    await state.update_data(customer=message.text.strip())
     await message.answer("📍 Введите адрес объекта:")
     await state.set_state(get_worker_form().object_address)
 
@@ -303,6 +309,7 @@ def register_registration_handlers(dp, form_class):
     dp.message.register(process_gender, form_class.gender)
     dp.message.register(process_position, form_class.position)
     dp.message.register(process_object, form_class.object)
+    dp.message.register(process_customer, form_class.customer)
     dp.message.register(process_object_address, form_class.object_address)
     dp.message.register(process_manager, form_class.manager)
     dp.message.register(process_phone_main, form_class.phone_main)

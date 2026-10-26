@@ -20,12 +20,17 @@ from contextlib import asynccontextmanager
 
 from config import DB_PATH, USERS_DIR
 from config.documents import DOC_FLOWS, DOC_PREFIXES
-from shared import WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA
+from shared import (
+    WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA,
+    WORKER_NOTES_SCHEMA,
+)
 
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
+
+HR_STATUSES = ('not_processed', 'docs_pending', 'employed', 'rejected', 'fired')
 
 
 # ─── Соединение ──────────────────────────────────────────────────────
@@ -53,11 +58,13 @@ async def init_db():
         await db.execute(WORKER_SCHEMA)
         await db.execute(WORKER_DOCUMENTS_SCHEMA)
         await db.execute(WORKER_MEETINGS_SCHEMA)
+        await db.execute(WORKER_NOTES_SCHEMA)
 
         # Индексы
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wn_worker ON worker_notes(worker_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
 
         await db.commit()
@@ -91,6 +98,8 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v3_to_v4(db)
     if from_version < 5:
         await _migrate_v4_to_v5(db)
+    if from_version < 6:
+        await _migrate_v5_to_v6(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -293,6 +302,49 @@ async def _migrate_v4_to_v5(db: aiosqlite.Connection):
     await db.commit()
     logger.info("Миграция v4→v5: backfill дат created_at/updated_at завершён")
 
+# ─── Миграция v5 → v6: заказчик, UI-поля, уведомления, комментарии ────
+
+async def _migrate_v5_to_v6(db: aiosqlite.Connection):
+    """Миграция v5→v6: новые поля анкеты, уведомления о встречах, комментарии."""
+    for column, definition in (
+        ('customer', 'TEXT'),
+        ('legal_entity', 'TEXT'),
+        ('hr_status', "TEXT DEFAULT 'not_processed'"),
+        ('hr_status_date', 'TEXT'),
+        ('archived_at', 'TEXT'),
+    ):
+        try:
+            await db.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError:
+            pass
+
+    for column in ('notified_at', 'reminded_at'):
+        try:
+            await db.execute(f"ALTER TABLE worker_meetings ADD COLUMN {column} TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    await db.execute(WORKER_NOTES_SCHEMA)
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_wn_worker ON worker_notes(worker_id)")
+
+    await db.execute(
+        "UPDATE workers SET hr_status = 'not_processed' "
+        "WHERE hr_status IS NULL OR hr_status = ''"
+    )
+    # Старые встречи не должны вызвать рассылку после обновления
+    await db.execute(
+        "UPDATE worker_meetings SET notified_at = "
+        "COALESCE(NULLIF(created_at, ''), datetime('now')) "
+        "WHERE notified_at IS NULL OR notified_at = ''"
+    )
+    await db.execute(
+        "UPDATE worker_meetings SET reminded_at = "
+        "COALESCE(NULLIF(created_at, ''), datetime('now')) "
+        "WHERE reminded_at IS NULL OR reminded_at = ''"
+    )
+    await db.commit()
+    logger.info("Миграция v5→v6 завершена")
+
 async def _migrate_from_json(db: aiosqlite.Connection):
     """Миграция существующих JSON-файлов в БД."""
     if not os.path.exists(USERS_DIR):
@@ -465,7 +517,7 @@ async def save_worker(data: dict) -> str:
 
         personal_keys = [
             'id', 'name', 'citizenship', 'gender', 'position', 'object',
-            'object_address', 'manager', 'phone_main', 'phone_additional',
+            'customer', 'object_address', 'manager', 'phone_main', 'phone_additional',
             'date', 'registration', 'marital_status', 'relatives_json',
             'telegram_id', 'telegram_username',
         ]
@@ -567,11 +619,31 @@ async def get_worker(worker_id: str) -> dict | None:
         return result
 
 
-async def get_all_workers() -> list[dict]:
+def _worker_filters(archived: str = '0', date_from: str | None = None,
+                    date_to: str | None = None) -> tuple[str, list]:
+    """Общие условия выборки анкет: архив и период по created_at."""
+    clauses = ["name != '__reserved__'"]
+    params: list = []
+    if archived == '0':
+        clauses.append("(archived_at IS NULL OR archived_at = '')")
+    elif archived == '1':
+        clauses.append("archived_at IS NOT NULL AND archived_at != ''")
+    if date_from:
+        clauses.append("date(created_at) >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("date(created_at) <= ?")
+        params.append(date_to)
+    return " AND ".join(clauses), params
+
+
+async def get_all_workers(archived: str = '0', date_from: str | None = None,
+                          date_to: str | None = None) -> list[dict]:
     """Получить всех работников (без документов для производительности)."""
+    where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE name != '__reserved__' ORDER BY id"
+            f"SELECT * FROM workers WHERE {where} ORDER BY id", params
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -594,23 +666,29 @@ async def get_worker_documents(worker_id: str) -> dict[str, list[dict]]:
         return result
 
 
-async def search_workers(query: str) -> list[dict]:
+async def search_workers(query: str, archived: str = '0',
+                         date_from: str | None = None,
+                         date_to: str | None = None) -> list[dict]:
     """Поиск работников по ФИО."""
+    where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE name LIKE ? AND name != '__reserved__' ORDER BY id",
-            (f"%{query}%",)
+            f"SELECT * FROM workers WHERE name LIKE ? AND {where} ORDER BY id",
+            [f"%{query}%", *params]
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
 
-async def get_workers_by_status(status: str) -> list[dict]:
+async def get_workers_by_status(status: str, archived: str = '0',
+                                date_from: str | None = None,
+                                date_to: str | None = None) -> list[dict]:
     """Получить работников по статусу (без записей-сирот)."""
+    where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = ? AND name != '__reserved__' ORDER BY id",
-            (status,)
+            f"SELECT * FROM workers WHERE status = ? AND {where} ORDER BY id",
+            [status, *params]
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -619,20 +697,22 @@ async def get_workers_by_status(status: str) -> list[dict]:
 # ─── Управление статусом анкеты ─────────────────────────────────────
 
 async def get_pending_workers() -> list[dict]:
-    """Получить работников со статусом pending (без записей-сирот)."""
+    """Получить работников со статусом pending (без записей-сирот и архива)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = 'pending' AND name != '__reserved__' ORDER BY created_at DESC"
+            "SELECT * FROM workers WHERE status = 'pending' AND name != '__reserved__' "
+            "AND (archived_at IS NULL OR archived_at = '') ORDER BY created_at DESC"
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
 
 async def get_pending_count() -> int:
-    """Количество анкет, ожидающих обработки (без записей-сирот)."""
+    """Количество анкет, ожидающих обработки (без записей-сирот и архива)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT COUNT(*) FROM workers WHERE status = 'pending' AND name != '__reserved__'"
+            "SELECT COUNT(*) FROM workers WHERE status = 'pending' AND name != '__reserved__' "
+            "AND (archived_at IS NULL OR archived_at = '')"
         )
         row = await cursor.fetchone()
         return row[0]
@@ -659,10 +739,11 @@ async def reject_worker(worker_id: str, reasons: list[str] | list[dict]):
 
 
 async def resubmit_worker(worker_id: str):
-    """Клиент переподал анкету — вернуть статус 'pending'."""
+    """Клиент переподал анкету — вернуть статус 'pending' и убрать из архива."""
     async with _get_conn() as db:
         await db.execute(
-            "UPDATE workers SET status = 'pending', rejection_reasons = '[]', notified_at = NULL WHERE id = ?",
+            "UPDATE workers SET status = 'pending', rejection_reasons = '[]', "
+            "notified_at = NULL, archived_at = NULL WHERE id = ?",
             (worker_id,)
         )
         await db.commit()
@@ -697,6 +778,198 @@ async def get_unnotified_rejected_workers() -> list[dict]:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+# ─── UI-поля анкеты ──────────────────────────────────────────────────
+
+async def set_legal_entity(worker_id: str, value: str) -> bool:
+    """Сохранить юридическое лицо (только UI)."""
+    from datetime import datetime
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "UPDATE workers SET legal_entity = ?, updated_at = ? WHERE id = ?",
+            (value, datetime.now().isoformat(), worker_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> bool:
+    """Сохранить HR-статус. Дата обязательна для employed/fired."""
+    from datetime import datetime
+    if status not in HR_STATUSES:
+        return False
+    if status in ('employed', 'fired') and not date_value:
+        return False
+    if status not in ('employed', 'fired'):
+        date_value = None
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "UPDATE workers SET hr_status = ?, hr_status_date = ?, updated_at = ? WHERE id = ?",
+            (status, date_value, datetime.now().isoformat(), worker_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def archive_worker(worker_id: str) -> bool:
+    """Поместить анкету в архив (мягкое удаление)."""
+    from datetime import datetime
+    now = datetime.now().isoformat()
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "UPDATE workers SET archived_at = ?, updated_at = ? WHERE id = ?",
+            (now, now, worker_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def unarchive_worker(worker_id: str) -> bool:
+    """Вернуть анкету из архива."""
+    from datetime import datetime
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "UPDATE workers SET archived_at = NULL, updated_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), worker_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_worker(worker_id: str) -> bool:
+    """Удалить анкету и связанные записи."""
+    async with _get_conn() as db:
+        await db.execute("DELETE FROM worker_notes WHERE worker_id = ?", (worker_id,))
+        await db.execute("DELETE FROM worker_documents WHERE worker_id = ?", (worker_id,))
+        await db.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
+        cursor = await db.execute("DELETE FROM workers WHERE id = ?", (worker_id,))
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+# ─── Встречи и уведомления ───────────────────────────────────────────
+
+async def add_meeting(worker_id: str, date: str, note: str) -> int:
+    """Добавить встречу, вернуть id."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
+            (worker_id, date, note)
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_unnotified_meetings() -> list[dict]:
+    """Встречи без уведомления по активным анкетам."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT m.id, m.worker_id, m.date, m.note, w.name AS worker_name, "
+            "w.object, w.telegram_id "
+            "FROM worker_meetings m JOIN workers w ON w.id = m.worker_id "
+            "WHERE (m.notified_at IS NULL OR m.notified_at = '') "
+            "AND w.name != '__reserved__' "
+            "AND (w.archived_at IS NULL OR w.archived_at = '') ORDER BY m.id"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def get_meetings_to_remind() -> list[dict]:
+    """Встречи, по которым уже отправлено уведомление, но нет напоминания."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT m.id, m.worker_id, m.date, m.note, w.name AS worker_name, "
+            "w.object, w.telegram_id "
+            "FROM worker_meetings m JOIN workers w ON w.id = m.worker_id "
+            "WHERE (m.notified_at IS NOT NULL AND m.notified_at != '') "
+            "AND (m.reminded_at IS NULL OR m.reminded_at = '') "
+            "AND w.name != '__reserved__' "
+            "AND (w.archived_at IS NULL OR w.archived_at = '') ORDER BY m.id"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def mark_meeting_notified(meeting_id: int, value: str) -> None:
+    """Отметить уведомление о встрече."""
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE worker_meetings SET notified_at = ? WHERE id = ?",
+            (value, meeting_id)
+        )
+        await db.commit()
+
+
+async def mark_meeting_reminded(meeting_id: int, value: str) -> None:
+    """Отметить напоминание о встрече."""
+    async with _get_conn() as db:
+        await db.execute(
+            "UPDATE worker_meetings SET reminded_at = ? WHERE id = ?",
+            (value, meeting_id)
+        )
+        await db.commit()
+
+
+# ─── Комментарии ─────────────────────────────────────────────────────
+
+async def get_worker_notes(worker_id: str) -> list[dict]:
+    """Комментарии анкеты в порядке добавления."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT id, text, created_at, updated_at FROM worker_notes "
+            "WHERE worker_id = ? ORDER BY id", (worker_id,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def add_worker_note(worker_id: str, text: str) -> int | None:
+    """Добавить комментарий. Пустой текст не сохраняется."""
+    from datetime import datetime
+    text = text.strip()
+    if not text:
+        return None
+    now = datetime.now().isoformat()
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "INSERT INTO worker_notes (worker_id, text, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?)", (worker_id, text, now, now)
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def update_worker_note(note_id: int, text: str,
+                             worker_id: str | None = None) -> bool:
+    """Изменить комментарий. Пустой текст не сохраняется."""
+    from datetime import datetime
+    text = text.strip()
+    if not text:
+        return False
+    sql = "UPDATE worker_notes SET text = ?, updated_at = ? WHERE id = ?"
+    params: list = [text, datetime.now().isoformat(), note_id]
+    if worker_id is not None:
+        sql += " AND worker_id = ?"
+        params.append(worker_id)
+    async with _get_conn() as db:
+        cursor = await db.execute(sql, params)
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_worker_note(note_id: int, worker_id: str | None = None) -> bool:
+    """Удалить комментарий."""
+    sql = "DELETE FROM worker_notes WHERE id = ?"
+    params: list = [note_id]
+    if worker_id is not None:
+        sql += " AND worker_id = ?"
+        params.append(worker_id)
+    async with _get_conn() as db:
+        cursor = await db.execute(sql, params)
+        await db.commit()
+        return cursor.rowcount > 0
 
 
 async def fetch_one(sql: str, params: tuple = ()) -> dict | None:

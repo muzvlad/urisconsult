@@ -1,6 +1,7 @@
 """Flask API server for URIS Consult application."""
 import os
 import sys
+import re
 import shutil
 import asyncio
 import tempfile
@@ -29,19 +30,72 @@ def run_async(coro):
     return asyncio.run(coro)
 
 
+def _valid_iso_date(value: str) -> bool:
+    """Проверить дату в формате YYYY-MM-DD."""
+    from datetime import datetime
+    if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+        return False
+    try:
+        datetime.strptime(value, '%Y-%m-%d')
+        return True
+    except ValueError:
+        return False
+
+
+def _valid_meeting_date(value: str) -> bool:
+    """Проверить дату встречи: дд.мм.гггг или дд.мм.гггг чч:мм."""
+    from datetime import datetime
+    if not isinstance(value, str):
+        return False
+    for fmt, pattern in (
+        ('%d.%m.%Y %H:%M', r'\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}'),
+        ('%d.%m.%Y', r'\d{2}\.\d{2}\.\d{4}'),
+    ):
+        if re.fullmatch(pattern, value):
+            try:
+                datetime.strptime(value, fmt)
+                return True
+            except ValueError:
+                return False
+    return False
+
+
+def _valid_hr_date(value: str) -> bool:
+    """Проверить HR-дату: только дд.мм.гггг."""
+    from datetime import datetime
+    if not isinstance(value, str) or not re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', value):
+        return False
+    try:
+        datetime.strptime(value, '%d.%m.%Y')
+        return True
+    except ValueError:
+        return False
+
+
 # ─── Workers ───────────────────────────────────────────────────────────
 
 @app.route('/api/workers', methods=['GET'])
 def list_workers():
     status = request.args.get('status')
     search = request.args.get('search')
+    archived = request.args.get('archived', '0')
+    date_from = request.args.get('date_from') or None
+    date_to = request.args.get('date_to') or None
+
+    if archived not in ('0', '1', 'all'):
+        return jsonify({"error": "Invalid archived"}), 400
+    if date_from and not _valid_iso_date(date_from):
+        return jsonify({"error": "Invalid date_from"}), 400
+    if date_to and not _valid_iso_date(date_to):
+        return jsonify({"error": "Invalid date_to"}), 400
+
     try:
         if search:
-            workers = run_async(db.search_workers(search))
+            workers = run_async(db.search_workers(search, archived, date_from, date_to))
         elif status:
-            workers = run_async(db.get_workers_by_status(status))
+            workers = run_async(db.get_workers_by_status(status, archived, date_from, date_to))
         else:
-            workers = run_async(db.get_all_workers())
+            workers = run_async(db.get_all_workers(archived, date_from, date_to))
         return jsonify(workers)
     except Exception as e:
         logging.getLogger(__name__).error("list_workers error: %s", e)
@@ -133,14 +187,7 @@ def update_worker(worker_id):
 @app.route('/api/workers/<worker_id>', methods=['DELETE'])
 def delete_worker(worker_id):
     try:
-        async def _delete():
-            async with db._get_conn() as conn:
-                await conn.execute("DELETE FROM worker_documents WHERE worker_id = ?", (worker_id,))
-                await conn.execute("DELETE FROM worker_meetings WHERE worker_id = ?", (worker_id,))
-                await conn.execute("DELETE FROM workers WHERE id = ?", (worker_id,))
-                await conn.commit()
-
-        run_async(_delete())
+        run_async(db.delete_worker(worker_id))
 
         worker_dir = os.path.join(DOCS_DIR, worker_id)
         if os.path.isdir(worker_dir):
@@ -186,6 +233,57 @@ def resubmit_worker(worker_id):
         return jsonify({"error": "Internal error"}), 500
 
 
+@app.route('/api/workers/<worker_id>/archive', methods=['POST'])
+def archive_worker(worker_id):
+    try:
+        ok = run_async(db.archive_worker(worker_id))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("archive_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/unarchive', methods=['POST'])
+def unarchive_worker(worker_id):
+    try:
+        ok = run_async(db.unarchive_worker(worker_id))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("unarchive_worker(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/legal-entity', methods=['PUT'])
+def set_legal_entity(worker_id):
+    try:
+        data = request.get_json(force=True)
+        ok = run_async(db.set_legal_entity(worker_id, str(data.get('legal_entity', ''))))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("set_legal_entity(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/hr-status', methods=['PUT'])
+def set_hr_status(worker_id):
+    try:
+        data = request.get_json(force=True)
+        status = data.get('hr_status', '')
+        date_value = data.get('hr_status_date') or None
+        if status not in db.HR_STATUSES:
+            return jsonify({"error": "Invalid hr_status"}), 400
+        if status in ('employed', 'fired'):
+            if not date_value or not _valid_hr_date(date_value):
+                return jsonify({"error": "Invalid hr_status_date"}), 400
+        else:
+            date_value = None
+        ok = run_async(db.set_hr_status(worker_id, status, date_value))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("set_hr_status(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
 # ─── Pending count ─────────────────────────────────────────────────────
 
 @app.route('/api/pending/count', methods=['GET'])
@@ -223,19 +321,59 @@ def list_meetings(worker_id):
 def add_meeting(worker_id):
     try:
         data = request.get_json(force=True)
-
-        async def _add():
-            async with db._get_conn() as conn:
-                await conn.execute(
-                    "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-                    (worker_id, data.get('date', ''), data.get('note', '')),
-                )
-                await conn.commit()
-
-        run_async(_add())
-        return jsonify({"ok": True})
+        date_value = str(data.get('date', '')).strip()
+        note = str(data.get('note', '')).strip()
+        if not date_value or not _valid_meeting_date(date_value):
+            return jsonify({"error": "Invalid meeting date"}), 400
+        meeting_id = run_async(db.add_meeting(worker_id, date_value, note))
+        return jsonify({"ok": True, "id": meeting_id})
     except Exception as e:
         _logger.error("add_meeting(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+# ─── Notes ─────────────────────────────────────────────────────────────
+
+@app.route('/api/workers/<worker_id>/notes', methods=['GET'])
+def list_notes(worker_id):
+    try:
+        return jsonify(run_async(db.get_worker_notes(worker_id)))
+    except Exception as e:
+        _logger.error("list_notes(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/notes', methods=['POST'])
+def add_note(worker_id):
+    try:
+        data = request.get_json(force=True)
+        note_id = run_async(db.add_worker_note(worker_id, str(data.get('text', ''))))
+        if note_id is None:
+            return jsonify({"error": "Empty note"}), 400
+        return jsonify({"ok": True, "id": note_id})
+    except Exception as e:
+        _logger.error("add_note(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/notes/<int:note_id>', methods=['PUT'])
+def update_note(worker_id, note_id):
+    try:
+        data = request.get_json(force=True)
+        ok = run_async(db.update_worker_note(note_id, str(data.get('text', '')), worker_id))
+        return jsonify({"ok": ok}), (200 if ok else 400)
+    except Exception as e:
+        _logger.error("update_note(%s) error: %s", note_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/notes/<int:note_id>', methods=['DELETE'])
+def delete_note(worker_id, note_id):
+    try:
+        ok = run_async(db.delete_worker_note(note_id, worker_id))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("delete_note(%s) error: %s", note_id, e)
         return jsonify({"error": "Internal error"}), 500
 
 

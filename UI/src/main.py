@@ -8,12 +8,15 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
-from src.config import get_config, get_paths, center_window, get_document_config, normalize_citizenship, FONT_FAMILY
+from src.config import (get_config, get_paths, center_window, get_document_config,
+                        normalize_citizenship, FONT_FAMILY, format_date, format_datetime,
+                        period_range, HR_STATUS_KEYS, HR_STATUS_LABELS, hr_status_style)
 from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
 from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, PhotoWidget
-from src.dialogs import NotificationsWindow, RejectDialog, ask_yes_no, show_info, show_error, show_warning
+from src.dialogs import (NotificationsWindow, RejectDialog, MeetingDialog, NoteDialog,
+                         LegalEntityDialog, ask_yes_no, show_info, show_error, show_warning)
 from src.logging_config import setup_logging, get_logger, log_error, log_exception, log_info, diagnostic_log
 
 
@@ -42,6 +45,7 @@ class DBViewerApp:
         # Состояние
         self.search_results: List[Worker] = []
         self.current_worker: Optional[Worker] = None
+        self.period_preset: str = "all"
 
         # UI компоненты
         self.list_widget: Optional[WorkerListWidget] = None
@@ -121,11 +125,8 @@ class DBViewerApp:
         self.search_entry.select_range(0, tk.END)
 
     def _refresh_current_list(self) -> None:
-        """Обновить текущий список (повторить последний поиск)."""
-        if hasattr(self, '_last_search_params'):
-            self._execute_search(*self._last_search_params)
-        else:
-            self._show_all_workers()
+        """Обновить текущий список с текущими фильтрами."""
+        self._execute_search()
 
     def _create_top_bar(self) -> None:
         """Создание верхней панели."""
@@ -148,6 +149,17 @@ class DBViewerApp:
                   bg=self.config.accent_orange, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
+
+        # Архив
+        tk.Label(top_frame, text="Показать:", bg=self.config.header_bg, fg='white',
+                 font=(FONT_FAMILY, 10)).pack(side=tk.LEFT, padx=(10, 4))
+        self.show_labels = {"Активные": "0", "Архив": "1", "Все": "all"}
+        self.show_var = tk.StringVar(value="Активные")
+        show_combo = ttk.Combobox(top_frame, textvariable=self.show_var,
+                                  values=list(self.show_labels), state="readonly",
+                                  width=10, font=(FONT_FAMILY, 10))
+        show_combo.pack(side=tk.LEFT)
+        show_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_current_list())
 
         # Колокольчик уведомлений
         bell_frame = tk.Frame(top_frame, bg=self.config.header_bg)
@@ -172,6 +184,44 @@ class DBViewerApp:
         tk.Button(search_frame, text="Найти", command=self._search_workers,
                   bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=14, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT, padx=5)
+
+        tk.Label(search_frame, text="Период:", bg=self.config.bg_color,
+                 font=(FONT_FAMILY, 10)).pack(side=tk.LEFT, padx=(15, 0))
+
+        self.period_labels = {
+            "Все время": "all",
+            "Сегодня": "today",
+            "За неделю": "week",
+            "За месяц": "month",
+            "Прошлый месяц": "prev_month",
+            "За год": "year",
+            "Произвольный": "custom",
+        }
+        self.period_var = tk.StringVar(value="Все время")
+        period_combo = ttk.Combobox(search_frame, textvariable=self.period_var,
+                                    values=list(self.period_labels), state="readonly",
+                                    width=16, font=(FONT_FAMILY, 10))
+        period_combo.pack(side=tk.LEFT, padx=5)
+        period_combo.bind("<<ComboboxSelected>>", self._on_period_change)
+        self.custom_range = (None, None)
+
+        self.custom_frame = tk.Frame(search_frame, bg=self.config.bg_color)
+        tk.Label(self.custom_frame, text="с", bg=self.config.bg_color,
+                 font=(FONT_FAMILY, 9)).pack(side=tk.LEFT)
+        self.date_from_entry = tk.Entry(self.custom_frame, width=11, font=(FONT_FAMILY, 9))
+        self.date_from_entry.pack(side=tk.LEFT, padx=3)
+        tk.Label(self.custom_frame, text="по", bg=self.config.bg_color,
+                 font=(FONT_FAMILY, 9)).pack(side=tk.LEFT)
+        self.date_to_entry = tk.Entry(self.custom_frame, width=11, font=(FONT_FAMILY, 9))
+        self.date_to_entry.pack(side=tk.LEFT, padx=3)
+        tk.Button(self.custom_frame, text="Применить", command=self._apply_custom_period,
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=8, relief=tk.FLAT, cursor='hand2').pack(side=tk.LEFT, padx=3)
+
+        tk.Button(search_frame, text="Сброс", command=self._reset_period,
+                  bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=10, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
     def _create_main_area(self) -> None:
@@ -279,22 +329,53 @@ class DBViewerApp:
         self._refresh_pending_count()
         self._open_notifications()  # Переоткрыть с обновленными данными
 
+    def _on_period_change(self, _event=None) -> None:
+        preset = self.period_labels.get(self.period_var.get(), "all")
+        if preset == "custom":
+            self.custom_frame.pack(side=tk.LEFT, padx=5)
+            return
+        self.custom_frame.pack_forget()
+        self.period_preset = preset
+        self._refresh_current_list()
+
+    def _apply_custom_period(self) -> None:
+        from src.config import parse_user_date
+        date_from = parse_user_date(self.date_from_entry.get())
+        date_to = parse_user_date(self.date_to_entry.get())
+        if not date_from or not date_to:
+            show_warning(self.root, "Внимание",
+                         "Укажите обе даты в формате дд.мм.гггг")
+            return
+        if date_from > date_to:
+            show_warning(self.root, "Внимание",
+                         "Дата «с» не может быть позже даты «по»")
+            return
+        self.custom_range = (date_from, date_to)
+        self.period_preset = "custom"
+        self._refresh_current_list()
+
+    def _reset_period(self) -> None:
+        self.period_preset = "all"
+        self.custom_range = (None, None)
+        self.period_var.set("Все время")
+        self.custom_frame.pack_forget()
+        self._refresh_current_list()
+
     def _search_workers(self) -> None:
-        """Поиск сотрудников по ФИО."""
+        """Поиск сотрудников по полям анкеты."""
         query = self.search_entry.get().strip()
-        if not query:
+        if (not query and self.period_preset == "all"
+                and self.show_labels.get(self.show_var.get(), "0") == "0"):
             show_warning(self.root, "Предупреждение", "Введите слово для поиска!")
             return
-
-        self._last_search_params = ("name LIKE ?", (f"%{query}%",))
-        self._execute_search("name LIKE ?", (f"%{query}%",))
+        self._execute_search()
 
     def _show_all_workers(self) -> None:
-        """Показать все анкеты."""
-        self._last_search_params = ("1=1", ())
-        self._execute_search("1=1", ())
+        """Показать все анкеты (фильтры периода и архива сохраняются)."""
+        self.search_entry.delete(0, tk.END)
+        self._execute_search()
 
-    def _execute_search(self, where_clause: str, params: tuple) -> None:
+    def _execute_search(self) -> None:
         """Выполнить поиск через API."""
         if not self.list_widget:
             return
@@ -303,15 +384,21 @@ class DBViewerApp:
         self.search_results = []
 
         try:
-            if where_clause == "1=1":
-                self.search_results = self.api.get_workers()
+            query = self.search_entry.get().strip() or None
+            if self.period_preset == "custom":
+                date_from, date_to = self.custom_range
+            elif self.period_preset != "all":
+                date_from, date_to = period_range(self.period_preset)
             else:
-                # Extract search query from params: ("name LIKE ?", (f"%{query}%",))
-                query_text = params[0].strip("%") if params else ""
-                self.search_results = self.api.get_workers(search=query_text)
+                date_from, date_to = None, None
+            archived = self.show_labels.get(self.show_var.get(), "0")
+            self.search_results = self.api.get_workers(
+                search=query, date_from=date_from, date_to=date_to, archived=archived)
 
             self.list_widget.set_workers(self.search_results)
-            self.status_bar.config(text=f"Найдено: {len(self.search_results)}")
+            self.status_bar.config(
+                text=f"Найдено: {len(self.search_results)}"
+                     + (" (архив)" if archived == "1" else ""))
             log_info(f"Search executed, found {len(self.search_results)} workers")
 
             if not self.search_results:
@@ -395,6 +482,101 @@ class DBViewerApp:
 
         EditDialog(self.root, worker, on_save)
 
+    def _archive_worker(self, worker: Worker) -> None:
+        """Поместить анкету в архив."""
+        if not ask_yes_no(self.root, "Архив",
+                          f"Убрать анкету #{worker.id} — {worker.name} в архив?"):
+            return
+        try:
+            if self.api.archive_worker(worker.id):
+                show_info(self.root, "Готово", f"Анкета #{worker.id} в архиве.")
+                self.current_worker = None
+                self._refresh_current_list()
+                self._refresh_pending_count()
+                self._clear_details()
+            else:
+                show_error(self.root, "Ошибка", "Не удалось архивировать запись")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+        except Exception as e:
+            log_error(f"Error archiving worker {worker.id}: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+    def _unarchive_worker(self, worker: Worker) -> None:
+        """Вернуть анкету из архива."""
+        try:
+            if self.api.unarchive_worker(worker.id):
+                show_info(self.root, "Готово", f"Анкета #{worker.id} возвращена из архива.")
+                self.current_worker = None
+                self._refresh_current_list()
+                self._refresh_pending_count()
+                self._clear_details()
+            else:
+                show_error(self.root, "Ошибка", "Не удалось вернуть запись из архива")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+        except Exception as e:
+            log_error(f"Error unarchiving worker {worker.id}: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+    def _edit_legal_entity(self, worker: Worker) -> None:
+        """Изменить юр. лицо отдельным запросом."""
+        def on_save(value: str) -> None:
+            try:
+                if self.api.set_legal_entity(worker.id, value):
+                    log_info(f"Worker {worker.id} legal entity updated")
+                    self._refresh_current_worker()
+                else:
+                    show_error(self.root, "Ошибка", "Не удалось сохранить юр. лицо")
+            except ConnectionError:
+                show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+            except Exception as e:
+                log_error(f"Error setting legal entity {worker.id}: {e}", exc_info=True)
+                show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+        LegalEntityDialog(self.root, worker, on_save)
+
+    def _open_note(self, worker: Worker, note: Optional[dict] = None) -> None:
+        """Добавить или изменить комментарий."""
+        def on_save(text: str) -> None:
+            try:
+                if note:
+                    ok = self.api.update_note(worker.id, note['id'], text)
+                else:
+                    ok = self.api.add_note(worker.id, text)
+                if ok:
+                    self._refresh_current_worker()
+                else:
+                    show_error(self.root, "Ошибка", "Комментарий не сохранён")
+            except ConnectionError:
+                show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+            except Exception as e:
+                log_error(f"Error saving note {worker.id}: {e}", exc_info=True)
+                show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+        NoteDialog(self.root, worker, on_save, note=note)
+
+    def _delete_note(self, worker: Worker, note: dict) -> None:
+        """Удалить комментарий с подтверждением."""
+        if not ask_yes_no(self.root, "Удаление", "Удалить комментарий?"):
+            return
+        try:
+            if self.api.delete_note(worker.id, note['id']):
+                self._refresh_current_worker()
+            else:
+                show_error(self.root, "Ошибка", "Не удалось удалить комментарий")
+        except ConnectionError:
+            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+        except Exception as e:
+            log_error(f"Error deleting note {note.get('id')}: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+    def _clear_details(self) -> None:
+        """Очистить правую панель."""
+        if self.scrollable_frame:
+            for w in self.scrollable_frame.winfo_children():
+                w.destroy()
+
     def _delete_worker(self, worker: Worker) -> None:
         """Удалить сотрудника из БД и файлов."""
         from src.dialogs import ask_yes_no
@@ -411,10 +593,7 @@ class DBViewerApp:
                 self.current_worker = None
                 self._refresh_current_list()
                 self._refresh_pending_count()
-                # Очистить панель деталей
-                if self.scrollable_frame:
-                    for w in self.scrollable_frame.winfo_children():
-                        w.destroy()
+                self._clear_details()
                 log_info(f"Worker {worker.id} deleted")
             else:
                 show_error(self.root, "Ошибка", "Не удалось удалить запись")
@@ -457,9 +636,73 @@ class DBViewerApp:
                 self.current_worker = fresh
                 self._display_worker_details(fresh)
                 if self.list_widget:
+                    self._refresh_current_list()
                     self.list_widget.select_by_id(fresh.id)
 
     # ─── Отображение деталей ───
+
+    def _build_hr_block(self, parent: tk.Widget, worker: Worker) -> None:
+        """Блок HR-статуса: комбобокс, плашка, дата и сохранение."""
+        from src.config import parse_user_date
+
+        block = tk.Frame(parent, bg='white')
+        block.pack(anchor=tk.W, pady=(10, 0))
+
+        tk.Label(block, text="HR-статус:", bg='white',
+                 font=(FONT_FAMILY, 10, 'bold')).pack(side=tk.LEFT)
+
+        current_label = HR_STATUS_LABELS.get(worker.hr_status, HR_STATUS_LABELS['not_processed'])
+        status_var = tk.StringVar(value=current_label)
+        combo = ttk.Combobox(block, textvariable=status_var, width=18, state='readonly',
+                             values=[HR_STATUS_LABELS[k] for k in HR_STATUS_KEYS],
+                             font=(FONT_FAMILY, 10))
+        combo.pack(side=tk.LEFT, padx=(6, 6))
+
+        key_by_label = {HR_STATUS_LABELS[k]: k for k in HR_STATUS_KEYS}
+        plaque = tk.Label(block, text=current_label, font=(FONT_FAMILY, 9, 'bold'),
+                          padx=8, pady=2)
+        plaque.pack(side=tk.LEFT)
+
+        date_entry = tk.Entry(block, width=12, font=(FONT_FAMILY, 10))
+        date_entry.pack(side=tk.LEFT, padx=(10, 6))
+        if worker.hr_status_date:
+            date_entry.insert(0, format_date(worker.hr_status_date))
+
+        def current_key() -> str:
+            return key_by_label.get(status_var.get(), 'not_processed')
+
+        def refresh_style(*_args) -> None:
+            style = hr_status_style(current_key())
+            plaque.config(text=style['label'], bg=style['bg'], fg=style['fg'])
+            required = current_key() in ('employed', 'fired')
+            date_entry.config(state='normal' if required else 'disabled')
+
+        def save() -> None:
+            key = current_key()
+            date_value = ''
+            if key in ('employed', 'fired'):
+                date_value = parse_user_date(date_entry.get()) or ''
+                if not date_value:
+                    show_warning(self.root, "Внимание",
+                                 "Укажите дату в формате дд.мм.гггг")
+                    return
+            try:
+                if self.api.set_hr_status(worker.id, key, date_value):
+                    log_info(f"Worker {worker.id} HR status -> {key}")
+                    self._refresh_current_worker()
+                else:
+                    show_error(self.root, "Ошибка", "Не удалось сохранить HR-статус")
+            except ConnectionError:
+                show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+            except Exception as e:
+                log_error(f"Error setting HR status {worker.id}: {e}", exc_info=True)
+                show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+        combo.bind('<<ComboboxSelected>>', refresh_style)
+        tk.Button(block, text="Сохранить", command=save,
+                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=10, relief=tk.FLAT, cursor='hand2').pack(side=tk.LEFT, padx=(6, 0))
+        refresh_style()
 
     def _display_worker_details(self, worker: Worker) -> None:
         """Отобразить детальную информацию о сотруднике."""
@@ -488,6 +731,7 @@ class DBViewerApp:
             'rejected': ('❌ Отклонена', self.config.status_colors['rejected']),
         }
         status_text, status_color = status_config.get(status, ('?', '#999'))
+        status_text = f"Статус бота: {status_text}"
 
         tk.Label(left_col, text=f"ФИО: {worker.name}",
                  font=(FONT_FAMILY, 14, 'bold'), bg='white', anchor='w').pack(anchor=tk.W, fill=tk.X)
@@ -505,28 +749,44 @@ class DBViewerApp:
                   padx=12, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=(0, 5))
 
+        if worker.is_archived:
+            tk.Button(btn_frame, text="Вернуть из архива",
+                      command=lambda: self._unarchive_worker(worker),
+                      bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                      padx=12, relief=tk.FLAT, cursor='hand2'
+                      ).pack(side=tk.LEFT, padx=(0, 5))
+        else:
+            tk.Button(btn_frame, text="В архив",
+                      command=lambda: self._archive_worker(worker),
+                      bg=self.config.accent_gray, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                      padx=12, relief=tk.FLAT, cursor='hand2'
+                      ).pack(side=tk.LEFT, padx=(0, 5))
+
         tk.Button(btn_frame, text="🗑 Удалить",
                   command=lambda: self._delete_worker(worker),
                   bg=self.config.accent_red, fg='white', font=(FONT_FAMILY, 9, 'bold'),
                   padx=12, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT)
 
+        self._build_hr_block(left_col, worker)
+
+        if worker.is_archived:
+            tk.Label(left_col, text="Анкета в архиве", bg='#F3F4F6', fg='#6B7280',
+                     font=(FONT_FAMILY, 10, 'bold'), padx=10, pady=4).pack(
+                anchor=tk.W, pady=(8, 0))
+
         # Даты
         dates_frame = tk.Frame(left_col, bg='white')
         dates_frame.pack(anchor=tk.W, pady=(8, 0))
         for field, label in (('created_at', 'Дата заведения'), ('updated_at', 'Последнее редактирование')):
             raw = getattr(worker, field, '') or ''
-            if raw:
-                try:
-                    dt = raw[:16].replace('T', ' ')
-                    from datetime import datetime as _dt
-                    dt = _dt.strptime(dt, '%Y-%m-%d %H:%M').strftime('%d.%m.%Y %H:%M')
-                except Exception:
-                    dt = raw[:16]
-            else:
-                dt = '—'
+            dt = format_datetime(raw) if raw else '—'
             tk.Label(dates_frame, text=f"{label}: {dt}",
                      font=(FONT_FAMILY, 9), bg='white', fg='#666').pack(anchor=tk.W)
+
+        if worker.archived_at:
+            tk.Label(dates_frame, text=f"В архиве с: {format_datetime(worker.archived_at)}",
+                     font=(FONT_FAMILY, 9), bg='white', fg='#999').pack(anchor=tk.W)
 
         tk.Label(right_col, text=f"ИД: {worker.id}",
                  font=(FONT_FAMILY, 12), bg='white').pack(anchor=tk.NE)
@@ -549,6 +809,8 @@ class DBViewerApp:
             ('date', 'Дата рождения'),
             ('manager', 'Менеджер'),
             ('object', 'Объект'),
+            ('customer', 'Заказчик'),
+            ('legal_entity', 'Юр. лицо'),
             ('object_address', 'Адрес объекта'),
             ('position', 'Должность'),
             ('phone_main', 'Основной телефон'),
@@ -557,6 +819,8 @@ class DBViewerApp:
         ]
 
         for field_key, field_label in fields:
+            if field_key == 'legal_entity':
+                continue
             value = getattr(worker, field_key, '')
             if value:
                 display = str(value)
@@ -565,6 +829,16 @@ class DBViewerApp:
                 tk.Label(info_inner, text=f"{field_label}: {display}",
                          font=(FONT_FAMILY, 11), bg='white', anchor='w',
                          wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, fill=tk.X, pady=2)
+
+        legal_row = tk.Frame(info_inner, bg='white')
+        legal_row.pack(anchor=tk.W, fill=tk.X, pady=2)
+        tk.Label(legal_row, text=f"Юр. лицо: {worker.legal_entity or '—'}",
+                 font=(FONT_FAMILY, 11), bg='white', anchor='w',
+                 wraplength=500, justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(legal_row, text="Изменить",
+                  command=lambda: self._edit_legal_entity(worker),
+                  bg='white', fg=self.config.accent_blue, font=(FONT_FAMILY, 9),
+                  relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
 
         # Родственники
         relatives = getattr(worker, 'relatives', None) or []
@@ -599,7 +873,7 @@ class DBViewerApp:
 
         if meetings:
             for m in meetings:
-                date = m.get('date', '')
+                date = format_datetime(m.get('date', ''))
                 note = m.get('note', '')
                 text = f"• {date} — {note}" if date else f"• {note}"
                 tk.Label(meetings_frame, text=text, font=(FONT_FAMILY, 10),
@@ -607,6 +881,45 @@ class DBViewerApp:
         else:
             tk.Label(meetings_frame, text="Нет встреч",
                      font=(FONT_FAMILY, 10), bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
+
+        # ── Комментарии ──
+        notes_frame = tk.Frame(self.scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=1)
+        notes_frame.pack(fill=tk.X, padx=5, pady=5)
+        notes_header = tk.Frame(notes_frame, bg='white')
+        notes_header.pack(fill=tk.X, padx=10, pady=(10, 5))
+        tk.Label(notes_header, text="Комментарии:", font=(FONT_FAMILY, 13, 'bold'),
+                 bg='white', anchor='w').pack(side=tk.LEFT)
+        tk.Button(notes_header, text="+ Добавить комментарий",
+                  command=lambda: self._open_note(worker),
+                  bg=self.config.accent_blue, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=12, pady=2, relief=tk.FLAT, cursor='hand2').pack(side=tk.RIGHT)
+        try:
+            notes = self.api.get_notes(worker.id)
+        except Exception:
+            notes = []
+        if notes:
+            for note in notes:
+                row = tk.Frame(notes_frame, bg='white')
+                row.pack(fill=tk.X, padx=20, pady=2)
+                tk.Label(row, text=note.get('text', ''), font=(FONT_FAMILY, 10),
+                         bg='white', anchor='w', justify=tk.LEFT,
+                         wraplength=600).pack(side=tk.LEFT, fill=tk.X, expand=True)
+                tk.Button(row, text="Удалить",
+                          command=lambda n=note: self._delete_note(worker, n),
+                          bg='white', fg=self.config.accent_red,
+                          font=(FONT_FAMILY, 9), relief=tk.FLAT,
+                          cursor='hand2').pack(side=tk.RIGHT, padx=4)
+                tk.Button(row, text="Изменить",
+                          command=lambda n=note: self._open_note(worker, n),
+                          bg='white', fg=self.config.accent_blue,
+                          font=(FONT_FAMILY, 9), relief=tk.FLAT,
+                          cursor='hand2').pack(side=tk.RIGHT, padx=4)
+                tk.Label(row, text=format_datetime(note.get('created_at', '')),
+                         font=(FONT_FAMILY, 8), bg='white', fg='#999'
+                         ).pack(side=tk.RIGHT, padx=4)
+        else:
+            tk.Label(notes_frame, text="Нет комментариев", font=(FONT_FAMILY, 10),
+                     bg='white', fg='#999').pack(anchor=tk.W, padx=20, pady=5)
 
         # ── Документы ──
         try:
@@ -701,6 +1014,8 @@ class DBViewerApp:
                 rkey = r.get('key', '') if isinstance(r, dict) else str(r)
                 rcomment = r.get('comment', '') if isinstance(r, dict) else ''
                 label = self.doc_service.get_document_label(rkey)
+                if rkey == 'customer':
+                    label = 'Заказчик'
                 tk.Label(rej_frame, text=f"  • {label}",
                          font=(FONT_FAMILY, 10), bg='#ffeaa7', anchor='w').pack(anchor=tk.W, padx=20)
                 if rcomment:

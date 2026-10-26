@@ -48,6 +48,7 @@ class DBSaver:
             'gender': data.get('gender', ''),
             'position': data.get('position', ''),
             'object': data.get('object', ''),
+            'customer': data.get('customer', ''),
             'object_address': data.get('object_address', ''),
             'manager': data.get('manager', ''),
             'phone_main': data.get('phone_main', ''),

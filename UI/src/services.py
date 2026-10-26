@@ -16,7 +16,8 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import messagebox
 
-from src.config import get_paths, get_config, get_bot_token, get_document_config, normalize_citizenship
+from src.config import (get_paths, get_config, get_bot_token, get_document_config,
+                        normalize_citizenship, format_date, format_datetime)
 from src.models import Worker
 
 
@@ -216,7 +217,8 @@ class TelegramService:
         # Русские названия полей
         field_labels = {
             'name': 'ФИО', 'citizenship': 'Категория', 'gender': 'Пол',
-            'position': 'Должность', 'object': 'Объект', 'object_address': 'Адрес',
+            'position': 'Должность', 'object': 'Объект', 'customer': 'Заказчик',
+            'object_address': 'Адрес',
             'manager': 'Менеджер', 'phone_main': 'Основной телефон',
             'phone_additional': 'Доп. телефон',
             'date': 'Дата рождения',
@@ -337,12 +339,15 @@ class PDFExportService:
         profile = [
             ('gender', 'Пол'), ('date', 'Дата рождения'),
             ('manager', 'Менеджер'), ('object', 'Объект'),
+            ('customer', 'Заказчик'), ('legal_entity', 'Юр. лицо'),
             ('object_address', 'Адрес'), ('position', 'Должность'),
             ('phone_main', 'Телефон'), ('phone_additional', 'Доп. телефон'),
         ]
         for key, label in profile:
             val = getattr(worker, key, '')
             if val:
+                if key == 'date':
+                    val = format_date(val)
                 c.drawString(50, y, f"{label}: {val}")
                 update_progress()
                 y -= 18
@@ -443,7 +448,8 @@ class PDFExportService:
             y -= 20
             c.setFont(self._font_name, 10)
             for m in meetings:
-                text = f"• {m['date']} — {m['note']}" if m['date'] else f"• {m['note']}"
+                meeting_date = format_datetime(m.get('date', ''))
+                text = f"• {meeting_date} — {m['note']}" if meeting_date else f"• {m['note']}"
                 c.drawString(70, y, text)
                 update_progress()
                 y -= 16

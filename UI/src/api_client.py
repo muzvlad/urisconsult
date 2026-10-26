@@ -79,13 +79,19 @@ class APIClient:
 
     # ── Workers ──
 
-    def get_workers(self, status: Optional[str] = None, search: Optional[str] = None) -> List[Worker]:
-        params = {}
+    def get_workers(self, status: Optional[str] = None, search: Optional[str] = None,
+                    date_from: Optional[str] = None, date_to: Optional[str] = None,
+                    archived: str = "0") -> List[Worker]:
+        params = {"archived": archived}
         if status:
             params["status"] = status
         if search:
             params["search"] = search
-        qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        qs = "?" + urllib.parse.urlencode(params)
         data = self._get(f"/api/workers{qs}")
         if not data:
             return []
@@ -137,6 +143,33 @@ class APIClient:
         resp = self._post(f"/api/workers/{worker_id}/meetings", {"date": date, "note": note})
         return bool(resp)
 
+    def get_notes(self, worker_id: str) -> List[dict]:
+        data = self._get(f"/api/workers/{worker_id}/notes")
+        return data if isinstance(data, list) else []
+
+    def add_note(self, worker_id: str, text: str) -> bool:
+        return bool(self._post(f"/api/workers/{worker_id}/notes", {"text": text}))
+
+    def update_note(self, worker_id: str, note_id: int, text: str) -> bool:
+        return bool(self._put(f"/api/workers/{worker_id}/notes/{note_id}", {"text": text}))
+
+    def delete_note(self, worker_id: str, note_id: int) -> bool:
+        return bool(self._delete(f"/api/workers/{worker_id}/notes/{note_id}"))
+
+    def set_legal_entity(self, worker_id: str, value: str) -> bool:
+        return bool(self._put(f"/api/workers/{worker_id}/legal-entity",
+                              {"legal_entity": value}))
+
+    def set_hr_status(self, worker_id: str, status: str, date_value: str = "") -> bool:
+        return bool(self._put(f"/api/workers/{worker_id}/hr-status",
+                              {"hr_status": status, "hr_status_date": date_value}))
+
+    def archive_worker(self, worker_id: str) -> bool:
+        return bool(self._post(f"/api/workers/{worker_id}/archive", {}))
+
+    def unarchive_worker(self, worker_id: str) -> bool:
+        return bool(self._post(f"/api/workers/{worker_id}/unarchive", {}))
+
     def get_pending_count(self) -> int:
         data = self._get("/api/pending/count")
         return data.get("count", 0) if isinstance(data, dict) else 0
@@ -182,6 +215,7 @@ def _dict_to_worker(d: dict) -> Worker:
         gender=d.get("gender", ""),
         position=d.get("position", ""),
         object=d.get("object", ""),
+        customer=d.get("customer", ""),
         object_address=d.get("object_address", ""),
         manager=d.get("manager", ""),
         phone_main=d.get("phone_main", ""),
@@ -197,6 +231,10 @@ def _dict_to_worker(d: dict) -> Worker:
         updated_at=d.get("updated_at", ""),
         status=d.get("status", "pending"),
         rejection_reasons=d.get("rejection_reasons", "[]"),
+        legal_entity=d.get("legal_entity", ""),
+        hr_status=d.get("hr_status", "not_processed") or "not_processed",
+        hr_status_date=d.get("hr_status_date", ""),
+        archived_at=d.get("archived_at", ""),
     )
     return w
 

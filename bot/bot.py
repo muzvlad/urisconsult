@@ -212,6 +212,84 @@ async def check_rejected_workers(bot: Bot):
         await asyncio.sleep(60)
 
 
+async def check_meeting_notifications(bot: Bot):
+    """Фоновая задача: уведомления о встречах и напоминания за 24 часа."""
+    from datetime import datetime, timedelta
+    from utils import parse_meeting_datetime
+
+    while True:
+        now = datetime.now()
+        try:
+            for m in await db.get_unnotified_meetings():
+                meeting_at = parse_meeting_datetime(m.get('date', ''))
+                meeting_id = m['id']
+                if not m.get('telegram_id'):
+                    await db.mark_meeting_notified(meeting_id, 'no_telegram')
+                    await db.mark_meeting_reminded(meeting_id, 'no_telegram')
+                    continue
+                if meeting_at is None:
+                    logger.warning("Некорректная дата встречи id=%s: %s",
+                                   meeting_id, m.get('date'))
+                    await db.mark_meeting_notified(meeting_id, 'invalid_date')
+                    await db.mark_meeting_reminded(meeting_id, 'invalid_date')
+                    continue
+
+                text = (
+                    f"Вам назначена встреча\n"
+                    f"ФИО: {m.get('worker_name', '')}\n"
+                    f"Дата и время: {m.get('date', '')}\n"
+                )
+                if m.get('note'):
+                    text += f"Примечание: {m['note']}\n"
+                try:
+                    await bot.send_message(chat_id=m['telegram_id'], text=text)
+                    await db.mark_meeting_notified(meeting_id, now.isoformat())
+                except Exception as e:
+                    logger.warning("Не удалось отправить встречу id=%s: %s", meeting_id, e)
+                    continue
+
+                # Встреча уже в пределах 24 часов — напоминание не дублируем
+                if meeting_at - now <= timedelta(hours=24):
+                    await db.mark_meeting_reminded(meeting_id, now.isoformat())
+
+            for m in await db.get_meetings_to_remind():
+                meeting_at = parse_meeting_datetime(m.get('date', ''))
+                meeting_id = m['id']
+                if not m.get('telegram_id'):
+                    await db.mark_meeting_reminded(meeting_id, 'no_telegram')
+                    continue
+                if meeting_at is None:
+                    await db.mark_meeting_reminded(meeting_id, 'invalid_date')
+                    continue
+
+                delta = meeting_at - now
+                if delta < timedelta(0):
+                    await db.mark_meeting_reminded(meeting_id, 'meeting_passed')
+                    continue
+                if delta > timedelta(hours=24):
+                    continue
+
+                text = (
+                    f"Напоминание о встрече через 24 часа\n"
+                    f"ФИО: {m.get('worker_name', '')}\n"
+                    f"Дата и время: {m.get('date', '')}\n"
+                )
+                if m.get('note'):
+                    text += f"Примечание: {m['note']}\n"
+                try:
+                    await bot.send_message(chat_id=m['telegram_id'], text=text)
+                    await db.mark_meeting_reminded(meeting_id, now.isoformat())
+                    logger.info("Напоминание о встрече отправлено worker=%s",
+                                m.get('worker_id'))
+                except Exception as e:
+                    logger.warning("Не удалось отправить напоминание id=%s: %s",
+                                   meeting_id, e)
+        except Exception as e:
+            logger.error("Ошибка проверки встреч: %s", e)
+
+        await asyncio.sleep(30)
+
+
 async def main():
     """Главная функция запуска бота"""
     bot = Bot(token=BOT_TOKEN)
@@ -231,14 +309,17 @@ async def main():
     try:
         await on_startup(bot)
         bg_task = asyncio.create_task(check_rejected_workers(bot))
+        meeting_task = asyncio.create_task(check_meeting_notifications(bot))
         try:
             await dp.start_polling(bot)
         finally:
             bg_task.cancel()
-            try:
-                await bg_task
-            except asyncio.CancelledError:
-                pass
+            meeting_task.cancel()
+            for task in (bg_task, meeting_task):
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
     finally:
         await storage.close()
         await bot.session.close()
