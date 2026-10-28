@@ -1,8 +1,25 @@
 # Changelog
 
-## v1.28 (28.10.2026)
+## v1.29 (28.10.2026)
 
-### Иконки UI: заголовок окна и EXE
+### Покрытие тестами bot/services (спеки 031-033)
+
+- `bot/tests/test_db_service.py` (спека 031): 25 тестов для db.py — get_next_id,
+  save_worker (INSERT/UPDATE, created_at), save_documents (single + multi-file),
+  get_worker, get_all_workers, search_workers, accept/reject/resubmit,
+  get_pending_count, set_legal_entity, set_hr_status, archive/unarchive,
+  delete_worker, встречи, комментарии, инициализация схемы (v6, 4 таблицы).
+- `bot/tests/test_db_saver.py` (спека 032): тесты DBSaver.save_worker_data.
+- `bot/tests/test_file_saver.py` (спека 032): тесты FileSaver.validate_file,
+  save_document (включая multi_file), cleanup_temp_files.
+- `bot/tests/test_utils.py` (спека 033): тесты parse_rejection_reasons,
+  parse_meeting_datetime, get_field_prompt, validate_file_extension.
+- `bot/tests/test_documents_config.py` (спека 033): тесты DOC_FLOWS,
+  get_next_doc, get_doc_by_key, DOC_PREFIXES, DOC_LABELS, get_doc_flow.
+- Установлен pytest-asyncio для запуска async-тестов бота.
+- Итого: 182 тестов (было 147).
+
+## v1.28 (28.10.2026)
 
 - `UI/src/main.py`: заголовок окна теперь показывает `icon.png` + текст "IS" (слово «Consult» убрано).
   Размер иконки адаптивный — квадрат, подстраивается под размер окна (min 16×16, max 64×64),
