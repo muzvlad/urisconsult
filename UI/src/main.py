@@ -763,11 +763,11 @@ class DBViewerApp:
 
         key_by_label = {HR_STATUS_LABELS[k]: k for k in HR_STATUS_KEYS}
         plaque = tk.Label(block, text=current_label, font=(FONT_FAMILY, 9, 'bold'),
-                          padx=8, pady=2)
-        plaque.pack(side=tk.LEFT)
+                          width=18, padx=0, pady=2)
+        plaque.pack(side=tk.LEFT, padx=(10, 0))
 
-        date_entry = tk.Entry(block, width=12, font=(FONT_FAMILY, 10))
-        date_entry.pack(side=tk.LEFT, padx=(10, 6))
+        date_entry = tk.Entry(block, width=12, font=(FONT_FAMILY, 10), justify='center')
+        date_entry.pack(side=tk.LEFT, padx=(18, 6))
         if worker.hr_status_date:
             date_entry.insert(0, format_date(worker.hr_status_date))
 
@@ -804,9 +804,13 @@ class DBViewerApp:
                 show_error(self.root, "Ошибка", f"Ошибка: {e}")
 
         combo.bind('<<ComboboxSelected>>', refresh_style)
-        tk.Button(block, text="Сохранить", command=save,
-                  bg=self.config.accent_green, fg='white', font=(FONT_FAMILY, 9, 'bold'),
-                  padx=10, relief=tk.FLAT, cursor='hand2').pack(side=tk.LEFT, padx=(6, 0))
+
+        save_row = tk.Frame(block, bg='white')
+        save_row.pack(anchor=tk.W, pady=(8, 0))
+        SAVE_GREEN = '#1f7a4c'  # затемнённый accent_green (#27ae60)
+        tk.Button(save_row, text="Сохранить", command=save,
+                  bg=SAVE_GREEN, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=14, relief=tk.SOLID, borderwidth=1, cursor='hand2').pack(side=tk.LEFT)
         refresh_style()
 
     def _display_worker_details(self, worker: Worker) -> None:
