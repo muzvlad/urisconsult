@@ -230,8 +230,7 @@ class DBViewerApp:
         main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # Левая панель — список
-        left_frame = tk.Frame(main_paned, relief=tk.RAISED, borderwidth=1, width=300)
-        left_frame.pack_propagate(False)
+        left_frame = tk.Frame(main_paned, relief=tk.RAISED, borderwidth=1)
         main_paned.add(left_frame, weight=1)
 
         tk.Label(left_frame, text="Найденные записи:",
@@ -251,7 +250,7 @@ class DBViewerApp:
 
         # Правая панель — детали
         right_frame = tk.Frame(main_paned, relief=tk.RAISED, borderwidth=1)
-        main_paned.add(right_frame, weight=10)
+        main_paned.add(right_frame, weight=1)
 
         self._create_scrollable_detail_area(right_frame)
 
