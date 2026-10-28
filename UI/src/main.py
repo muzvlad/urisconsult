@@ -268,8 +268,6 @@ class DBViewerApp:
             pass
 
     def _create_scrollable_detail_area(self, parent: tk.Widget) -> None:
-
-    def _create_scrollable_detail_area(self, parent: tk.Widget) -> None:
         """Создание прокручиваемой области для деталей."""
         self.canvas = tk.Canvas(parent, bg='white')
         v_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.canvas.yview)
