@@ -33,6 +33,9 @@ class AppPaths:
 @dataclass(frozen=True)
 class AppConfig:
     """Настройки приложения."""
+    # Версия приложения (записывается из CHANGELOG.md при сборке build_exe.py)
+    app_version: str = "dev"
+
     # Размеры окна
     window_width: int = 1300
     window_height: int = 850
@@ -250,7 +253,29 @@ def get_paths() -> AppPaths:
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     """Получить конфигурацию (кэшируется)."""
-    return AppConfig()
+    # Версия из автогенерируемого _version.py (build_exe.py пишет перед сборкой)
+    version = "dev"
+    try:
+        from src._version import APP_VERSION  # noqa: WPS433
+        version = APP_VERSION
+    except Exception:
+        # Fallback: попробовать прочитать CHANGELOG.md напрямую
+        try:
+            from pathlib import Path
+            import re
+            root = _get_project_root()
+            changelog = root / "docs_project" / "CHANGELOG.md"
+            if changelog.exists():
+                with open(changelog, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        m = re.match(r'^##\s+v?(\d+(?:\.\d+)+)', line)
+                        if m:
+                            version = m.group(1)
+                            break
+        except Exception:
+            pass
+    return AppConfig(app_version=version)
 
 
 def get_bot_token() -> Optional[str]:

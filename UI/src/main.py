@@ -73,7 +73,7 @@ class DBViewerApp:
 
     def _setup_ui(self) -> None:
         """Построение интерфейса."""
-        self.root.title(self.config.app_title)
+        self.root.title(f"{self.config.app_title} v{self.config.app_version}")
         self.root.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.root.configure(bg=self.config.bg_color)
         self.root.minsize(self.config.min_window_width, self.config.min_window_height)
