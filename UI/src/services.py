@@ -299,6 +299,7 @@ class PDFExportService:
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.lib.utils import ImageReader
         except ImportError:
             return False, "Библиотека reportlab не установлена"
 
@@ -350,6 +351,20 @@ class PDFExportService:
                 c.drawString(50, y, f"{label}: {val}")
                 update_progress()
                 y -= 18
+
+        # Фото — в правом верхнем углу (поверх всего)
+        if worker.id:
+            photo_path = self.doc_service.find_photo(worker.id)
+            if photo_path:
+                try:
+                    img = ImageReader(str(photo_path))
+                    photo_x = width - 50 - 80
+                    photo_y = height - 50 - 80
+                    c.drawImage(img, photo_x, photo_y, width=80, height=80,
+                                preserveAspectRatio=True, mask='auto')
+                    update_progress()
+                except Exception:
+                    pass
 
         # Документы
         update_progress()
