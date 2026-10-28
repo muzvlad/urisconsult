@@ -166,6 +166,12 @@ class DBViewerApp:
                   padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
+        # Кнопка "Экспорт списка в PDF"
+        tk.Button(top_frame, text="Экспорт списка в PDF", command=self._export_list_to_pdf,
+                  bg=self.config.accent_orange, fg='white', font=(FONT_FAMILY, 10, 'bold'),
+                  padx=14, relief=tk.FLAT, cursor='hand2'
+                  ).pack(side=tk.LEFT, padx=5)
+
         # Архив
         tk.Label(top_frame, text="Показать:", bg=self.config.header_bg, fg='white',
                  font=(FONT_FAMILY, 10)).pack(side=tk.LEFT, padx=(10, 4))
@@ -1175,6 +1181,60 @@ class DBViewerApp:
                     log_error(f"PDF export failed: {msg}")
         except Exception as e:
             log_error(f"PDF export error: {e}", exc_info=True)
+            show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
+
+    # ─── Экспорт списка в PDF ───
+
+    def _period_label(self) -> str:
+        """Человекочитаемая метка текущего периода для диалога выгрузки."""
+        preset = self.period_labels.get(self.period_var.get(), "all")
+        if preset == "all":
+            return "За все время"
+        if preset == "custom" and self.custom_range and self.custom_range[0] and self.custom_range[1]:
+            d_from, d_to = self.custom_range
+            return f"За {d_from} — {d_to}"
+        # Обратный перевод пресета в метку (по значению -> ключу)
+        for label, value in self.period_labels.items():
+            if value == preset:
+                return label
+        return "За все время"
+
+    def _export_list_to_pdf(self) -> None:
+        """Экспорт текущего отфильтрованного списка анкет в PDF."""
+        if not self.search_results:
+            show_warning(self.root, "Предупреждение", "Нет данных для выгрузки!")
+            return
+
+        period_label = self._period_label()
+        msg = (
+            f"Будет произведена выгрузка за период «{period_label}».\n"
+            f"Найдено анкет: {len(self.search_results)}.\n"
+            f"Вы хотите сделать выгрузку?"
+        )
+        if not ask_yes_no(self.root, "Выгрузка в PDF", msg):
+            return
+
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                title="Сохранить список в PDF"
+            )
+            if not filename:
+                return
+
+            log_info(f"Exporting {len(self.search_results)} workers to PDF: {filename}")
+            success, msg = self.pdf_service.export_list(
+                self.search_results, filename, period_label=period_label
+            )
+            if success:
+                show_info(self.root, "Успех", msg)
+                log_info(f"PDF list export successful: {filename}")
+            else:
+                show_error(self.root, "Ошибка", msg)
+                log_error(f"PDF list export failed: {msg}")
+        except Exception as e:
+            log_error(f"PDF list export error: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
 
 

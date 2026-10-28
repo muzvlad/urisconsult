@@ -299,7 +299,6 @@ class PDFExportService:
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.utils import ImageReader
         except ImportError:
             return False, "Библиотека reportlab не установлена"
 
@@ -352,20 +351,6 @@ class PDFExportService:
                 update_progress()
                 y -= 18
 
-        # Фото — в правом верхнем углу (поверх всего)
-        if worker.id:
-            photo_path = self.doc_service.find_photo(worker.id)
-            if photo_path:
-                try:
-                    img = ImageReader(str(photo_path))
-                    photo_x = width - 50 - 80
-                    photo_y = height - 50 - 80
-                    c.drawImage(img, photo_x, photo_y, width=80, height=80,
-                                preserveAspectRatio=True, mask='auto')
-                    update_progress()
-                except Exception:
-                    pass
-
         # Документы
         update_progress()
         y -= 20
@@ -402,13 +387,6 @@ class PDFExportService:
                     update_progress()
                     if len(entries) > 1:
                         c.drawString(70, y - 12, f"  + ещё {len(entries) - 1} файл(а)")
-                    if doc_path:
-                        try:
-                            img = ImageReader(str(doc_path))
-                            c.drawImage(img, 450, y - 5, width=60, height=60,
-                                        preserveAspectRatio=True, mask='auto')
-                        except Exception:
-                            pass
                     y -= 70
                 else:
                     c.drawString(70, y, f"{doc.label}: —")
@@ -453,6 +431,99 @@ class PDFExportService:
                 c.drawString(70, y, text)
                 update_progress()
                 y -= 16
+
+        c.save()
+        return True, f"PDF сохранён: {output_path}"
+
+    def export_list(self, workers: List[Worker], output_path: Path,
+                    period_label: str = "",
+                    progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
+        """
+        Экспортировать список анкет в PDF (одна анкета — блок полей).
+
+        Args:
+            workers: Список сотрудников для выгрузки
+            output_path: Путь для сохранения
+            period_label: Человекочитаемая метка периода для заголовка
+            progress_callback: Функция обратного вызова (current, total)
+        """
+        try:
+            from reportlab.pdfgen import canvas as pdf_canvas
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+        except ImportError:
+            return False, "Библиотека reportlab не установлена"
+
+        self._register_font()
+
+        c = pdf_canvas.Canvas(str(output_path), pagesize=A4)
+        width, height = A4
+
+        # Заголовок документа
+        c.setFont(self._font_name, 16)
+        c.drawString(50, height - 50, "Список сотрудников")
+        if period_label:
+            c.setFont(self._font_name, 12)
+            c.drawString(50, height - 70, f"Период: {period_label}")
+            y = height - 100
+        else:
+            y = height - 80
+
+        c.setFont(self._font_name, 9)
+
+        total = len(workers)
+        for idx, worker in enumerate(workers):
+            # Новая страница для каждой анкеты (кроме первой)
+            if idx > 0:
+                c.showPage()
+                y = height - 50
+                c.setFont(self._font_name, 16)
+                c.drawString(50, y, "Список сотрудников (продолжение)")
+                if period_label:
+                    c.setFont(self._font_name, 12)
+                    c.drawString(50, y - 20, f"Период: {period_label}")
+                    y = height - 140
+                else:
+                    y = height - 120
+                c.setFont(self._font_name, 9)
+
+            y -= 20
+            c.drawString(50, y, f"Анкета №{idx + 1} из {total}")
+            y -= 16
+
+            fields = [
+                ("ID", worker.id),
+                ("ФИО", worker.name),
+                ("Гражданство", worker.citizenship),
+                ("Пол", worker.gender),
+                ("Дата рождения", format_date(worker.date) if worker.date else ""),
+                ("Объект", worker.object),
+                ("Заказчик", worker.customer),
+                ("Юр. лицо", worker.legal_entity),
+                ("Должность", worker.position),
+                ("Телефон", worker.phone_main),
+                ("Доп. телефон", worker.phone_additional),
+                ("Статус анкеты", worker.status),
+                ("HR-статус", worker.hr_status),
+                ("Дата HR-статуса", worker.hr_status_date or ""),
+                ("Создана", worker.created_at or ""),
+                ("Обновлена", worker.updated_at or ""),
+            ]
+            for label, val in fields:
+                if not val:
+                    continue
+                c.drawString(50, y, f"{label}: {val}")
+                y -= 14
+                if y < 60:
+                    c.showPage()
+                    y = height - 50
+                    c.setFont(self._font_name, 9)
+
+            y -= 10
+            if y < 80:
+                c.showPage()
+                y = height - 60
 
         c.save()
         return True, f"PDF сохранён: {output_path}"
