@@ -255,15 +255,19 @@ class DBViewerApp:
         # Деление пополам по умолчанию (относительно окна, не в px).
         # Разделитель можно передвигать вручную — позиция запомнится.
         self.root.after_idle(lambda mp=main_paned: self._set_sash_center(mp))
+        self.root.after(150, lambda mp=main_paned: self._set_sash_center(mp))
 
         self._create_scrollable_detail_area(right_frame)
 
     def _set_sash_center(self, paned: ttk.PanedWindow) -> None:
         """Установить разделитель PanedWindow в центр окна (50/50)."""
         try:
+            self.root.update_idletasks()
             width = paned.winfo_width()
             if width > 10:
                 paned.sashpos(0, width // 2)
+            else:
+                self.root.after(100, lambda: self._set_sash_center(paned))
         except tk.TclError:
             pass
 
@@ -273,7 +277,7 @@ class DBViewerApp:
         v_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.canvas.yview)
         h_scrollbar = ttk.Scrollbar(parent, orient="horizontal", command=self.canvas.xview)
 
-        self.scrollable_frame = tk.Frame(self.canvas, bg='white', width=900)
+        self.scrollable_frame = tk.Frame(self.canvas, bg='white')
 
         self.scrollable_frame.bind(
             "<Configure>",
