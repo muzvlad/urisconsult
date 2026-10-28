@@ -751,18 +751,20 @@ class DBViewerApp:
         block = tk.Frame(parent, bg='white')
         block.pack(anchor=tk.W, pady=(10, 0))
 
-        tk.Label(block, text="HR-статус:", bg='white',
-                 font=(FONT_FAMILY, 10, 'bold')).pack(side=tk.LEFT)
-
+        # Первая строка: надпись + поля
         fields_row = tk.Frame(block, bg='white')
-        fields_row.pack(side=tk.LEFT)
+        fields_row.pack(side=tk.TOP, anchor=tk.W)
+
+        label = tk.Label(fields_row, text="HR-статус:", bg='white',
+                         font=(FONT_FAMILY, 10, 'bold'))
+        label.pack(side=tk.LEFT)
 
         current_label = HR_STATUS_LABELS.get(worker.hr_status, HR_STATUS_LABELS['not_processed'])
         status_var = tk.StringVar(value=current_label)
         combo = ttk.Combobox(fields_row, textvariable=status_var, width=18, state='readonly',
                              values=[HR_STATUS_LABELS[k] for k in HR_STATUS_KEYS],
                              font=(FONT_FAMILY, 10))
-        combo.pack(side=tk.LEFT, padx=(0, 6))
+        combo.pack(side=tk.LEFT, padx=(6, 6))
 
         key_by_label = {HR_STATUS_LABELS[k]: k for k in HR_STATUS_KEYS}
         plaque = tk.Label(fields_row, text=current_label, font=(FONT_FAMILY, 9, 'bold'),
@@ -770,7 +772,7 @@ class DBViewerApp:
         plaque.pack(side=tk.LEFT, padx=(10, 0))
 
         date_entry = tk.Entry(fields_row, width=12, font=(FONT_FAMILY, 10), justify='center')
-        date_entry.pack(side=tk.LEFT, padx=(18, 0))
+        date_entry.pack(side=tk.LEFT, padx=(18, 6))
         if worker.hr_status_date:
             date_entry.insert(0, format_date(worker.hr_status_date))
 
@@ -808,6 +810,7 @@ class DBViewerApp:
 
         combo.bind('<<ComboboxSelected>>', refresh_style)
 
+        # Вторая строка: кнопка «Сохранить» под надписью «HR-статус:»
         save_row = tk.Frame(block, bg='white')
         save_row.pack(side=tk.TOP, anchor=tk.W, pady=(8, 0))
         SAVE_GREEN = '#1f7a4c'  # затемнённый accent_green (#27ae60)
