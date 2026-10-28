@@ -784,11 +784,12 @@ class DBViewerApp:
             key = current_key()
             date_value = ''
             if key in ('employed', 'fired'):
-                date_value = parse_user_date(date_entry.get()) or ''
-                if not date_value:
+                date_text = date_entry.get().strip()
+                if not parse_user_date(date_text):
                     show_warning(self.root, "Внимание",
                                  "Укажите дату в формате дд.мм.гггг")
                     return
+                date_value = date_text
             try:
                 if self.api.set_hr_status(worker.id, key, date_value):
                     log_info(f"Worker {worker.id} HR status -> {key}")
