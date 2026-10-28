@@ -56,6 +56,11 @@ goto :clone_done
 echo    Pulling latest changes...
 for /f %%i in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set OLD_COMMIT=%%i
 git -C "%REPO_DIR%" checkout -- . 2>nul
+REM Обновить remote URL с актуальным токеном, чтобы fetch работал с приватным репозиторием
+if exist "%TOKEN_FILE%" (
+    set /p GITHUB_TOKEN=<"%TOKEN_FILE%"
+    git -C "%REPO_DIR%" remote set-url origin "https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git" >nul 2>&1
+)
 git -C "%REPO_DIR%" fetch --quiet origin 2>nul
 git -C "%REPO_DIR%" reset --hard origin/master --quiet 2>nul
 if errorlevel 1 (
