@@ -69,9 +69,10 @@ class NotificationBell(tk.Frame):
 class WorkerListWidget(tk.Frame):
     """Виджет списка сотрудников с Treeview и фильтрацией."""
 
-    COLUMNS = ("status", "id", "name", "created_at", "citizenship",
+    COLUMNS = ("select", "status", "id", "name", "created_at", "citizenship",
                "manager", "object", "hr_status")
     HEADERS = {
+        "select": "✓",
         "status": "Статус бота",
         "id": "ID",
         "name": "ФИО",
@@ -82,6 +83,7 @@ class WorkerListWidget(tk.Frame):
         "hr_status": "HR-статус",
     }
     COLUMN_WIDTHS = {
+        "select": 34,
         "status": 95,
         "id": 70,
         "name": 200,
@@ -100,6 +102,7 @@ class WorkerListWidget(tk.Frame):
         self.on_double_click = on_double_click
         self.config = get_config()
         self.workers: List[Worker] = []
+        self._selected_ids: set = set()
         self._sort_column: str = "id"
         self._sort_reverse: bool = False
         self._filter_text: str = ""
@@ -147,6 +150,29 @@ class WorkerListWidget(tk.Frame):
 
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         self.tree.bind("<Double-Button-1>", self._on_double_click)
+        self.tree.bind("<Button-1>", self._on_tree_click, add="+")
+
+    def _on_tree_click(self, event) -> None:
+        region = self.tree.identify_region(event.x, event.y)
+        if region == "cell":
+            column = self.tree.identify_column(event.x)
+            if column == "#1":  # колонка чекбоксов
+                iid = self.tree.identify_row(event.y)
+                if iid:
+                    self._toggle_select(iid)
+
+    def _sort_by(self, column: str) -> None:
+        if column == "select":
+            self._toggle_all()
+            return
+        if self._sort_column == column:
+            self._sort_reverse = not self._sort_reverse
+        else:
+            self._sort_column = column
+            self._sort_reverse = False
+
+        self._update_headers()
+        self._apply_sort()
 
     def _on_filter_change(self, *_args) -> None:
         self._filter_text = self._filter_var.get().strip().lower()
@@ -181,6 +207,33 @@ class WorkerListWidget(tk.Frame):
         self.workers.sort(key=self._get_sort_key, reverse=self._sort_reverse)
         self._refresh_tree()
 
+    def _toggle_select(self, iid: str) -> None:
+        if iid in self._selected_ids:
+            self._selected_ids.discard(iid)
+        else:
+            self._selected_ids.add(iid)
+        checked = "☑" if iid in self._selected_ids else "☐"
+        self.tree.set(iid, "select", checked)
+
+    def _toggle_all(self) -> None:
+        visible_ids = list(self.tree.get_children())
+        if not visible_ids:
+            return
+        all_selected = all(iid in self._selected_ids for iid in visible_ids)
+        if all_selected:
+            self._selected_ids.clear()
+        else:
+            self._selected_ids = set(visible_ids)
+        for iid in visible_ids:
+            checked = "☑" if iid in self._selected_ids else "☐"
+            self.tree.set(iid, "select", checked)
+
+    def get_selected_workers(self) -> List[Worker]:
+        """Вернуть отмеченные анкеты (или все видимые, если ничего не выбрано)."""
+        if self._selected_ids:
+            return [w for w in self.workers if w.id in self._selected_ids]
+        return list(self.workers)
+
     def _matches_filter(self, worker: Worker) -> bool:
         if not self._filter_text:
             return True
@@ -205,15 +258,17 @@ class WorkerListWidget(tk.Frame):
             tags = (f"hr_{status_key}",)
             if worker.is_archived:
                 tags = tags + ("archived",)
+            checked = "☑" if worker.id in self._selected_ids else "☐"
             self.tree.insert("", tk.END, iid=worker.id,
                              tags=tags, values=(
-                icon, worker.id, worker.name, format_date(worker.created_at),
+                checked, icon, worker.id, worker.name, format_date(worker.created_at),
                 worker.citizenship, worker.manager, worker.object,
                 hr_style['label'],
             ))
 
     def set_workers(self, workers: List[Worker]) -> None:
         self.workers = workers
+        self._selected_ids.clear()
         self._apply_sort()
 
     def _on_select(self, event) -> None:

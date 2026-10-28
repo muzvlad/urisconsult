@@ -284,58 +284,20 @@ class PDFExportService:
         self._font_name = "Helvetica"
         self._font_registered = False
 
-    def export(self, worker: Worker, output_path: Path,
-               progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
-        """
-        Экспортировать карточку в PDF.
-
-        Args:
-            worker: Сотрудник
-            output_path: Путь для сохранения
-            progress_callback: Функция обратного вызова (current, total)
-        """
-        try:
-            from reportlab.pdfgen import canvas as pdf_canvas
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.utils import ImageReader
-        except ImportError:
-            return False, "Библиотека reportlab не установлена"
-
-        self._register_font()
-
-        c = pdf_canvas.Canvas(str(output_path), pagesize=A4)
-        width, height = A4
-        y = height - 50
-
-        # Подсчет общего количества элементов для прогресса
-        total_items = self._count_pdf_items(worker)
-        current_item = 0
-
-        def update_progress():
-            nonlocal current_item
-            current_item += 1
-            if progress_callback:
-                progress_callback(current_item, total_items)
-
+    def _draw_worker_card(self, c, worker, y, width, height):
+        """Нарисовать карточку одного сотрудника на холсте c, начиная с y."""
         c.setFont(self._font_name, 16)
         c.drawString(50, y, "Карточка сотрудника")
-        update_progress()
-
         y -= 30
+
         c.setFont(self._font_name, 12)
         c.drawString(50, y, f"ФИО: {worker.name}")
-        update_progress()
         y -= 20
         c.drawString(50, y, f"ИД: {worker.id}")
-        update_progress()
         y -= 20
         c.drawString(50, y, f"Категория: {worker.citizenship}")
-        update_progress()
         y -= 20
 
-        # Основные поля
         profile = [
             ('gender', 'Пол'), ('date', 'Дата рождения'),
             ('manager', 'Менеджер'), ('object', 'Объект'),
@@ -349,7 +311,6 @@ class PDFExportService:
                 if key == 'date':
                     val = format_date(val)
                 c.drawString(50, y, f"{label}: {val}")
-                update_progress()
                 y -= 18
 
         # Фото — в правом верхнем углу (поверх всего)
@@ -362,19 +323,16 @@ class PDFExportService:
                     photo_y = height - 50 - 80
                     c.drawImage(img, photo_x, photo_y, width=80, height=80,
                                 preserveAspectRatio=True, mask='auto')
-                    update_progress()
                 except Exception:
                     pass
 
-        # Документы
-        update_progress()
+        # Документы (только текст, без миниатюр)
         y -= 20
         citizenship = worker.citizenship
         normalized = normalize_citizenship(citizenship)
         if normalized in self.doc_service._doc_flows:
             c.setFont(self._font_name, 14)
             c.drawString(50, y, f"Документы ({citizenship}):")
-            update_progress()
             y -= 25
             c.setFont(self._font_name, 10)
 
@@ -382,12 +340,6 @@ class PDFExportService:
             db_docs = get_db_service().get_documents(worker.id)
 
             for doc in self.doc_service._doc_flows[normalized]:
-                if y < 50:
-                    c.showPage()
-                    y = height - 50
-                    c.setFont(self._font_name, 10)
-                    update_progress()
-
                 entries = db_docs.get(doc.key, [])
                 if isinstance(entries, str):
                     entries = [{'filename': entries, 'created_at': ''}]
@@ -399,22 +351,18 @@ class PDFExportService:
                     doc_path = self.doc_service._find_document_file(worker.id, doc.prefix, filename_doc)
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
-                    update_progress()
                     if len(entries) > 1:
                         c.drawString(70, y - 12, f"  + ещё {len(entries) - 1} файл(а)")
                     y -= 70
                 else:
                     c.drawString(70, y, f"{doc.label}: —")
-                    update_progress()
                     y -= 18
 
         # Замечания
         if worker.is_rejected and worker.reasons:
-            update_progress()
             y -= 10
             c.setFont(self._font_name, 12)
             c.drawString(50, y, "⚠ Замечания:")
-            update_progress()
             y -= 20
             c.setFont(self._font_name, 10)
             for r in worker.reasons:
@@ -422,51 +370,37 @@ class PDFExportService:
                 rcomment = r.get('comment', '') if isinstance(r, dict) else ''
                 label = self.doc_service.get_document_label(rkey)
                 c.drawString(70, y, f"• {label}")
-                update_progress()
                 y -= 16
                 if rcomment:
                     c.drawString(85, y, f"📝 {rcomment}")
-                    update_progress()
                     y -= 16
 
         # Встречи
         from src.api_client import get_db_service
         meetings = get_db_service().get_meetings(worker.id)
         if meetings:
-            update_progress()
             y -= 10
             c.setFont(self._font_name, 12)
             c.drawString(50, y, "Встречи:")
-            update_progress()
             y -= 20
             c.setFont(self._font_name, 10)
             for m in meetings:
                 meeting_date = format_datetime(m.get('date', ''))
                 text = f"• {meeting_date} — {m['note']}" if meeting_date else f"• {m['note']}"
                 c.drawString(70, y, text)
-                update_progress()
                 y -= 16
 
-        c.save()
-        return True, f"PDF сохранён: {output_path}"
+        return y
 
-    def export_list(self, workers: List[Worker], output_path: Path,
-                    period_label: str = "",
-                    progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
-        """
-        Экспортировать список анкет в PDF (одна анкета — блок полей).
-
-        Args:
-            workers: Список сотрудников для выгрузки
-            output_path: Путь для сохранения
-            period_label: Человекочитаемая метка периода для заголовка
-            progress_callback: Функция обратного вызова (current, total)
-        """
+    def export(self, worker: Worker, output_path: Path,
+               progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
+        """Экспортировать одну карточку в PDF (одна анкета на странице)."""
         try:
             from reportlab.pdfgen import canvas as pdf_canvas
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.lib.utils import ImageReader
         except ImportError:
             return False, "Библиотека reportlab не установлена"
 
@@ -475,70 +409,118 @@ class PDFExportService:
         c = pdf_canvas.Canvas(str(output_path), pagesize=A4)
         width, height = A4
 
+        self._draw_worker_card(c, worker, height - 50, width, height)
+
+        c.save()
+        return True, f"PDF сохранён: {output_path}"
+
+    def export_cards(self, workers: List[Worker], output_path: Path,
+                     period_label: str = "",
+                     progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
+        """Экспортировать несколько карточек в один PDF (каждая на своей странице)."""
+        try:
+            from reportlab.pdfgen import canvas as pdf_canvas
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.lib.utils import ImageReader
+        except ImportError:
+            return False, "Библиотека reportlab не установлена"
+
+        self._register_font()
+
+        c = pdf_canvas.Canvas(str(output_path), pagesize=A4)
+        width, height = A4
+
+        total = len(workers)
+        for idx, worker in enumerate(workers):
+            if idx > 0:
+                c.showPage()
+            self._draw_worker_card(c, worker, height - 50, width, height)
+
+        c.save()
+        return True, f"PDF сохранён: {output_path}"
+
+    def export_list(self, workers: List[Worker], output_path: Path,
+                    period_label: str = "",
+                    progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
+        """Экспортировать список анкет в PDF — альбомная таблица.
+
+        Каждая анкета — одна строка таблицы со столбцами, соответствующими
+        полям из найденных анкет.
+        """
+        try:
+            from reportlab.pdfgen import canvas as pdf_canvas
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+        except ImportError:
+            return False, "Библиотека reportlab не установлена"
+
+        self._register_font()
+
+        c = pdf_canvas.Canvas(str(output_path), pagesize=landscape(A4))
+        width, height = landscape(A4)
+
         # Заголовок документа
         c.setFont(self._font_name, 16)
         c.drawString(50, height - 50, "Список сотрудников")
         if period_label:
             c.setFont(self._font_name, 12)
-            c.drawString(50, height - 70, f"Период: {period_label}")
-            y = height - 100
+            c.drawString(50, height - 75, f"Период: {period_label}")
+            y = height - 110
         else:
-            y = height - 80
+            y = height - 90
 
-        c.setFont(self._font_name, 9)
+        # Колонки таблицы: (заголовок, x, ширина)
+        columns = [
+            ("ID", 45, 45),
+            ("ФИО", 95, 130),
+            ("Гражданство", 225, 90),
+            ("Дата рожд.", 315, 75),
+            ("Объект", 390, 100),
+            ("Заказчик", 490, 95),
+            ("Должность", 585, 70),
+            ("Телефон", 655, 85),
+            ("Статус", 740, 60),
+            ("HR-статус", 800, 55),
+        ]
 
-        total = len(workers)
-        for idx, worker in enumerate(workers):
-            # Новая страница для каждой анкеты (кроме первой)
-            if idx > 0:
-                c.showPage()
-                y = height - 50
-                c.setFont(self._font_name, 16)
-                c.drawString(50, y, "Список сотрудников (продолжение)")
-                if period_label:
-                    c.setFont(self._font_name, 12)
-                    c.drawString(50, y - 20, f"Период: {period_label}")
-                    y = height - 140
-                else:
-                    y = height - 120
-                c.setFont(self._font_name, 9)
+        def draw_header(yy):
+            c.setFont(self._font_name, 9)
+            c.setFillColorRGB(0.8, 0.8, 0.8)
+            c.rect(45, yy - 7, 752, 16, stroke=0, fill=1)
+            c.setFillColorRGB(0, 0, 0)
+            for label, x, w in columns:
+                c.drawString(x + 5, yy - 4, label)
 
-            y -= 20
-            c.drawString(50, y, f"Анкета №{idx + 1} из {total}")
-            y -= 16
+        draw_header(y)
+        y -= 20
 
-            fields = [
-                ("ID", worker.id),
-                ("ФИО", worker.name),
-                ("Гражданство", worker.citizenship),
-                ("Пол", worker.gender),
-                ("Дата рождения", format_date(worker.date) if worker.date else ""),
-                ("Объект", worker.object),
-                ("Заказчик", worker.customer),
-                ("Юр. лицо", worker.legal_entity),
-                ("Должность", worker.position),
-                ("Телефон", worker.phone_main),
-                ("Доп. телефон", worker.phone_additional),
-                ("Статус анкеты", worker.status),
-                ("HR-статус", worker.hr_status),
-                ("Дата HR-статуса", worker.hr_status_date or ""),
-                ("Создана", worker.created_at or ""),
-                ("Обновлена", worker.updated_at or ""),
-            ]
-            for label, val in fields:
-                if not val:
-                    continue
-                c.drawString(50, y, f"{label}: {val}")
-                y -= 14
-                if y < 60:
-                    c.showPage()
-                    y = height - 50
-                    c.setFont(self._font_name, 9)
-
-            y -= 10
-            if y < 80:
+        row_height = 15
+        for worker in workers:
+            if y < 55:
                 c.showPage()
                 y = height - 60
+                draw_header(y)
+                y -= 20
+
+            c.setFont(self._font_name, 9)
+            values = [
+                worker.id or "",
+                worker.name or "",
+                worker.citizenship or "",
+                worker.gender or "",
+                format_date(worker.date) if worker.date else "",
+                worker.object or "",
+                worker.customer or "",
+                worker.position or "",
+                worker.phone_main or "",
+                worker.hr_status or "",
+            ]
+            for (label, x, w), val in zip(columns, values):
+                c.drawString(x + 5, y, str(val))
+            y -= row_height
 
         c.save()
         return True, f"PDF сохранён: {output_path}"

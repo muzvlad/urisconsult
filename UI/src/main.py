@@ -1159,28 +1159,44 @@ class DBViewerApp:
     # ─── Экспорт в PDF ───
 
     def _export_to_pdf(self) -> None:
-        """Экспорт текущей карточки в PDF."""
-        if not self.current_worker:
-            show_warning(self.root, "Предупреждение", "Сначала выберите запись!")
+        """Экспорт выбранных карточек в PDF (каждая на отдельной странице).
+        Если ничего не выделено — экспортирует текущую анкету."""
+        workers = self.list_widget.get_selected_workers()
+        if not workers:
+            if self.current_worker:
+                workers = [self.current_worker]
+            else:
+                show_warning(self.root, "Предупреждение", "Сначала выберите запись в списке!")
+                return
+
+        period_label = self._period_label()
+        msg = (
+            f"Будет произведена выгрузка за период «{period_label}».\n"
+            f"Анкет для выгрузки: {len(workers)}.\n"
+            f"Вы хотите сделать выгрузку?"
+        )
+        if not ask_yes_no(self.root, "Выгрузка в PDF", msg):
             return
 
         try:
             filename = filedialog.asksaveasfilename(
                 defaultextension=".pdf",
                 filetypes=[("PDF files", "*.pdf")],
-                title="Сохранить как PDF"
+                title="Сохранить карточки в PDF"
             )
-            if filename:
-                log_info(f"Exporting worker {self.current_worker.id} to PDF: {filename}")
-                success, msg = self.pdf_service.export(self.current_worker, filename)
-                if success:
-                    show_info(self.root, "Успех", msg)
-                    log_info(f"PDF export successful: {filename}")
-                else:
-                    show_error(self.root, "Ошибка", msg)
-                    log_error(f"PDF export failed: {msg}")
+            if not filename:
+                return
+
+            log_info(f"Exporting {len(workers)} workers to PDF cards: {filename}")
+            success, msg = self.pdf_service.export_cards(workers, filename, period_label=period_label)
+            if success:
+                show_info(self.root, "Успех", msg)
+                log_info(f"PDF cards export successful: {filename}")
+            else:
+                show_error(self.root, "Ошибка", msg)
+                log_error(f"PDF cards export failed: {msg}")
         except Exception as e:
-            log_error(f"PDF export error: {e}", exc_info=True)
+            log_error(f"PDF cards export error: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
 
     # ─── Экспорт списка в PDF ───
