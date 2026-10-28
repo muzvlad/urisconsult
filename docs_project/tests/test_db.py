@@ -393,7 +393,7 @@ class TestWorkerCRUD:
         assert [d['filename'] for d in docs['vnzh_work_book']] == ['trud.jpg', 'trud_2.jpg']
 
     def test_replace_document(self, fresh_db, sample_personal_data):
-        """Перезаливка документа удаляет старую запись."""
+        """Перезаливка: запись остаётся, имя файла прежнее, created_at обновляется."""
         db_path, users_dir, docs_dir = fresh_db
         db_module = _patch_db_module(db_path, users_dir, docs_dir)
 
@@ -404,6 +404,11 @@ class TestWorkerCRUD:
         asyncio.get_event_loop().run_until_complete(
             db_module.save_documents('00001', {'photo': 'photo_v1.jpg'})
         )
+        docs_before = asyncio.get_event_loop().run_until_complete(
+            db_module.get_worker_documents('00001')
+        )
+        old_created = docs_before['photo'][0]['created_at']
+
         asyncio.get_event_loop().run_until_complete(
             db_module.replace_document('00001', 'photo', 'photo_v1.jpg')
         )
@@ -411,7 +416,8 @@ class TestWorkerCRUD:
         docs = asyncio.get_event_loop().run_until_complete(
             db_module.get_worker_documents('00001')
         )
-        assert docs.get('photo') in (None, [])
+        assert [d['filename'] for d in docs['photo']] == ['photo_v1.jpg']
+        assert docs['photo'][0]['created_at'] != old_created
 
     def test_save_worker_fills_dates(self, fresh_db, sample_personal_data):
         """save_worker гарантирует created_at/updated_at."""

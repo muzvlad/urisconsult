@@ -41,6 +41,8 @@ bot/Users/docs/*
 
 # Logs
 *.log
+logs/
+bot/logs/
 
 # Test coverage
 .coverage

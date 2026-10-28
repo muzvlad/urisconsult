@@ -1,5 +1,6 @@
-"""Тесты HTTP API (spec 025, 027)."""
+"""Тесты HTTP API (spec 025, 027, 035, 036)."""
 import asyncio
+import io
 import os
 import sys
 
@@ -93,3 +94,47 @@ class TestNotesAndMeetingsApi:
                            json={'date': '26/10/2026'}).status_code == 400
         assert client.post('/api/workers/00001/meetings',
                            json={'date': '26.10.2026 9:30'}).status_code == 400
+
+    def test_list_meetings_returns_same_shape(self, client):
+        """GET meetings отдаёт id, date, note, created_at (spec 035)."""
+        client.post('/api/workers/00001/meetings',
+                    json={'date': '26.10.2026 14:30', 'note': 'Планёрка'})
+
+        meetings = client.get('/api/workers/00001/meetings').get_json()
+        assert len(meetings) == 1
+        assert set(meetings[0]) == {'id', 'date', 'note', 'created_at'}
+        assert meetings[0]['date'] == '26.10.2026 14:30'
+        assert meetings[0]['note'] == 'Планёрка'
+
+
+class TestDocumentsApi:
+    def test_replace_document_overwrites_file_and_keeps_record(self, client, feature_db,
+                                                               tmp_path, monkeypatch):
+        """Перезаливка из UI: файл перезаписан под тем же именем, запись остаётся (spec 036)."""
+        import api_server
+
+        docs_dir = tmp_path / "api_docs"
+        docs_dir.mkdir()
+        monkeypatch.setattr(api_server, 'DOCS_DIR', str(docs_dir))
+
+        asyncio.run(feature_db.save_documents('00001', {'photo': 'passport.jpg'}))
+        before = client.get('/api/workers/00001/documents').get_json()['photo'][0]['created_at']
+
+        worker_dir = docs_dir / '00001'
+        worker_dir.mkdir()
+        target = worker_dir / 'passport.jpg'
+        target.write_bytes(b'old-content')
+
+        resp = client.post('/api/workers/00001/documents', data={
+            'doc_type': 'photo',
+            'old_filename': 'passport.jpg',
+            'file': (io.BytesIO(b'new-content'), 'upload.jpg'),
+        }, content_type='multipart/form-data')
+        assert resp.status_code == 200
+        assert resp.get_json()['ok'] is True
+
+        assert target.read_bytes() == b'new-content'
+
+        docs = client.get('/api/workers/00001/documents').get_json()
+        assert [d['filename'] for d in docs['photo']] == ['passport.jpg']
+        assert docs['photo'][0]['created_at'] != before

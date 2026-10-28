@@ -32,17 +32,36 @@ CURRENT_SCHEMA_VERSION = 6
 
 HR_STATUSES = ('not_processed', 'docs_pending', 'employed', 'rejected', 'fired')
 
+# Служебная запись, резервирующая следующий числовой ID (см. get_next_id).
+RESERVED_NAME = '__reserved__'
+
+# Брошенным считается резерв старше этого времени (часов).
+RESERVED_TTL_HOURS = 1
+
+
+def _not_reserved(alias: str = '') -> str:
+    """SQL-условие, исключающее служебные записи __reserved__ из выборок."""
+    column = f"{alias}.name" if alias else "name"
+    return f"{column} != '{RESERVED_NAME}'"
+
 
 # ─── Соединение ──────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def _get_conn():
-    """Контекстный менеджер: открывает соединение, отдаёт, закрывает."""
+    """Контекстный менеджер: открывает соединение, отдаёт, закрывает.
+
+    БД может лежать на сетевом ресурсе (бот и UI на разных машинах),
+    поэтому транзакции должны быть короткими: commit сразу после пачки
+    логически связных изменений, не держать соединение во время сетевых
+    вызовов и тяжёлых вычислений. Прямой доступ к SQLite есть только
+    здесь — UI работает исключительно через HTTP API.
+    """
     conn = await aiosqlite.connect(DB_PATH)
     conn.row_factory = aiosqlite.Row
-    await conn.execute("PRAGMA journal_mode=WAL")
-    await conn.execute("PRAGMA foreign_keys=ON")
+    # busy_timeout задаём первым: без него ожидание блокировки идёт 0 мс.
     await conn.execute("PRAGMA busy_timeout=30000")
+    await conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
     finally:
@@ -51,39 +70,88 @@ async def _get_conn():
 
 # ─── Инициализация ──────────────────────────────────────────────────
 
-async def init_db():
-    """Инициализация БД: создание таблиц и миграция по версиям."""
+async def _ensure_wal():
+    """Перевести БД в режим WAL (один раз на файл БД).
+
+    Режим журнала хранится в файле БД, поэтому переключать его при каждом
+    подключении не нужно. Сам PRAGMA требует эксклюзивной блокировки и при
+    конкуренции возвращает SQLITE_BUSY, не вызывая busy-handler, поэтому
+    переключение повторяем. Работает на отдельном соединении: неудачный
+    PRAGMA оставляет соединение в непригодном для записи состоянии.
+    """
+    import asyncio
+
     async with _get_conn() as db:
-        # Таблицы — единая схема из shared
-        await db.execute(WORKER_SCHEMA)
-        await db.execute(WORKER_DOCUMENTS_SCHEMA)
-        await db.execute(WORKER_MEETINGS_SCHEMA)
-        await db.execute(WORKER_NOTES_SCHEMA)
+        # fetchall, а не fetchone: курсор должен быть исчерпан, иначе
+        # остаётся read-lock, который блокирует переключение в WAL.
+        cursor = await db.execute("PRAGMA journal_mode")
+        rows = await cursor.fetchall()
+        mode = str(rows[0][0]).lower() if rows else ''
+        if mode == 'wal':
+            return
+        for _ in range(25):
+            try:
+                await db.execute("PRAGMA journal_mode=WAL")
+                return
+            except sqlite3.OperationalError:
+                await asyncio.sleep(0.2)
+    logger.warning("Не удалось перевести БД в режим WAL")
 
-        # Индексы
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wn_worker ON worker_notes(worker_id)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
 
-        await db.commit()
+async def init_db():
+    """Инициализация БД: создание таблиц и миграция по версиям.
 
-        # Очистка записей-сирот: __reserved__ от прерванных регистраций
-        await db.execute("DELETE FROM workers WHERE name = '__reserved__'")
-        await db.commit()
+    BEGIN IMMEDIATE сериализует инициализацию между процессами: бот и
+    API-сервер на разных машинах могут стартовать одновременно на одной
+    общей БД, и без явной блокировки миграции выполнялись бы параллельно
+    (это давало «database is locked» на свежей БД). Всё выполняется одной
+    транзакцией — при сбое изменения откатываются целиком.
+    """
+    from datetime import datetime, timedelta
 
-        # Версионированные миграции
-        cursor = await db.execute("PRAGMA user_version")
-        row = await cursor.fetchone()
-        current_version = row[0]
+    # WAL переключаем до BEGIN IMMEDIATE: смена режима журнала
+    # невозможна внутри транзакции.
+    await _ensure_wal()
 
-        if current_version < CURRENT_SCHEMA_VERSION:
-            logger.info("Миграция БД: версия %d → %d", current_version, CURRENT_SCHEMA_VERSION)
-            await _run_migrations(db, current_version)
-            await db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+    async with _get_conn() as db:
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            # Таблицы — единая схема из shared
+            await db.execute(WORKER_SCHEMA)
+            await db.execute(WORKER_DOCUMENTS_SCHEMA)
+            await db.execute(WORKER_MEETINGS_SCHEMA)
+            await db.execute(WORKER_NOTES_SCHEMA)
+
+            # Индексы
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_worker ON worker_documents(worker_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_wd_type ON worker_documents(doc_type)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_wn_worker ON worker_notes(worker_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
+
+            # Очистка брошенных резервов: свежие резервы не трогаем, иначе
+            # другой процесс мог бы получить уже выданный ID.
+            cutoff = (datetime.now() - timedelta(hours=RESERVED_TTL_HOURS)).isoformat()
+            await db.execute(
+                "DELETE FROM workers WHERE name = ? AND (created_at = '' OR created_at < ?)",
+                (RESERVED_NAME, cutoff)
+            )
+
+            # Версионированные миграции
+            cursor = await db.execute("PRAGMA user_version")
+            row = await cursor.fetchone()
+            current_version = row[0]
+
+            if current_version < CURRENT_SCHEMA_VERSION:
+                logger.info("Миграция БД: версия %d → %d", current_version, CURRENT_SCHEMA_VERSION)
+                await _run_migrations(db, current_version)
+                await db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+                logger.info("Миграция БД завершена. Текущая версия: %d", CURRENT_SCHEMA_VERSION)
+
             await db.commit()
-            logger.info("Миграция БД завершена. Текущая версия: %d", CURRENT_SCHEMA_VERSION)
+        except Exception:
+            await db.rollback()
+            raise
 
 
 async def _run_migrations(db: aiosqlite.Connection, from_version: int):
@@ -477,11 +545,23 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
 # ─── CRUD операции ──────────────────────────────────────────────────
 
 async def get_next_id() -> str:
-    """Получить следующий доступный ID (без race condition)."""
+    """Получить следующий доступный ID (без race condition).
+
+    ID резервируется служебной записью __reserved__: INSERT падает с
+    IntegrityError, если параллельный вызов уже занял тот же номер.
+    Резерв перезаписывается реальными данными в save_worker, а брошенные
+    резервы (старше RESERVED_TTL_HOURS) чистятся в init_db.
+    """
+    from datetime import datetime
+
     async with _get_conn() as db:
-        for _ in range(100):  # ponytail: limit以防无限循环
+        for _ in range(100):  # ponytail: не больше 100 попыток
+            # fetchall, а не fetchone: курсор должен быть исчерпан, иначе
+            # остаётся read-lock, и следующий INSERT идёт как upgrade
+            # read→write — SQLite отдаёт «database is locked» без retry.
             cursor = await db.execute("SELECT id FROM workers ORDER BY CAST(id AS INTEGER) DESC LIMIT 1")
-            row = await cursor.fetchone()
+            rows = await cursor.fetchall()
+            row = rows[0] if rows else None
             if not row:
                 next_id = 1
             else:
@@ -492,14 +572,14 @@ async def get_next_id() -> str:
             next_id_str = str(next_id).zfill(5)
             try:
                 await db.execute(
-                    "INSERT INTO workers (id, name, created_at) VALUES (?, '__reserved__', '')",
-                    (next_id_str,)
+                    "INSERT INTO workers (id, name, created_at) VALUES (?, ?, ?)",
+                    (next_id_str, RESERVED_NAME, datetime.now().isoformat())
                 )
                 await db.commit()
-                logger.debug("get_next_id: created __reserved__ id=%s", next_id_str)
+                logger.debug("get_next_id: создана запись-заглушка id=%s", next_id_str)
                 return next_id_str
-            except Exception:
-                # ponytail: IntegrityError — ID занят, пробуем следующий
+            except sqlite3.IntegrityError:
+                # ID занят параллельным вызовом — пробуем следующий
                 continue
         raise RuntimeError("Не удалось сгенерировать уникальный ID после 100 попыток")
 
@@ -559,6 +639,10 @@ async def save_worker(data: dict) -> str:
 
 async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
     """Сохранить документы работника. doc_files = {doc_type: filename | [filename, ...]}."""
+    from datetime import datetime
+    # created_at пишем явно локальным временем: DEFAULT CURRENT_TIMESTAMP в SQLite
+    # отдаёт UTC, из-за чего «Залит:» показывалось бы на 3 часа раньше.
+    now = datetime.now().isoformat()
     async with _get_conn() as db:
         for doc_type in doc_files:
             await db.execute(
@@ -570,20 +654,27 @@ async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
             for filename in filenames:
                 if filename:
                     await db.execute(
-                        "INSERT INTO worker_documents (worker_id, doc_type, filename) VALUES (?, ?, ?)",
-                        (worker_id, doc_type, filename)
+                        "INSERT INTO worker_documents (worker_id, doc_type, filename, created_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        (worker_id, doc_type, filename, now)
                     )
         await db.commit()
 
 
-async def replace_document(worker_id: str, doc_type: str, old_filename: str):
-    """Удалить старую запись документа (перезаливка из UI). created_at обновится при вставке."""
+async def replace_document(worker_id: str, doc_type: str, old_filename: str) -> bool:
+    """Замена документа (перезаливка из UI): имя файла не меняется,
+    содержимое перезаписывается, а created_at обновляется — в таблице
+    нет updated_at, поэтому дата замены фиксируется в created_at.
+    """
+    from datetime import datetime
     async with _get_conn() as db:
-        await db.execute(
-            "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ? AND filename = ?",
-            (worker_id, doc_type, old_filename)
+        cursor = await db.execute(
+            "UPDATE worker_documents SET created_at = ? "
+            "WHERE worker_id = ? AND doc_type = ? AND filename = ?",
+            (datetime.now().isoformat(), worker_id, doc_type, old_filename)
         )
         await db.commit()
+        return cursor.rowcount > 0
 
 
 async def get_worker(worker_id: str) -> dict | None:
@@ -622,7 +713,7 @@ async def get_worker(worker_id: str) -> dict | None:
 def _worker_filters(archived: str = '0', date_from: str | None = None,
                     date_to: str | None = None) -> tuple[str, list]:
     """Общие условия выборки анкет: архив и период по created_at."""
-    clauses = ["name != '__reserved__'"]
+    clauses = [_not_reserved()]
     params: list = []
     if archived == '0':
         clauses.append("(archived_at IS NULL OR archived_at = '')")
@@ -700,7 +791,7 @@ async def get_pending_workers() -> list[dict]:
     """Получить работников со статусом pending (без записей-сирот и архива)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = 'pending' AND name != '__reserved__' "
+            f"SELECT * FROM workers WHERE status = 'pending' AND {_not_reserved()} "
             "AND (archived_at IS NULL OR archived_at = '') ORDER BY created_at DESC"
         )
         rows = await cursor.fetchall()
@@ -711,7 +802,7 @@ async def get_pending_count() -> int:
     """Количество анкет, ожидающих обработки (без записей-сирот и архива)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT COUNT(*) FROM workers WHERE status = 'pending' AND name != '__reserved__' "
+            f"SELECT COUNT(*) FROM workers WHERE status = 'pending' AND {_not_reserved()} "
             "AND (archived_at IS NULL OR archived_at = '')"
         )
         row = await cursor.fetchone()
@@ -774,7 +865,8 @@ async def get_unnotified_rejected_workers() -> list[dict]:
     """Получить отклонённых работников, которым ещё не отправлено уведомление (без записей-сирот)."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "SELECT * FROM workers WHERE status = 'rejected' AND (notified_at IS NULL OR notified_at = '') AND name != '__reserved__'"
+            f"SELECT * FROM workers WHERE status = 'rejected' "
+            f"AND (notified_at IS NULL OR notified_at = '') AND {_not_reserved()}"
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -869,7 +961,7 @@ async def get_unnotified_meetings() -> list[dict]:
             "w.object, w.telegram_id "
             "FROM worker_meetings m JOIN workers w ON w.id = m.worker_id "
             "WHERE (m.notified_at IS NULL OR m.notified_at = '') "
-            "AND w.name != '__reserved__' "
+            f"AND {_not_reserved('w')} "
             "AND (w.archived_at IS NULL OR w.archived_at = '') ORDER BY m.id"
         )
         rows = await cursor.fetchall()
@@ -885,7 +977,7 @@ async def get_meetings_to_remind() -> list[dict]:
             "FROM worker_meetings m JOIN workers w ON w.id = m.worker_id "
             "WHERE (m.notified_at IS NOT NULL AND m.notified_at != '') "
             "AND (m.reminded_at IS NULL OR m.reminded_at = '') "
-            "AND w.name != '__reserved__' "
+            f"AND {_not_reserved('w')} "
             "AND (w.archived_at IS NULL OR w.archived_at = '') ORDER BY m.id"
         )
         rows = await cursor.fetchall()
@@ -910,6 +1002,17 @@ async def mark_meeting_reminded(meeting_id: int, value: str) -> None:
             (value, meeting_id)
         )
         await db.commit()
+
+
+async def get_meetings(worker_id: str) -> list[dict]:
+    """Встречи работника в порядке добавления."""
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT id, date, note, created_at FROM worker_meetings WHERE worker_id = ? ORDER BY id",
+            (worker_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 # ─── Комментарии ─────────────────────────────────────────────────────

@@ -148,7 +148,8 @@ def upload_document(worker_id):
                 return jsonify({"error": err}), 400
 
             if old_filename:
-                # Перезаливка: перезаписываем файл под старым именем
+                # Перезаливка: файл перезаписывается под старым именем,
+                # запись в worker_documents остаётся, обновляется created_at
                 worker_dir = os.path.join(DOCS_DIR, worker_id)
                 os.makedirs(worker_dir, exist_ok=True)
                 new_path = os.path.join(worker_dir, os.path.basename(old_filename))
@@ -301,16 +302,7 @@ def pending_count():
 @app.route('/api/workers/<worker_id>/meetings', methods=['GET'])
 def list_meetings(worker_id):
     try:
-        async def _get_meetings():
-            async with db._get_conn() as conn:
-                cursor = await conn.execute(
-                    "SELECT id, date, note, created_at FROM worker_meetings WHERE worker_id = ? ORDER BY id",
-                    (worker_id,),
-                )
-                rows = await cursor.fetchall()
-                return [dict(r) for r in rows]
-
-        meetings = run_async(_get_meetings())
+        meetings = run_async(db.get_meetings(worker_id))
         return jsonify(meetings)
     except Exception as e:
         _logger.error("list_meetings(%s) error: %s", worker_id, e)

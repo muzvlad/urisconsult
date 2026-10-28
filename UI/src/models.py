@@ -1,12 +1,14 @@
 """
 Модели данных для работы с БД.
+
+UI не обращается к SQLite напрямую: данные приходят из API бота
+(dict -> Worker через api_client._dict_to_worker).
 """
 from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-import sqlite3
 
 
 @dataclass
@@ -81,45 +83,6 @@ class Worker:
     def is_archived(self) -> bool:
         return bool(self.archived_at)
 
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "Worker":
-        # Безопасное получение значений из Row (поддержка частичных строк)
-        def get(key: str, default: str = "") -> str:
-            try:
-                val = row[key]
-                return val if val is not None else default
-            except (KeyError, IndexError):
-                return default
-
-        return cls(
-            id=get("id"),
-            name=get("name"),
-            citizenship=get("citizenship"),
-            gender=get("gender"),
-            position=get("position"),
-            object=get("object"),
-            customer=get("customer"),
-            object_address=get("object_address"),
-            manager=get("manager"),
-            phone_main=get("phone_main"),
-            phone_additional=get("phone_additional"),
-            email=get("email"),
-            date=get("date"),
-            registration=get("registration"),
-            marital_status=get("marital_status"),
-            relatives_json=get("relatives_json", "[]"),
-            telegram_id=row["telegram_id"] if "telegram_id" in row.keys() else None,
-            telegram_username=get("telegram_username"),
-            created_at=get("created_at"),
-            updated_at=get("updated_at"),
-            status=get("status", "pending"),
-            rejection_reasons=get("rejection_reasons", "[]"),
-            legal_entity=get("legal_entity"),
-            hr_status=get("hr_status", "not_processed") or "not_processed",
-            hr_status_date=get("hr_status_date"),
-            archived_at=get("archived_at"),
-        )
-
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -149,44 +112,6 @@ class Worker:
             "hr_status_date": self.hr_status_date,
             "archived_at": self.archived_at,
         }
-
-
-@dataclass
-class WorkerDocument:
-    """Документ сотрудника."""
-    worker_id: str
-    doc_type: str
-    filename: str
-    created_at: str = ""
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "WorkerDocument":
-        return cls(
-            worker_id=row["worker_id"],
-            doc_type=row["doc_type"],
-            filename=row["filename"],
-            created_at=row["created_at"] or "",
-        )
-
-
-@dataclass
-class WorkerMeeting:
-    """Встреча сотрудника."""
-    worker_id: str
-    date: str
-    note: str
-    created_at: str = ""
-    id: int = 0
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "WorkerMeeting":
-        return cls(
-            id=row["id"],
-            worker_id=row["worker_id"],
-            date=row["date"] or "",
-            note=row["note"] or "",
-            created_at=row["created_at"] or "",
-        )
 
 
 # ─── Статусы ───

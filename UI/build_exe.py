@@ -129,7 +129,6 @@ def create_executable() -> bool:
             '--hidden-import=urllib.request',
             '--hidden-import=urllib.parse',
             '--hidden-import=json',
-            '--hidden-import=sqlite3',
             '--hidden-import=threading',
             '--hidden-import=concurrent.futures',
             '--hidden-import=src',

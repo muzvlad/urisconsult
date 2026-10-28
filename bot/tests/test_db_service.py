@@ -144,13 +144,16 @@ async def test_save_documents_multi_file(temp_db):
 
 @pytest.mark.asyncio
 async def test_replace_document(temp_db):
-    """replace_document удаляет старую запись."""
+    """replace_document: запись остаётся, имя прежнее, created_at обновляется."""
     await db.save_worker({"id": "00001", "name": "Иван", "citizenship": "Патент"})
     await db.save_documents("00001", {"passport": "pas_old.jpg"})
+    before = (await db.get_worker_documents("00001"))["passport"][0]["created_at"]
+
     await db.replace_document("00001", "passport", "pas_old.jpg")
 
     docs = await db.get_worker_documents("00001")
-    assert "passport" not in docs or len(docs.get("passport", [])) == 0
+    assert [d["filename"] for d in docs["passport"]] == ["pas_old.jpg"]
+    assert docs["passport"][0]["created_at"] != before
 
 
 # ─── get_all_workers / search_workers ─────────────────────────────────
@@ -380,3 +383,33 @@ async def test_init_db_tables_exist(temp_db):
         assert "worker_documents" in tables
         assert "worker_meetings" in tables
         assert "worker_notes" in tables
+
+
+@pytest.mark.asyncio
+async def test_init_db_keeps_fresh_reserved(temp_db):
+    """Свежий резерв __reserved__ переживает init_db.
+
+    Раньше init_db удалял все резервы, и живой резерв другого процесса
+    исчезал — тот же ID выдавался дважды.
+    """
+    import aiosqlite
+
+    reserved_id = await db.get_next_id()
+
+    async with aiosqlite.connect(db_module.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute(
+            "SELECT name, created_at FROM workers WHERE id = ?", (reserved_id,)
+        )
+        row = await cursor.fetchone()
+        assert row["name"] == db_module.RESERVED_NAME
+        assert row["created_at"]  # отметка времени нужна для старения резерва
+
+    await db_module.init_db()
+
+    async with aiosqlite.connect(db_module.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute("SELECT name FROM workers WHERE id = ?", (reserved_id,))
+        row = await cursor.fetchone()
+        assert row is not None
+        assert row["name"] == db_module.RESERVED_NAME
