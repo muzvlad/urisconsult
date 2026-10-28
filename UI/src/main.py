@@ -151,7 +151,7 @@ class DBViewerApp:
         top_frame = tk.Frame(self.root, bg=self.config.header_bg, pady=8)
         top_frame.pack(fill=tk.X, padx=0, pady=0)
 
-        # Логотип: иконка icon.png + текст "IS" (слово Consult убрано)
+        # Логотип: иконка icon.png в заголовке окна
         self._create_header_logo(top_frame)
 
         # Кнопка "Все анкеты"
@@ -186,7 +186,7 @@ class DBViewerApp:
         self.bell.pack()
 
     def _create_header_logo(self, parent) -> None:
-        """Иконка icon.png + текст 'IS' в заголовке окна (слово Consult убрано)."""
+        """Иконка icon.png в заголовке окна."""
         from PIL import Image, ImageTk
 
         icon_frame = tk.Frame(parent, bg=self.config.header_bg)
@@ -194,15 +194,6 @@ class DBViewerApp:
 
         self._icon_label = tk.Label(icon_frame, bg=self.config.header_bg)
         self._icon_label.pack(side=tk.LEFT)
-
-        self._header_text_label = tk.Label(
-            icon_frame,
-            text=f"IS v{self.config.app_version}",
-            font=(FONT_FAMILY, 16, 'bold'),
-            bg=self.config.header_bg,
-            fg=self.config.header_fg,
-        )
-        self._header_text_label.pack(side=tk.LEFT, padx=(5, 0))
 
         # Базовый размер иконки — квадрат, пропорционален высоте окна
         base_size = max(16, int(self.config.window_height * 0.05))
