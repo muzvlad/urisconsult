@@ -128,7 +128,6 @@ def get_worker_documents(worker_id):
 def upload_document(worker_id):
     """Загрузка/перезаливка документа из UI. multipart: doc_type, file, old_filename(optional)."""
     try:
-        from datetime import datetime
         from services.file_saver import FileSaver
 
         doc_type = request.form.get('doc_type', '')
@@ -161,7 +160,7 @@ def upload_document(worker_id):
             # Обновляем дату редактирования анкеты
             worker = run_async(db.get_worker(worker_id))
             if worker:
-                run_async(db.save_worker({**worker, 'updated_at': datetime.now().isoformat()}))
+                run_async(db.save_worker({**worker, 'updated_at': db.now_msk().isoformat()}))
 
             return jsonify({"ok": True})
         finally:
@@ -174,10 +173,9 @@ def upload_document(worker_id):
 @app.route('/api/workers/<worker_id>', methods=['PUT'])
 def update_worker(worker_id):
     try:
-        from datetime import datetime
         data = request.get_json(force=True)
         data['id'] = worker_id
-        data['updated_at'] = datetime.now().isoformat()
+        data['updated_at'] = db.now_msk().isoformat()
         run_async(db.save_worker(data))
         return jsonify({"ok": True})
     except Exception as e:

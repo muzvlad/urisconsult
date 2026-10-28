@@ -413,3 +413,41 @@ async def test_init_db_keeps_fresh_reserved(temp_db):
         row = await cursor.fetchone()
         assert row is not None
         assert row["name"] == db_module.RESERVED_NAME
+
+
+# ─── Московское время ─────────────────────────────────────────────────
+
+def test_now_msk_is_utc_plus3():
+    """now_msk() — московское время (UTC+3) независимо от TZ машины."""
+    from datetime import datetime, timedelta, timezone
+
+    from shared import now_msk
+
+    value = now_msk()
+    assert value.tzinfo is None  # naive: смещение в строке ломает date() в SQLite
+
+    expected = datetime.now(timezone.utc) + timedelta(hours=3)
+    assert abs((value - expected.replace(tzinfo=None)).total_seconds()) < 120
+
+
+@pytest.mark.asyncio
+async def test_saved_timestamps_are_moscow(temp_db):
+    """Всё, что пишется в БД, получает московское время."""
+    from datetime import datetime, timedelta, timezone
+
+    await db.save_worker({"id": "00001", "name": "Иван", "citizenship": "Патент"})
+    await db.save_documents("00001", {"passport": "pas.jpg"})
+    await db.add_meeting("00001", "26.10.2026 14:30", "Планёрка")
+
+    utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+    msk_now = utc_now + timedelta(hours=3)
+
+    worker = await db.get_worker("00001")
+    written = datetime.fromisoformat(worker["created_at"])
+    assert abs((written - msk_now).total_seconds()) < 300
+    # Заметное отличие от UTC: часовой пояс машины может совпасть с UTC
+    assert abs((written - utc_now).total_seconds()) > 60 * 60
+
+    docs = await db.get_worker_documents("00001")
+    doc_at = datetime.fromisoformat(docs["passport"][0]["created_at"])
+    assert abs((doc_at - msk_now).total_seconds()) < 300

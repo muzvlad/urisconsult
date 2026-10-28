@@ -6,13 +6,13 @@
 import os
 import sys
 import asyncio
-from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from config import DB_PATH, USERS_DIR, DOCS_DIR
 from services.db import init_db, _get_conn
+from shared import now_msk
 
 
 TEST_WORKERS = [
@@ -102,7 +102,7 @@ async def create_test_workers():
 
     await init_db()
 
-    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    now = now_msk().strftime("%d.%m.%Y %H:%M:%S")
 
     async with _get_conn() as conn:
         for w in TEST_WORKERS:

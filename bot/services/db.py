@@ -22,7 +22,7 @@ from config import DB_PATH, USERS_DIR
 from config.documents import DOC_FLOWS, DOC_PREFIXES
 from shared import (
     WORKER_SCHEMA, WORKER_DOCUMENTS_SCHEMA, WORKER_MEETINGS_SCHEMA,
-    WORKER_NOTES_SCHEMA,
+    WORKER_NOTES_SCHEMA, now_msk,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ async def init_db():
     (это давало «database is locked» на свежей БД). Всё выполняется одной
     транзакцией — при сбое изменения откатываются целиком.
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     # WAL переключаем до BEGIN IMMEDIATE: смена режима журнала
     # невозможна внутри транзакции.
@@ -131,7 +131,7 @@ async def init_db():
 
             # Очистка брошенных резервов: свежие резервы не трогаем, иначе
             # другой процесс мог бы получить уже выданный ID.
-            cutoff = (datetime.now() - timedelta(hours=RESERVED_TTL_HOURS)).isoformat()
+            cutoff = (now_msk() - timedelta(hours=RESERVED_TTL_HOURS)).isoformat()
             await db.execute(
                 "DELETE FROM workers WHERE name = ? AND (created_at = '' OR created_at < ?)",
                 (RESERVED_NAME, cutoff)
@@ -340,7 +340,7 @@ async def _migrate_v3_to_v4(db: aiosqlite.Connection):
             worker_id TEXT NOT NULL,
             doc_type TEXT NOT NULL,
             filename TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', '+3 hours')),
             FOREIGN KEY (worker_id) REFERENCES workers(id)
         )
     """)
@@ -402,12 +402,12 @@ async def _migrate_v5_to_v6(db: aiosqlite.Connection):
     # Старые встречи не должны вызвать рассылку после обновления
     await db.execute(
         "UPDATE worker_meetings SET notified_at = "
-        "COALESCE(NULLIF(created_at, ''), datetime('now')) "
+        "COALESCE(NULLIF(created_at, ''), datetime('now', '+3 hours')) "
         "WHERE notified_at IS NULL OR notified_at = ''"
     )
     await db.execute(
         "UPDATE worker_meetings SET reminded_at = "
-        "COALESCE(NULLIF(created_at, ''), datetime('now')) "
+        "COALESCE(NULLIF(created_at, ''), datetime('now', '+3 hours')) "
         "WHERE reminded_at IS NULL OR reminded_at = ''"
     )
     await db.commit()
@@ -552,7 +552,6 @@ async def get_next_id() -> str:
     Резерв перезаписывается реальными данными в save_worker, а брошенные
     резервы (старше RESERVED_TTL_HOURS) чистятся в init_db.
     """
-    from datetime import datetime
 
     async with _get_conn() as db:
         for _ in range(100):  # ponytail: не больше 100 попыток
@@ -573,7 +572,7 @@ async def get_next_id() -> str:
             try:
                 await db.execute(
                     "INSERT INTO workers (id, name, created_at) VALUES (?, ?, ?)",
-                    (next_id_str, RESERVED_NAME, datetime.now().isoformat())
+                    (next_id_str, RESERVED_NAME, now_msk().isoformat())
                 )
                 await db.commit()
                 logger.debug("get_next_id: создана запись-заглушка id=%s", next_id_str)
@@ -586,12 +585,11 @@ async def get_next_id() -> str:
 
 async def save_worker(data: dict) -> str:
     """Сохранить работника в БД (INSERT или UPDATE по id)."""
-    from datetime import datetime
     async with _get_conn() as db:
         worker_id = data.get('id', '')
 
         # Гарантируем даты: created_at только при INSERT, updated_at при каждом сохранении
-        now = datetime.now().isoformat()
+        now = now_msk().isoformat()
         created_at = data.get('created_at') or now
         updated_at = data.get('updated_at') or now
 
@@ -629,8 +627,10 @@ async def save_worker(data: dict) -> str:
                 for m in (meetings or []):
                     if isinstance(m, dict):
                         await db.execute(
-                            "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-                            (worker_id, m.get('date', ''), m.get('note', m.get('description', '')))
+                            "INSERT INTO worker_meetings (worker_id, date, note, created_at) "
+                            "VALUES (?, ?, ?, ?)",
+                            (worker_id, m.get('date', ''),
+                             m.get('note', m.get('description', '')), now_msk().isoformat())
                         )
 
         await db.commit()
@@ -639,10 +639,9 @@ async def save_worker(data: dict) -> str:
 
 async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
     """Сохранить документы работника. doc_files = {doc_type: filename | [filename, ...]}."""
-    from datetime import datetime
-    # created_at пишем явно локальным временем: DEFAULT CURRENT_TIMESTAMP в SQLite
-    # отдаёт UTC, из-за чего «Залит:» показывалось бы на 3 часа раньше.
-    now = datetime.now().isoformat()
+    # created_at пишем явно московским временем: DEFAULT CURRENT_TIMESTAMP
+    # в SQLite отдаёт UTC, из-за чего «Залит:» показывалось бы на 3 часа раньше.
+    now = now_msk().isoformat()
     async with _get_conn() as db:
         for doc_type in doc_files:
             await db.execute(
@@ -666,12 +665,11 @@ async def replace_document(worker_id: str, doc_type: str, old_filename: str) -> 
     содержимое перезаписывается, а created_at обновляется — в таблице
     нет updated_at, поэтому дата замены фиксируется в created_at.
     """
-    from datetime import datetime
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE worker_documents SET created_at = ? "
             "WHERE worker_id = ? AND doc_type = ? AND filename = ?",
-            (datetime.now().isoformat(), worker_id, doc_type, old_filename)
+            (now_msk().isoformat(), worker_id, doc_type, old_filename)
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -852,11 +850,10 @@ async def get_worker_status(worker_id: str) -> str | None:
 
 async def mark_notified(worker_id: str):
     """Пометить работника как уведомлённого."""
-    from datetime import datetime
     async with _get_conn() as db:
         await db.execute(
             "UPDATE workers SET notified_at = ? WHERE id = ?",
-            (datetime.now().isoformat(), worker_id)
+            (now_msk().isoformat(), worker_id)
         )
         await db.commit()
 
@@ -876,11 +873,10 @@ async def get_unnotified_rejected_workers() -> list[dict]:
 
 async def set_legal_entity(worker_id: str, value: str) -> bool:
     """Сохранить юридическое лицо (только UI)."""
-    from datetime import datetime
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE workers SET legal_entity = ?, updated_at = ? WHERE id = ?",
-            (value, datetime.now().isoformat(), worker_id)
+            (value, now_msk().isoformat(), worker_id)
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -888,7 +884,6 @@ async def set_legal_entity(worker_id: str, value: str) -> bool:
 
 async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> bool:
     """Сохранить HR-статус. Дата обязательна для employed/fired."""
-    from datetime import datetime
     if status not in HR_STATUSES:
         return False
     if status in ('employed', 'fired') and not date_value:
@@ -898,7 +893,7 @@ async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> 
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE workers SET hr_status = ?, hr_status_date = ?, updated_at = ? WHERE id = ?",
-            (status, date_value, datetime.now().isoformat(), worker_id)
+            (status, date_value, now_msk().isoformat(), worker_id)
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -906,8 +901,7 @@ async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> 
 
 async def archive_worker(worker_id: str) -> bool:
     """Поместить анкету в архив (мягкое удаление)."""
-    from datetime import datetime
-    now = datetime.now().isoformat()
+    now = now_msk().isoformat()
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE workers SET archived_at = ?, updated_at = ? WHERE id = ?",
@@ -919,11 +913,10 @@ async def archive_worker(worker_id: str) -> bool:
 
 async def unarchive_worker(worker_id: str) -> bool:
     """Вернуть анкету из архива."""
-    from datetime import datetime
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE workers SET archived_at = NULL, updated_at = ? WHERE id = ?",
-            (datetime.now().isoformat(), worker_id)
+            (now_msk().isoformat(), worker_id)
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -946,8 +939,9 @@ async def add_meeting(worker_id: str, date: str, note: str) -> int:
     """Добавить встречу, вернуть id."""
     async with _get_conn() as db:
         cursor = await db.execute(
-            "INSERT INTO worker_meetings (worker_id, date, note) VALUES (?, ?, ?)",
-            (worker_id, date, note)
+            "INSERT INTO worker_meetings (worker_id, date, note, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (worker_id, date, note, now_msk().isoformat())
         )
         await db.commit()
         return cursor.lastrowid
@@ -1030,11 +1024,10 @@ async def get_worker_notes(worker_id: str) -> list[dict]:
 
 async def add_worker_note(worker_id: str, text: str) -> int | None:
     """Добавить комментарий. Пустой текст не сохраняется."""
-    from datetime import datetime
     text = text.strip()
     if not text:
         return None
-    now = datetime.now().isoformat()
+    now = now_msk().isoformat()
     async with _get_conn() as db:
         cursor = await db.execute(
             "INSERT INTO worker_notes (worker_id, text, created_at, updated_at) "
@@ -1047,12 +1040,11 @@ async def add_worker_note(worker_id: str, text: str) -> int | None:
 async def update_worker_note(note_id: int, text: str,
                              worker_id: str | None = None) -> bool:
     """Изменить комментарий. Пустой текст не сохраняется."""
-    from datetime import datetime
     text = text.strip()
     if not text:
         return False
     sql = "UPDATE worker_notes SET text = ?, updated_at = ? WHERE id = ?"
-    params: list = [text, datetime.now().isoformat(), note_id]
+    params: list = [text, now_msk().isoformat(), note_id]
     if worker_id is not None:
         sql += " AND worker_id = ?"
         params.append(worker_id)

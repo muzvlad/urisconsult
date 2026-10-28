@@ -21,6 +21,7 @@ from handlers.documents import register_document_handlers
 from handlers.confirmation import register_confirmation_handlers
 from middleware import ThrottlingMiddleware
 from services import db
+from shared import now_msk
 from log_context import setup_logging_filters
 
 # ─── Настройка логирования ──────────────────────────────────────────
@@ -214,11 +215,11 @@ async def check_rejected_workers(bot: Bot):
 
 async def check_meeting_notifications(bot: Bot):
     """Фоновая задача: уведомления о встречах и напоминания за 24 часа."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from utils import parse_meeting_datetime
 
     while True:
-        now = datetime.now()
+        now = now_msk()
         try:
             for m in await db.get_unnotified_meetings():
                 meeting_at = parse_meeting_datetime(m.get('date', ''))

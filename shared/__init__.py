@@ -1,8 +1,23 @@
 """
 Общая схема базы данных для бота и UI.
 
-Единый источник истины для структуры таблиц.
+Единый источник истины для структуры таблиц и для времени записи.
 """
+from datetime import datetime, timedelta, timezone
+
+# Москва = UTC+3 круглый год (переход на летнее время отменён с 2014).
+MSK = timezone(timedelta(hours=3))
+
+
+def now_msk() -> datetime:
+    """Текущее время по Москве, naive (без смещения в строке).
+
+    Смещение (+03:00) намеренно не записывается: SQLite разбирает такую
+    строку как UTC и переводит её назад, из-за чего date(created_at)
+    уезжал бы на сутки. Всё, что пишется в БД как время, идёт отсюда.
+    """
+    return datetime.now(MSK).replace(tzinfo=None)
+
 
 # Таблицы
 WORKERS_TABLE = "workers"
@@ -51,7 +66,7 @@ CREATE TABLE IF NOT EXISTS {WORKER_DOCUMENTS_TABLE} (
     worker_id TEXT NOT NULL,
     doc_type TEXT NOT NULL,
     filename TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT DEFAULT (datetime('now', '+3 hours')),
     FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)
 )
 """
@@ -63,7 +78,7 @@ CREATE TABLE IF NOT EXISTS {WORKER_MEETINGS_TABLE} (
     worker_id TEXT NOT NULL,
     date TEXT,
     note TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT DEFAULT (datetime('now', '+3 hours')),
     notified_at TEXT,
     reminded_at TEXT,
     FOREIGN KEY (worker_id) REFERENCES {WORKERS_TABLE}(id)

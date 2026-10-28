@@ -6,13 +6,13 @@
 import os
 import sys
 import shutil
-from datetime import datetime
 
 # Пути
 BOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BOT_DIR)
 
 from config import DB_PATH, PROJECT_ROOT
+from shared import now_msk
 
 BACKUP_DIR = os.path.join(PROJECT_ROOT, "backups")
 
@@ -21,7 +21,7 @@ def backup_db():
     """Создать бэкап БД."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = now_msk().strftime("%Y%m%d_%H%M%S")
     backup_name = f"users_{timestamp}.db"
     backup_path = os.path.join(BACKUP_DIR, backup_name)
 
