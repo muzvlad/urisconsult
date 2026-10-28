@@ -387,7 +387,8 @@ class DBViewerApp:
             count = self.api.get_pending_count()
             if self.bell:
                 self.bell.set_count(count)
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Pending count error: server unavailable — {e}")
             if self.bell:
                 self.bell.set_count(0)
         except Exception:
@@ -483,7 +484,8 @@ class DBViewerApp:
 
             if not self.search_results:
                 show_info(self.root, "Результаты", "Записи не найдены")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Search error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Search error: {e}", exc_info=True)
@@ -512,7 +514,8 @@ class DBViewerApp:
                 log_info(f"Worker {worker.id} accepted")
             else:
                 show_error(self.root, "Ошибка", "Не удалось обновить статус")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Accept error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error accepting worker {worker.id}: {e}", exc_info=True)
@@ -535,7 +538,8 @@ class DBViewerApp:
                 log_info(f"Worker {worker.id} rejected with reasons: {reasons}")
             else:
                 show_error(self.root, "Ошибка", "Не удалось обновить статус")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Reject error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error rejecting worker {worker.id}: {e}", exc_info=True)
@@ -576,7 +580,8 @@ class DBViewerApp:
                 self._clear_details()
             else:
                 show_error(self.root, "Ошибка", "Не удалось архивировать запись")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Archive error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error archiving worker {worker.id}: {e}", exc_info=True)
@@ -593,7 +598,8 @@ class DBViewerApp:
                 self._clear_details()
             else:
                 show_error(self.root, "Ошибка", "Не удалось вернуть запись из архива")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Unarchive error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error unarchiving worker {worker.id}: {e}", exc_info=True)
@@ -608,7 +614,8 @@ class DBViewerApp:
                     self._refresh_current_worker()
                 else:
                     show_error(self.root, "Ошибка", "Не удалось сохранить юр. лицо")
-            except ConnectionError:
+            except ConnectionError as e:
+                log_error(f"Legal entity error: server unavailable — {e}")
                 show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
             except Exception as e:
                 log_error(f"Error setting legal entity {worker.id}: {e}", exc_info=True)
@@ -628,7 +635,8 @@ class DBViewerApp:
                     self._refresh_current_worker()
                 else:
                     show_error(self.root, "Ошибка", "Комментарий не сохранён")
-            except ConnectionError:
+            except ConnectionError as e:
+                log_error(f"Save note error: server unavailable — {e}")
                 show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
             except Exception as e:
                 log_error(f"Error saving note {worker.id}: {e}", exc_info=True)
@@ -645,7 +653,8 @@ class DBViewerApp:
                 self._refresh_current_worker()
             else:
                 show_error(self.root, "Ошибка", "Не удалось удалить комментарий")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Delete note error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error deleting note {note.get('id')}: {e}", exc_info=True)
@@ -677,7 +686,8 @@ class DBViewerApp:
                 log_info(f"Worker {worker.id} deleted")
             else:
                 show_error(self.root, "Ошибка", "Не удалось удалить запись")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Delete worker error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error deleting worker {worker.id}: {e}", exc_info=True)
@@ -702,7 +712,8 @@ class DBViewerApp:
                 self._refresh_current_worker()
             else:
                 show_error(self.root, "Ошибка", "Не удалось заменить документ")
-        except ConnectionError:
+        except ConnectionError as e:
+            log_error(f"Replace document error: server unavailable — {e}")
             show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
         except Exception as e:
             log_error(f"Error replacing document {doc.doc_type}: {e}", exc_info=True)
@@ -772,7 +783,8 @@ class DBViewerApp:
                     self._refresh_current_worker()
                 else:
                     show_error(self.root, "Ошибка", "Не удалось сохранить HR-статус")
-            except ConnectionError:
+            except ConnectionError as e:
+                log_error(f"HR status error: server unavailable — {e}")
                 show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
             except Exception as e:
                 log_error(f"Error setting HR status {worker.id}: {e}", exc_info=True)
