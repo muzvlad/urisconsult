@@ -446,8 +446,9 @@ class PDFExportService:
                     progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
         """Экспортировать список анкет в PDF — альбомная таблица.
 
-        Каждая анкета — одна строка таблицы со столбцами, соответствующими
-        полям из найденных анкет.
+        Каждая анкета — одна строка таблицы со столбцами из найденных
+        анкет. Ориентация альбомная, текст обрезается с переносом,
+        не выходя за края листа.
         """
         try:
             from reportlab.pdfgen import canvas as pdf_canvas
@@ -462,50 +463,82 @@ class PDFExportService:
         c = pdf_canvas.Canvas(str(output_path), pagesize=landscape(A4))
         width, height = landscape(A4)
 
+        # Поля полосы: 40 слева/справа, 50 сверху/снизу
+        margin = 40
+        top_margin = 55
+        bottom_margin = 45
+        content_width = width - 2 * margin
+
         # Заголовок документа
         c.setFont(self._font_name, 16)
-        c.drawString(50, height - 50, "Список сотрудников")
+        c.drawString(margin, height - 40, "Список сотрудников")
         if period_label:
             c.setFont(self._font_name, 12)
-            c.drawString(50, height - 75, f"Период: {period_label}")
-            y = height - 110
+            c.drawString(margin, height - 65, f"Период: {period_label}")
+            y = height - 100
         else:
-            y = height - 90
+            y = height - 80
 
-        # Колонки таблицы: (заголовок, x, ширина)
-        columns = [
-            ("ID", 45, 45),
-            ("ФИО", 95, 130),
-            ("Гражданство", 225, 90),
-            ("Дата рожд.", 315, 75),
-            ("Объект", 390, 100),
-            ("Заказчик", 490, 95),
-            ("Должность", 585, 70),
-            ("Телефон", 655, 85),
-            ("Статус", 740, 60),
-            ("HR-статус", 800, 55),
+        # Колонки таблицы: (заголовок, доля ширины)
+        col_specs = [
+            ("ID", 0.05),
+            ("ФИО", 0.18),
+            ("Гражданство", 0.10),
+            ("Пол", 0.06),
+            ("Дата рожд.", 0.08),
+            ("Объект", 0.12),
+            ("Заказчик", 0.12),
+            ("Должность", 0.10),
+            ("Телефон", 0.12),
+            ("Статус анкеты", 0.09),
+            ("HR-статус", 0.10),
         ]
+        total_share = sum(w for _, w in col_specs)
+        columns = []
+        x = margin
+        for label, share in col_specs:
+            w = content_width * share / total_share
+            columns.append((label, x, w))
+            x += w
 
-        def draw_header(yy):
+        def draw_header(yy: float) -> None:
             c.setFont(self._font_name, 9)
-            c.setFillColorRGB(0.8, 0.8, 0.8)
-            c.rect(45, yy - 7, 752, 16, stroke=0, fill=1)
+            c.setFillColorRGB(0.82, 0.82, 0.82)
+            c.rect(margin, yy - 8, content_width, 16, stroke=0, fill=1)
             c.setFillColorRGB(0, 0, 0)
             for label, x, w in columns:
-                c.drawString(x + 5, yy - 4, label)
+                c.drawString(x + 4, yy - 5, label)
 
         draw_header(y)
-        y -= 20
+        y -= 18
 
-        row_height = 15
-        for worker in workers:
-            if y < 55:
-                c.showPage()
-                y = height - 60
-                draw_header(y)
-                y -= 20
+        row_height = 14
+        font_size = 8.5
+        line_height = font_size + 2
 
-            c.setFont(self._font_name, 9)
+        def wrap_text(text: str, x: float, w: float) -> List[str]:
+            """Разбить текст на строки по ширине колонки."""
+            if not text:
+                return [""]
+            c.setFont(self._font_name, font_size)
+            max_width = w - 8
+            words = str(text).split()
+            lines: List[str] = []
+            current = ""
+            for word in words:
+                trial = (current + " " + word).strip()
+                if c.stringWidth(trial, self._font_name, font_size) <= max_width:
+                    current = trial
+                else:
+                    if current:
+                        lines.append(current)
+                    current = word
+            if current:
+                lines.append(current)
+            return lines or [""]
+
+        for idx, worker in enumerate(workers):
+            # Расчёт необходимой высоты строки (максимальное число строк в ячейках)
             values = [
                 worker.id or "",
                 worker.name or "",
@@ -518,9 +551,41 @@ class PDFExportService:
                 worker.phone_main or "",
                 worker.hr_status or "",
             ]
-            for (label, x, w), val in zip(columns, values):
-                c.drawString(x + 5, y, str(val))
-            y -= row_height
+            wrapped: List[List[str]] = []
+            max_lines = 1
+            for val, (label, x, w) in zip(values, columns):
+                lines = wrap_text(val, x, w)
+                wrapped.append(lines)
+                max_lines = max(max_lines, len(lines))
+
+            need_height = max_lines * line_height + 6
+            if y - need_height < bottom_margin:
+                c.showPage()
+                y = height - top_margin
+                draw_header(y)
+                y -= 18
+
+            # Тень строки (чередование)
+            if idx % 2 == 1:
+                c.setFillColorRGB(0.96, 0.96, 0.96)
+                c.rect(margin, y - need_height + 2, content_width, need_height - 2,
+                       stroke=0, fill=1)
+                c.setFillColorRGB(0, 0, 0)
+
+            # Границы ячеек
+            c.setStrokeColorRGB(0.85, 0.85, 0.85)
+            c.setLineWidth(0.5)
+            c.rect(margin, y - need_height + 2, content_width, need_height - 2,
+                   stroke=1, fill=0)
+
+            # Текст ячеек
+            for (val, lines, (label, x, w)) in zip(values, wrapped, columns):
+                line_y = y - line_height
+                for line in lines:
+                    c.drawString(x + 4, line_y, line)
+                    line_y -= line_height
+
+            y -= need_height
 
         c.save()
         return True, f"PDF сохранён: {output_path}"
