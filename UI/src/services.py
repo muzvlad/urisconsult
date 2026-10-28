@@ -17,8 +17,16 @@ import tkinter as tk
 from tkinter import messagebox
 
 from src.config import (get_paths, get_config, get_bot_token, get_document_config,
-                        normalize_citizenship, format_date, format_datetime)
+                        normalize_citizenship, format_date, format_datetime,
+                        HR_STATUS_LABELS)
 from src.models import Worker
+
+# Статус анкеты (поле workers.status) -> человекочитаемый перевод
+STATUS_LABELS = {
+    'pending': 'В ожидании',
+    'accepted': 'Принят',
+    'rejected': 'Отклонён',
+}
 
 
 # ─── Сервис документов ───
@@ -463,10 +471,10 @@ class PDFExportService:
         c = pdf_canvas.Canvas(str(output_path), pagesize=landscape(A4))
         width, height = landscape(A4)
 
-        # Поля полосы: 40 слева/справа, 50 сверху/снизу
-        margin = 40
-        top_margin = 55
-        bottom_margin = 45
+        # Поля полосы: 20 слева/справа, 45 сверху/снизу
+        margin = 20
+        top_margin = 45
+        bottom_margin = 35
         content_width = width - 2 * margin
 
         # Заголовок документа
@@ -549,7 +557,8 @@ class PDFExportService:
                 worker.customer or "",
                 worker.position or "",
                 worker.phone_main or "",
-                worker.hr_status or "",
+                STATUS_LABELS.get(worker.status, worker.status),
+                HR_STATUS_LABELS.get(worker.hr_status, worker.hr_status),
             ]
             wrapped: List[List[str]] = []
             max_lines = 1
