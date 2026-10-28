@@ -754,20 +754,23 @@ class DBViewerApp:
         tk.Label(block, text="HR-статус:", bg='white',
                  font=(FONT_FAMILY, 10, 'bold')).pack(side=tk.LEFT)
 
+        fields_row = tk.Frame(block, bg='white')
+        fields_row.pack(side=tk.TOP, anchor=tk.W)
+
         current_label = HR_STATUS_LABELS.get(worker.hr_status, HR_STATUS_LABELS['not_processed'])
         status_var = tk.StringVar(value=current_label)
-        combo = ttk.Combobox(block, textvariable=status_var, width=18, state='readonly',
+        combo = ttk.Combobox(fields_row, textvariable=status_var, width=18, state='readonly',
                              values=[HR_STATUS_LABELS[k] for k in HR_STATUS_KEYS],
                              font=(FONT_FAMILY, 10))
-        combo.pack(side=tk.LEFT, padx=(6, 6))
+        combo.pack(side=tk.LEFT, padx=(0, 6))
 
         key_by_label = {HR_STATUS_LABELS[k]: k for k in HR_STATUS_KEYS}
-        plaque = tk.Label(block, text=current_label, font=(FONT_FAMILY, 9, 'bold'),
+        plaque = tk.Label(fields_row, text=current_label, font=(FONT_FAMILY, 9, 'bold'),
                           width=18, padx=0, pady=2)
         plaque.pack(side=tk.LEFT, padx=(10, 0))
 
-        date_entry = tk.Entry(block, width=12, font=(FONT_FAMILY, 10), justify='center')
-        date_entry.pack(side=tk.LEFT, padx=(18, 6))
+        date_entry = tk.Entry(fields_row, width=12, font=(FONT_FAMILY, 10), justify='center')
+        date_entry.pack(side=tk.LEFT, padx=(18, 0))
         if worker.hr_status_date:
             date_entry.insert(0, format_date(worker.hr_status_date))
 
@@ -806,7 +809,7 @@ class DBViewerApp:
         combo.bind('<<ComboboxSelected>>', refresh_style)
 
         save_row = tk.Frame(block, bg='white')
-        save_row.pack(anchor=tk.W, pady=(8, 0))
+        save_row.pack(side=tk.TOP, anchor=tk.W, pady=(8, 0))
         SAVE_GREEN = '#1f7a4c'  # затемнённый accent_green (#27ae60)
         tk.Button(save_row, text="Сохранить", command=save,
                   bg=SAVE_GREEN, fg='white', font=(FONT_FAMILY, 9, 'bold'),
