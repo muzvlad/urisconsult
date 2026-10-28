@@ -755,7 +755,7 @@ class DBViewerApp:
                  font=(FONT_FAMILY, 10, 'bold')).pack(side=tk.LEFT)
 
         fields_row = tk.Frame(block, bg='white')
-        fields_row.pack(side=tk.TOP, anchor=tk.W)
+        fields_row.pack(side=tk.LEFT)
 
         current_label = HR_STATUS_LABELS.get(worker.hr_status, HR_STATUS_LABELS['not_processed'])
         status_var = tk.StringVar(value=current_label)
