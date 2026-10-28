@@ -56,16 +56,11 @@ goto :clone_done
 echo    Pulling latest changes...
 for /f %%i in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set OLD_COMMIT=%%i
 git -C "%REPO_DIR%" checkout -- . 2>nul
-if exist "%TOKEN_FILE%" (
-    set /p GITHUB_TOKEN=<"%TOKEN_FILE%"
-    git -C "%REPO_DIR%" pull --quiet 2>nul
-) else (
-    git -C "%REPO_DIR%" pull --quiet 2>nul
-)
+git -C "%REPO_DIR%" fetch --quiet origin 2>nul
+git -C "%REPO_DIR%" reset --hard origin/master --quiet 2>nul
 if errorlevel 1 (
-    echo    [WARN] Pull failed, trying fetch+reset...
-    git -C "%REPO_DIR%" fetch --quiet 2>nul
-    git -C "%REPO_DIR%" reset --hard origin/master --quiet 2>nul
+    echo    [ERROR] Fetch/reset failed. Check internet or token.
+    goto :fail
 )
 for /f %%i in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set NEW_COMMIT=%%i
 if not "%OLD_COMMIT%"=="%NEW_COMMIT%" (
