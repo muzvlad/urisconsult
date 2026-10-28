@@ -10,7 +10,8 @@ from typing import Optional, List, Dict, Any
 
 from src.config import (get_config, get_paths, center_window, get_document_config,
                         normalize_citizenship, FONT_FAMILY, format_date, format_datetime,
-                        period_range, HR_STATUS_KEYS, HR_STATUS_LABELS, hr_status_style)
+                        period_range, HR_STATUS_KEYS, HR_STATUS_LABELS, hr_status_style,
+                        _icon_path)
 from src.api_client import get_db_service as get_api_client
 from src.services import get_document_service, get_telegram_service, get_pdf_service
 from src.models import Worker
@@ -74,6 +75,12 @@ class DBViewerApp:
     def _setup_ui(self) -> None:
         """Построение интерфейса."""
         self.root.title(f"{self.config.app_title} v{self.config.app_version}")
+        # Иконка окна (titlebar) — icon.ico
+        try:
+            ico_path = _icon_path("icon.ico")
+            self.root.iconbitmap(str(ico_path))
+        except Exception as e:
+            diagnostic_log(f"Не удалось установить иконку окна: {e}")
         self.root.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.root.configure(bg=self.config.bg_color)
         self.root.minsize(self.config.min_window_width, self.config.min_window_height)
@@ -129,14 +136,12 @@ class DBViewerApp:
         self._execute_search()
 
     def _create_top_bar(self) -> None:
-        """Создание верхней панели."""
+        """Создание верхней панели с иконкой в заголовке."""
         top_frame = tk.Frame(self.root, bg=self.config.header_bg, pady=8)
         top_frame.pack(fill=tk.X, padx=0, pady=0)
 
-        # Логотип
-        tk.Label(top_frame, text="URIS Consult",
-                 font=(FONT_FAMILY, 16, 'bold'), bg=self.config.header_bg, fg=self.config.header_fg
-                 ).pack(side=tk.LEFT, padx=15)
+        # Логотип: иконка icon.png + текст "IS" (слово Consult убрано)
+        self._create_header_logo(top_frame)
 
         # Кнопка "Все анкеты"
         tk.Button(top_frame, text="Все анкеты", command=self._show_all_workers,
@@ -168,6 +173,65 @@ class DBViewerApp:
         self.bell = NotificationBell(bell_frame, on_click=self._open_notifications,
                                      bg=self.config.header_bg)
         self.bell.pack()
+
+    def _create_header_logo(self, parent) -> None:
+        """Иконка icon.png + текст 'IS' в заголовке окна (слово Consult убрано)."""
+        from PIL import Image, ImageTk
+
+        icon_frame = tk.Frame(parent, bg=self.config.header_bg)
+        icon_frame.pack(side=tk.LEFT, padx=15)
+
+        self._icon_label = tk.Label(icon_frame, bg=self.config.header_bg)
+        self._icon_label.pack(side=tk.LEFT)
+
+        self._header_text_label = tk.Label(
+            icon_frame,
+            text=f"IS v{self.config.app_version}",
+            font=(FONT_FAMILY, 16, 'bold'),
+            bg=self.config.header_bg,
+            fg=self.config.header_fg,
+        )
+        self._header_text_label.pack(side=tk.LEFT, padx=(5, 0))
+
+        # Базовый размер иконки — квадрат, пропорционален высоте окна
+        base_size = max(16, int(self.config.window_height * 0.05))
+        base_size = min(base_size, 64)
+        self._load_header_icon(base_size)
+
+        # Адаптивный размер при изменении окна
+        self.root.bind("<Configure>", self._on_resize_header_icon)
+        self._last_icon_size = base_size
+
+    def _load_header_icon(self, size: int) -> None:
+        """Загрузить иконку icon.png с заданным квадратным размером."""
+        from PIL import Image, ImageTk
+        try:
+            path = _icon_path("icon.png")
+            img = Image.open(path).convert("RGBA")
+            # Квадрат: обрезаем по центру если нужно, пропорция не теряется
+            w, h = img.size
+            side = min(w, h)
+            left = (w - side) // 2
+            top = (h - side) // 2
+            img = img.crop((left, top, left + side, top + side))
+            img = img.resize((size, size), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            self._icon_label.configure(image=photo)
+            self._icon_label.image = photo  # hold reference
+        except Exception as e:
+            diagnostic_log(f"Не удалось загрузить icon.png: {e}")
+            self._icon_label.configure(text="")
+
+    def _on_resize_header_icon(self, event) -> None:
+        """Пересчитать размер иконки при изменении размера окна."""
+        if event.widget != self.root:
+            return
+        new_size = max(16, int(self.root.winfo_height() * 0.05))
+        new_size = min(new_size, 64)
+        if abs(self._last_icon_size - new_size) < 4:
+            return
+        self._last_icon_size = new_size
+        self._load_header_icon(new_size)
 
     def _create_search_bar(self) -> None:
         """Создание панели поиска."""

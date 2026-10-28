@@ -165,6 +165,19 @@ def register_font(root) -> str:
     return FONT_FAMILY
 
 
+def _icon_path(name: str) -> Path:
+    """
+    Получить путь к иконке: EXE (_MEIPASS) → dev (UI/).
+    Все иконки упаковываются внутрь single EXE через build_exe.py.
+    """
+    if getattr(sys, "frozen", False):
+        meipass = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else None
+        if meipass and (meipass / name).exists():
+            return meipass / name
+    # Dev: иконка лежит в UI/ рядом с src/
+    return Path(__file__).parent.parent / name
+
+
 # ─── API сервер ───
 def _get_api_server() -> str:
     """Прочитать адрес API сервера: env var > .env файл > hardcoded."""

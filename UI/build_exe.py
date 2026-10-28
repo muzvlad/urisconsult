@@ -93,6 +93,8 @@ def create_executable() -> bool:
         src_dir = os.path.join(base_dir, 'src')
         bot_config_dir = os.path.join(project_root, 'bot', 'config')
         fonts_dir = os.path.join(base_dir, 'assets', 'fonts')
+        icon_ico_path = os.path.join(base_dir, 'icon.ico')
+        icon_png_path = os.path.join(base_dir, 'icon.png')
         db_viewer = os.path.join(base_dir, 'db_viewer.py')
 
         # Команда для создания exe
@@ -101,13 +103,15 @@ def create_executable() -> bool:
             '--onefile',              # Один exe файл
             '--windowed',             # Без консоли (GUI приложение)
             '--name=[Search]Driver',  # Имя exe файла
-            '--icon=NONE',            # Без иконки
+            f'--icon={icon_ico_path}',  # Иконка EXE-файла и окна
             '--noconfirm',            # Не спрашивать подтверждение
             '--clean',                # Очистить перед сборкой
-            # Добавляем src, bot/config и шрифты как data
+            # Добавляем src, bot/config, шрифты и иконки как data (внутрь single EXE)
             f'--add-data={src_dir}{os.pathsep}src',
             f'--add-data={bot_config_dir}{os.pathsep}bot_config',
             f'--add-data={fonts_dir}{os.pathsep}fonts',
+            f'--add-data={icon_ico_path}{os.pathsep}.',
+            f'--add-data={icon_png_path}{os.pathsep}.',
             # Пути для поиска пакетов
             f'--paths={project_root}',
             # Скрытые импорты для надежности

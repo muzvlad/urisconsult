@@ -28,6 +28,12 @@ if exist "dist\[Search]Driver.exe" (
     echo =============================
     echo DONE!
     echo =============================
+
+    REM Создать ярлык с иконкой icon.ico
+    if exist "icon.ico" (
+        echo Creating shortcut with icon...
+        powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%~dp0dist\[Search]Driver.lnk'); $Shortcut.TargetPath = '%~dp0dist\[Search]Driver.exe'; $Shortcut.IconLocation = '%~dp0icon.ico'; $Shortcut.Save()"
+    )
 ) else (
     echo BUILD ERROR!
 )
