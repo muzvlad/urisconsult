@@ -4,6 +4,7 @@
 from __future__ import annotations
 import sys
 import logging
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
@@ -107,9 +108,19 @@ class DBViewerApp:
         self._auto_refresh_bell()
 
     def _auto_refresh_bell(self) -> None:
-        """Автоматическое обновление колокольчика каждые 15 секунд."""
-        self._refresh_pending_count()
-        self.root.after(15000, self._auto_refresh_bell)
+        """Автоматическое обновление колокольчика каждые 15 секунд (в фоне)."""
+        def _run():
+            try:
+                count = self.api.get_pending_count()
+            except Exception as e:
+                log_error(f"Bell refresh error: {e}")
+                count = 0
+            # Обновить UI в главном потоке
+            self.root.after(0, lambda: self.bell.set_count(count) if self.bell else None)
+            # Следующая итерация
+            self.root.after(15000, self._auto_refresh_bell)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _refresh_all(self) -> None:
         """Обновить всё: колокольчик + текущий список."""
@@ -457,39 +468,49 @@ class DBViewerApp:
         self._execute_search()
 
     def _execute_search(self) -> None:
-        """Выполнить поиск через API."""
+        """Выполнить поиск через API (в фоновом потоке, чтобы GUI не зависал)."""
         if not self.list_widget:
             return
 
         self.list_widget.tree.delete(*self.list_widget.tree.get_children())
         self.search_results = []
 
-        try:
-            query = self.search_entry.get().strip() or None
-            if self.period_preset == "custom":
-                date_from, date_to = self.custom_range
-            elif self.period_preset != "all":
-                date_from, date_to = period_range(self.period_preset)
-            else:
-                date_from, date_to = None, None
-            archived = self.show_labels.get(self.show_var.get(), "0")
-            self.search_results = self.api.get_workers(
-                search=query, date_from=date_from, date_to=date_to, archived=archived)
+        def _run():
+            try:
+                query = self.search_entry.get().strip() or None
+                if self.period_preset == "custom":
+                    date_from, date_to = self.custom_range
+                elif self.period_preset != "all":
+                    date_from, date_to = period_range(self.period_preset)
+                else:
+                    date_from, date_to = None, None
+                archived = self.show_labels.get(self.show_var.get(), "0")
+                results = self.api.get_workers(
+                    search=query, date_from=date_from, date_to=date_to, archived=archived)
 
-            self.list_widget.set_workers(self.search_results)
-            self.status_bar.config(
-                text=f"Найдено: {len(self.search_results)}"
-                     + (" (архив)" if archived == "1" else ""))
-            log_info(f"Search executed, found {len(self.search_results)} workers")
+                def _update():
+                    self.search_results = results
+                    self.list_widget.set_workers(self.search_results)
+                    self.status_bar.config(
+                        text=f"Найдено: {len(self.search_results)}"
+                             + (" (архив)" if archived == "1" else ""))
+                    log_info(f"Search executed, found {len(self.search_results)} workers")
+                    if not self.search_results:
+                        show_info(self.root, "Результаты", "Записи не найдены")
 
-            if not self.search_results:
-                show_info(self.root, "Результаты", "Записи не найдены")
-        except ConnectionError as e:
-            log_error(f"Search error: server unavailable — {e}")
-            show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
-        except Exception as e:
-            log_error(f"Search error: {e}", exc_info=True)
-            show_error(self.root, "Ошибка", f"Ошибка поиска: {e}")
+                self.root.after(0, _update)
+            except ConnectionError as e:
+                def _error():
+                    log_error(f"Search error: server unavailable — {e}")
+                    show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+                self.root.after(0, _error)
+            except Exception as e:
+                def _error():
+                    log_error(f"Search error: {e}", exc_info=True)
+                    show_error(self.root, "Ошибка", f"Ошибка поиска: {e}")
+                self.root.after(0, _error)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _on_worker_select(self, worker: Worker) -> None:
         """Обработка выбора сотрудника в списке."""
