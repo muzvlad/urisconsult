@@ -71,9 +71,9 @@ class TestWorkerListTechnical:
         archived = widget.tree.item("1")
         active = widget.tree.item("2")
         assert list(archived["tags"]) == ["hr_employed", "archived"]
-        assert archived["values"][8] == "Трудоустроен"
+        assert archived["values"][9] == "Трудоустроен"
         assert list(active["tags"]) == ["hr_not_processed"]
-        assert active["values"][8] == "Новый"
+        assert active["values"][9] == "Новый"
 
 
 class TestRefreshCurrentWorker:

@@ -39,6 +39,7 @@ class Worker:
     legal_entity: str = ""
     hr_status: str = "not_processed"
     hr_status_date: str = ""
+    documents_signed: str = "0"
     archived_at: str = ""
 
     # Кэш связанных данных
@@ -110,6 +111,7 @@ class Worker:
             "legal_entity": self.legal_entity,
             "hr_status": self.hr_status,
             "hr_status_date": self.hr_status_date,
+            "documents_signed": self.documents_signed,
             "archived_at": self.archived_at,
         }
 

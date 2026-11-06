@@ -141,6 +141,8 @@ def create_executable() -> bool:
             '--hidden-import=src.main',
             '--hidden-import=src.logging_config',
             '--hidden-import=fitz',
+            '--hidden-import=openpyxl',
+            '--hidden-import=et_xmlfile',
             db_viewer
         ]
 

@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS {WORKERS_TABLE} (
     legal_entity TEXT,
     hr_status TEXT DEFAULT 'not_processed',
     hr_status_date TEXT,
+    documents_signed TEXT DEFAULT '0',
     archived_at TEXT
 )
 """
@@ -107,5 +108,6 @@ MIGRATIONS = [
     ("legal_entity", "TEXT"),
     ("hr_status", "TEXT DEFAULT 'not_processed'"),
     ("hr_status_date", "TEXT"),
+    ("documents_signed", "TEXT DEFAULT '0'"),
     ("archived_at", "TEXT"),
 ]

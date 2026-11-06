@@ -17,7 +17,13 @@ def test_to_dict_contains_new_fields():
     assert data['legal_entity'] == 'ООО Тест'
     assert data['hr_status'] == 'employed'
     assert data['hr_status_date'] == '01.01.2026'
+    assert data['documents_signed'] == '0'
     assert data['archived_at'] == '2026-01-01T10:00:00'
+
+
+def test_documents_signed_default():
+    assert Worker(id='1', name='A').documents_signed == '0'
+    assert Worker(id='2', name='B', documents_signed='1').documents_signed == '1'
 
 
 def test_is_archived():

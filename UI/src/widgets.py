@@ -70,7 +70,8 @@ class WorkerListWidget(tk.Frame):
     """Виджет списка сотрудников с Treeview и фильтрацией."""
 
     COLUMNS = ("select", "status", "id", "name", "created_at", "citizenship",
-               "manager", "object", "hr_status")
+               "manager", "customer", "object", "hr_status", "hr_status_date",
+               "documents_signed")
     HEADERS = {
         "select": "✓",
         "status": "Статус бота",
@@ -79,8 +80,11 @@ class WorkerListWidget(tk.Frame):
         "created_at": "Дата",
         "citizenship": "Категория",
         "manager": "Менеджер",
+        "customer": "Заказчик",
         "object": "Объект",
         "hr_status": "HR-статус",
+        "hr_status_date": "Дата",
+        "documents_signed": "Док. подписаны",
     }
     COLUMN_WIDTHS = {
         "select": 34,
@@ -90,8 +94,11 @@ class WorkerListWidget(tk.Frame):
         "created_at": 100,
         "citizenship": 90,
         "manager": 120,
+        "customer": 110,
         "object": 150,
         "hr_status": 110,
+        "hr_status_date": 95,
+        "documents_signed": 70,
     }
 
     def __init__(self, parent: tk.Widget,
@@ -241,7 +248,7 @@ class WorkerListWidget(tk.Frame):
         fields = [
             worker.status, worker.id, worker.name,
             worker.created_at or "", worker.citizenship,
-            worker.manager, worker.object, worker.customer,
+            worker.manager, worker.customer, worker.object,
             worker.legal_entity, worker.hr_status,
         ]
         return any(f in (v or "").lower() for v in fields)
@@ -262,8 +269,10 @@ class WorkerListWidget(tk.Frame):
             self.tree.insert("", tk.END, iid=worker.id,
                              tags=tags, values=(
                 checked, icon, worker.id, worker.name, format_date(worker.created_at),
-                worker.citizenship, worker.manager, worker.object,
+                worker.citizenship, worker.manager, worker.customer, worker.object,
                 hr_style['label'],
+                format_date(worker.hr_status_date),
+                "☑" if worker.documents_signed == "1" else "☐",
             ))
 
     def set_workers(self, workers: List[Worker]) -> None:

@@ -357,6 +357,8 @@ HR_STATUS_LABELS: Dict[str, str] = {
     'employed': 'Трудоустроен',
     'rejected': 'Отказ',
     'fired': 'Уволен',
+    'notify': 'Уведомить',
+    'mvd_check': 'На проверке МВД',
 }
 HR_STATUS_KEYS: List[str] = list(HR_STATUS_LABELS)
 HR_STATUS_STYLES: Dict[str, Dict[str, str]] = {
@@ -365,6 +367,8 @@ HR_STATUS_STYLES: Dict[str, Dict[str, str]] = {
     'employed': {'bg': '#D1FAE5', 'fg': '#065F46'},
     'rejected': {'bg': '#FEE2E2', 'fg': '#991B1B'},
     'fired': {'bg': '#E5E7EB', 'fg': '#6B7280'},
+    'notify': {'bg': '#E0E7FF', 'fg': '#3730A3'},
+    'mvd_check': {'bg': '#FFFBEB', 'fg': '#92400E'},
 }
 
 

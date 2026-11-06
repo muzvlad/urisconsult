@@ -661,10 +661,109 @@ class PDFExportService:
         self._font_registered = True
 
 
+# ─── Сервис Excel экспорта ───
+
+class ExcelExportService:
+    """Экспорт списка анкет в Excel (.xlsx)."""
+
+    def __init__(self):
+        self.config = get_config()
+
+    def export_list(self, workers: List[Worker], output_path: Path,
+                    period_label: str = "",
+                    progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
+        """Экспортировать список анкет в Excel — таблица со столбцами списка."""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        except ImportError:
+            return False, "Библиотека openpyxl не установлена"
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Список сотрудников"
+
+        # Заголовок документа
+        ws["A1"] = "Список сотрудников"
+        ws["A1"].font = Font(bold=True, size=14)
+        row = 2
+        if period_label:
+            ws.cell(row=row, column=1, value=f"Период: {period_label}").font = Font(size=11, italic=True)
+            row += 1
+        row += 1  # пустая строка
+
+        header_row = row
+        columns = [
+            ("ID", "id"),
+            ("ФИО", "name"),
+            ("Категория", "citizenship"),
+            ("Менеджер", "manager"),
+            ("Заказчик", "customer"),
+            ("Объект", "object"),
+            ("HR-статус", "hr_status"),
+            ("Дата HR", "hr_status_date"),
+            ("Док. подписаны", "documents_signed"),
+            ("Статус анкеты", "status"),
+            ("Телефон", "phone_main"),
+            ("Дата рожд.", "date"),
+        ]
+
+        # Стили заголовка
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill("solid", fgColor="2C3E50")
+        thin = Side(style="thin", color="B0B0B0")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        for col_idx, (label, _) in enumerate(columns, start=1):
+            cell = ws.cell(row=header_row, column=col_idx, value=label)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center
+            cell.border = border
+
+        # Данные
+        for idx, worker in enumerate(workers, start=header_row + 1):
+            hr_label = HR_STATUS_LABELS.get(worker.hr_status, worker.hr_status)
+            status_label = STATUS_LABELS.get(worker.status, worker.status)
+            signed = "Да" if worker.documents_signed == "1" else "Нет"
+            values = [
+                worker.id or "",
+                worker.name or "",
+                worker.citizenship or "",
+                worker.manager or "",
+                worker.customer or "",
+                worker.object or "",
+                hr_label,
+                format_date(worker.hr_status_date) if worker.hr_status_date else "",
+                signed,
+                status_label,
+                worker.phone_main or "",
+                format_date(worker.date) if worker.date else "",
+            ]
+            for col_idx, val in enumerate(values, start=1):
+                cell = ws.cell(row=idx, column=col_idx, value=val)
+                cell.border = border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+                if idx % 2 == 0:
+                    cell.fill = PatternFill("solid", fgColor="F2F2F2")
+
+        # Ширина колонок
+        widths = [8, 26, 14, 16, 16, 20, 16, 12, 14, 16, 16, 14]
+        for col_idx, width in enumerate(widths, start=1):
+            ws.column_dimensions[chr(64 + col_idx)].width = width
+
+        ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
+
+        wb.save(str(output_path))
+        return True, f"Excel сохранён: {output_path}"
+
+
 # Глобальные экземпляры сервисов (ленивые)
 _doc_service: Optional[DocumentService] = None
 _telegram_service: Optional[TelegramService] = None
 _pdf_service: Optional[PDFExportService] = None
+_excel_service: Optional[ExcelExportService] = None
 
 
 def get_document_service() -> DocumentService:
@@ -686,3 +785,10 @@ def get_pdf_service() -> PDFExportService:
     if _pdf_service is None:
         _pdf_service = PDFExportService()
     return _pdf_service
+
+
+def get_excel_service() -> ExcelExportService:
+    global _excel_service
+    if _excel_service is None:
+        _excel_service = ExcelExportService()
+    return _excel_service

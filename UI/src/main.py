@@ -14,7 +14,8 @@ from src.config import (get_config, get_paths, center_window, get_document_confi
                         period_range, HR_STATUS_KEYS, HR_STATUS_LABELS, hr_status_style,
                         _icon_path)
 from src.api_client import get_db_service as get_api_client
-from src.services import get_document_service, get_telegram_service, get_pdf_service
+from src.services import (get_document_service, get_telegram_service,
+                          get_pdf_service, get_excel_service)
 from src.models import Worker
 from src.widgets import NotificationBell, WorkerListWidget, DocumentViewer, PhotoWidget
 from src.dialogs import (NotificationsWindow, RejectDialog, MeetingDialog, NoteDialog,
@@ -39,6 +40,7 @@ class DBViewerApp:
         self.doc_service = get_document_service()
         self.telegram = get_telegram_service()
         self.pdf_service = get_pdf_service()
+        self.excel_service = get_excel_service()
 
         self._splash_update("Подключение к API...")
         self.api = get_api_client()
@@ -166,8 +168,8 @@ class DBViewerApp:
                   padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
 
-        # Кнопка "Экспорт списка в PDF"
-        tk.Button(top_frame, text="Экспорт списка в PDF", command=self._export_list_to_pdf,
+        # Кнопка "Экспорт списка в Excel"
+        tk.Button(top_frame, text="Экспорт списка в Excel", command=self._export_list_to_excel,
                   bg=self.config.accent_orange, fg='white', font=(FONT_FAMILY, 10, 'bold'),
                   padx=14, relief=tk.FLAT, cursor='hand2'
                   ).pack(side=tk.LEFT, padx=5)
@@ -788,14 +790,13 @@ class DBViewerApp:
         def refresh_style(*_args) -> None:
             style = hr_status_style(current_key())
             plaque.config(text=style['label'], bg=style['bg'], fg=style['fg'])
-            required = current_key() in ('employed', 'fired')
-            date_entry.config(state='normal' if required else 'disabled')
+            date_entry.config(state='normal')
 
         def save() -> None:
             key = current_key()
+            date_text = date_entry.get().strip()
             date_value = ''
-            if key in ('employed', 'fired'):
-                date_text = date_entry.get().strip()
+            if date_text:
                 if not parse_user_date(date_text):
                     show_warning(self.root, "Внимание",
                                  "Укажите дату в формате дд.мм.гггг")
@@ -823,6 +824,36 @@ class DBViewerApp:
         tk.Button(save_row, text="Сохранить", command=save,
                   bg=SAVE_GREEN, fg='white', font=(FONT_FAMILY, 9, 'bold'),
                   padx=14, relief=tk.SOLID, borderwidth=1, cursor='hand2').pack(side=tk.LEFT)
+
+        # Блок «Документы подписаны»
+        docs_row = tk.Frame(block, bg='white')
+        docs_row.pack(side=tk.TOP, anchor=tk.W, pady=(8, 0))
+        docs_var = tk.BooleanVar(value=worker.documents_signed == "1")
+        docs_cb = tk.Checkbutton(docs_row, text="Документы подписаны",
+                                 variable=docs_var, bg='white',
+                                 font=(FONT_FAMILY, 10, 'bold'),
+                                 cursor='hand2')
+        docs_cb.pack(side=tk.LEFT)
+
+        def save_docs() -> None:
+            value = '1' if docs_var.get() else '0'
+            try:
+                if self.api.set_documents_signed(worker.id, value):
+                    log_info(f"Worker {worker.id} documents_signed -> {value}")
+                    self._refresh_current_worker()
+                else:
+                    show_error(self.root, "Ошибка", "Не удалось сохранить")
+            except ConnectionError as e:
+                log_error(f"Documents signed error: server unavailable — {e}")
+                show_error(self.root, "Ошибка", "Сервер недоступен. Проверьте подключение.")
+            except Exception as e:
+                log_error(f"Error saving documents signed {worker.id}: {e}", exc_info=True)
+                show_error(self.root, "Ошибка", f"Ошибка: {e}")
+
+        tk.Button(docs_row, text="Сохранить", command=save_docs,
+                  bg=SAVE_GREEN, fg='white', font=(FONT_FAMILY, 9, 'bold'),
+                  padx=14, relief=tk.SOLID, borderwidth=1, cursor='hand2').pack(side=tk.LEFT, padx=(10, 0))
+
         refresh_style()
 
     def _display_worker_details(self, worker: Worker) -> None:
@@ -1215,8 +1246,8 @@ class DBViewerApp:
                 return label
         return "За все время"
 
-    def _export_list_to_pdf(self) -> None:
-        """Экспорт текущего отфильтрованного списка анкет в PDF."""
+    def _export_list_to_excel(self) -> None:
+        """Экспорт текущего отфильтрованного списка анкет в Excel."""
         if not self.search_results:
             show_warning(self.root, "Предупреждение", "Нет данных для выгрузки!")
             return
@@ -1232,25 +1263,25 @@ class DBViewerApp:
 
         try:
             filename = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF files", "*.pdf")],
-                title="Сохранить список в PDF"
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")],
+                title="Сохранить список в Excel"
             )
             if not filename:
                 return
 
-            log_info(f"Exporting {len(self.search_results)} workers to PDF: {filename}")
-            success, msg = self.pdf_service.export_list(
+            log_info(f"Exporting {len(self.search_results)} workers to Excel: {filename}")
+            success, msg = self.excel_service.export_list(
                 self.search_results, filename, period_label=period_label
             )
             if success:
                 show_info(self.root, "Успех", msg)
-                log_info(f"PDF list export successful: {filename}")
+                log_info(f"Excel list export successful: {filename}")
             else:
                 show_error(self.root, "Ошибка", msg)
-                log_error(f"PDF list export failed: {msg}")
+                log_error(f"Excel list export failed: {msg}")
         except Exception as e:
-            log_error(f"PDF list export error: {e}", exc_info=True)
+            log_error(f"Excel list export error: {e}", exc_info=True)
             show_error(self.root, "Ошибка", f"Ошибка экспорта: {e}")
 
 

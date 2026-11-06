@@ -164,6 +164,10 @@ class APIClient:
         return bool(self._put(f"/api/workers/{worker_id}/hr-status",
                               {"hr_status": status, "hr_status_date": date_value}))
 
+    def set_documents_signed(self, worker_id: str, value: str) -> bool:
+        return bool(self._put(f"/api/workers/{worker_id}/documents-signed",
+                              {"documents_signed": value}))
+
     def archive_worker(self, worker_id: str) -> bool:
         return bool(self._post(f"/api/workers/{worker_id}/archive", {}))
 
@@ -234,6 +238,7 @@ def _dict_to_worker(d: dict) -> Worker:
         legal_entity=d.get("legal_entity", ""),
         hr_status=d.get("hr_status", "not_processed") or "not_processed",
         hr_status_date=d.get("hr_status_date", ""),
+        documents_signed=d.get("documents_signed", "0"),
         archived_at=d.get("archived_at", ""),
     )
     return w

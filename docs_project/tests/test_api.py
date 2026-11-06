@@ -44,8 +44,10 @@ class TestWorkersApi:
 
 class TestHrStatusApi:
     def test_employed_requires_date(self, client):
+        # Дата теперь активна для любого статуса, но не обязательна
         assert client.put('/api/workers/00001/hr-status',
-                          json={'hr_status': 'employed'}).status_code == 400
+                          json={'hr_status': 'employed'}).status_code == 200
+        # Неверный формат даты (ISO вместо ДД.ММ.ГГГГ) — 400
         assert client.put('/api/workers/00001/hr-status',
                           json={'hr_status': 'employed',
                                 'hr_status_date': '2026-01-01'}).status_code == 400
@@ -68,7 +70,33 @@ class TestHrStatusApi:
         resp = client.put('/api/workers/00001/hr-status',
                           json={'hr_status': 'rejected', 'hr_status_date': '01.01.2026'})
         assert resp.status_code == 200
-        assert client.get('/api/workers/00001').get_json()['hr_status_date'] is None
+        # Дата сохраняется для любого статуса, не очищается
+        assert client.get('/api/workers/00001').get_json()['hr_status_date'] == '01.01.2026'
+
+
+class TestDocumentsSignedApi:
+    def test_documents_signed_toggle(self, client):
+        # По умолчанию не подписаны
+        worker = client.get('/api/workers/00001').get_json()
+        assert worker.get('documents_signed') == '0'
+
+        # Подписать
+        resp = client.put('/api/workers/00001/documents-signed',
+                          json={'documents_signed': '1'})
+        assert resp.status_code == 200
+        assert client.get('/api/workers/00001').get_json()['documents_signed'] == '1'
+
+        # Снять галочку
+        resp = client.put('/api/workers/00001/documents-signed',
+                          json={'documents_signed': '0'})
+        assert resp.status_code == 200
+        assert client.get('/api/workers/00001').get_json()['documents_signed'] == '0'
+
+        # Неверное значение — 404 (rowcount 0) или 200 с False? set_documents_signed
+        # возвращает False для не '0'/'1' -> api отдаст 404
+        resp = client.put('/api/workers/00001/documents-signed',
+                          json={'documents_signed': '2'})
+        assert resp.status_code == 404
 
 
 class TestNotesAndMeetingsApi:

@@ -126,10 +126,10 @@ class TestDatabaseSchema:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
 
-        assert {'customer', 'legal_entity', 'hr_status', 'archived_at'} <= worker_cols
+        assert {'customer', 'legal_entity', 'hr_status', 'archived_at', 'documents_signed'} <= worker_cols
         assert {'notified_at', 'reminded_at'} <= meeting_cols
         assert meeting[0] and meeting[1]
-        assert version == 6
+        assert version == 7
 
     def test_workers_table_columns(self, fresh_db):
         db_path, users_dir, docs_dir = fresh_db

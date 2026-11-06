@@ -268,18 +268,27 @@ def set_hr_status(worker_id):
     try:
         data = request.get_json(force=True)
         status = data.get('hr_status', '')
-        date_value = data.get('hr_status_date') or None
+        date_value = data.get('hr_status_date')
         if status not in db.HR_STATUSES:
             return jsonify({"error": "Invalid hr_status"}), 400
-        if status in ('employed', 'fired'):
-            if not date_value or not _valid_hr_date(date_value):
-                return jsonify({"error": "Invalid hr_status_date"}), 400
-        else:
-            date_value = None
+        if date_value is not None and not _valid_hr_date(date_value):
+            return jsonify({"error": "Invalid hr_status_date"}), 400
         ok = run_async(db.set_hr_status(worker_id, status, date_value))
         return jsonify({"ok": ok}), (200 if ok else 404)
     except Exception as e:
         _logger.error("set_hr_status(%s) error: %s", worker_id, e)
+        return jsonify({"error": "Internal error"}), 500
+
+
+@app.route('/api/workers/<worker_id>/documents-signed', methods=['PUT'])
+def set_documents_signed(worker_id):
+    try:
+        data = request.get_json(force=True)
+        value = str(data.get('documents_signed', ''))
+        ok = run_async(db.set_documents_signed(worker_id, value))
+        return jsonify({"ok": ok}), (200 if ok else 404)
+    except Exception as e:
+        _logger.error("set_documents_signed(%s) error: %s", worker_id, e)
         return jsonify({"error": "Internal error"}), 500
 
 

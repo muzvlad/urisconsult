@@ -28,9 +28,9 @@ from shared import (
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
-HR_STATUSES = ('not_processed', 'docs_pending', 'employed', 'rejected', 'fired')
+HR_STATUSES = ('not_processed', 'docs_pending', 'employed', 'rejected', 'fired', 'notify', 'mvd_check')
 
 # Служебная запись, резервирующая следующий числовой ID (см. get_next_id).
 RESERVED_NAME = '__reserved__'
@@ -168,6 +168,8 @@ async def _run_migrations(db: aiosqlite.Connection, from_version: int):
         await _migrate_v4_to_v5(db)
     if from_version < 6:
         await _migrate_v5_to_v6(db)
+    if from_version < 7:
+        await _migrate_v6_to_v7(db)
 
 
 # ─── Миграция v0 → v1: старая схема с колонками документов ──────────
@@ -412,6 +414,18 @@ async def _migrate_v5_to_v6(db: aiosqlite.Connection):
     )
     await db.commit()
     logger.info("Миграция v5→v6 завершена")
+
+# ─── Миграция v6 → v7: документы подписаны + новые HR-статусы ─────
+
+async def _migrate_v6_to_v7(db: aiosqlite.Connection):
+    """Миграция v6→v7: добавление колонки documents_signed."""
+    try:
+        await db.execute("ALTER TABLE workers ADD COLUMN documents_signed TEXT DEFAULT '0'")
+        logger.info("Миграция v6→v7: добавлена колонка documents_signed")
+    except sqlite3.OperationalError:
+        pass
+    await db.commit()
+
 
 async def _migrate_from_json(db: aiosqlite.Connection):
     """Миграция существующих JSON-файлов в БД."""
@@ -883,17 +897,41 @@ async def set_legal_entity(worker_id: str, value: str) -> bool:
 
 
 async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> bool:
-    """Сохранить HR-статус. Дата обязательна для employed/fired."""
+    """Сохранить HR-статус. Дата активна для всех статусов (дд.мм.гггг)."""
     if status not in HR_STATUSES:
         return False
-    if status in ('employed', 'fired') and not date_value:
+    if date_value is not None and not _valid_hr_date_local(date_value):
         return False
-    if status not in ('employed', 'fired'):
-        date_value = None
     async with _get_conn() as db:
         cursor = await db.execute(
             "UPDATE workers SET hr_status = ?, hr_status_date = ?, updated_at = ? WHERE id = ?",
-            (status, date_value, now_msk().isoformat(), worker_id)
+            (status, date_value or '', now_msk().isoformat(), worker_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+def _valid_hr_date_local(value: str) -> bool:
+    """Проверить дату в формате ДД.ММ.ГГГГ."""
+    import re
+    from datetime import datetime
+    if not isinstance(value, str) or not re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', value):
+        return False
+    try:
+        datetime.strptime(value, '%d.%m.%Y')
+        return True
+    except ValueError:
+        return False
+
+
+async def set_documents_signed(worker_id: str, value: str) -> bool:
+    """Отметить/снять галочку «Документы подписаны» ('1'/'0')."""
+    if value not in ('0', '1'):
+        return False
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "UPDATE workers SET documents_signed = ?, updated_at = ? WHERE id = ?",
+            (value, now_msk().isoformat(), worker_id)
         )
         await db.commit()
         return cursor.rowcount > 0
