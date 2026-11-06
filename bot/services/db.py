@@ -28,8 +28,11 @@ from shared import (
 logger = logging.getLogger(__name__)
 
 # ─── Текущая версия схемы ──────────────────────────────────────────
+# ─── Текущая версия схемы ──────────────────────────────────────────
 CURRENT_SCHEMA_VERSION = 7
 
+# HR-статусы: внутренний кадровый процесс, клиент их не видит и не меняет.
+# notify (Уведомить) и mvd_check (На проверке МВД) ставятся только из UI.
 HR_STATUSES = ('not_processed', 'docs_pending', 'employed', 'rejected', 'fired', 'notify', 'mvd_check')
 
 # Служебная запись, резервирующая следующий числовой ID (см. get_next_id).
@@ -925,7 +928,10 @@ def _valid_hr_date_local(value: str) -> bool:
 
 
 async def set_documents_signed(worker_id: str, value: str) -> bool:
-    """Отметить/снять галочку «Документы подписаны» ('1'/'0')."""
+    """Отметить/снять галочку «Документы подписаны» ('1'/'0').
+
+    Внутренний HR-флаг: ставится только из UI, клиент его не видит.
+    """
     if value not in ('0', '1'):
         return False
     async with _get_conn() as db:

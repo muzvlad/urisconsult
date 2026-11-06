@@ -265,6 +265,13 @@ def set_legal_entity(worker_id):
 
 @app.route('/api/workers/<worker_id>/hr-status', methods=['PUT'])
 def set_hr_status(worker_id):
+    """Изменить HR-статус (внутренний кадровый процесс).
+
+    Доступные статусы: not_processed, docs_pending, employed, rejected,
+    fired, notify (Уведомить), mvd_check (На проверке МВД).
+    Дата (ДД.ММ.ГГГГ) активна для любого статуса, но не обязательна.
+    Меняется только из UI; клиент не видит этих полей.
+    """
     try:
         data = request.get_json(force=True)
         status = data.get('hr_status', '')
@@ -282,6 +289,7 @@ def set_hr_status(worker_id):
 
 @app.route('/api/workers/<worker_id>/documents-signed', methods=['PUT'])
 def set_documents_signed(worker_id):
+    """Внутренний HR-флаг «Документы подписаны» — меняется только из UI."""
     try:
         data = request.get_json(force=True)
         value = str(data.get('documents_signed', ''))
