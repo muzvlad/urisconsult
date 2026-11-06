@@ -362,12 +362,12 @@ async def test_add_note_empty_text(temp_db):
 
 @pytest.mark.asyncio
 async def test_init_db_schema_version(temp_db):
-    """init_db устанавливает PRAGMA user_version = 6."""
+    """init_db устанавливает PRAGMA user_version = 7."""
     import aiosqlite
     async with aiosqlite.connect(db_module.DB_PATH) as conn:
         cursor = await conn.execute("PRAGMA user_version")
         row = await cursor.fetchone()
-        assert row[0] == 6
+        assert row[0] == 7
 
 
 @pytest.mark.asyncio

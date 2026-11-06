@@ -131,6 +131,7 @@ async def init_db():
             await db.execute("CREATE INDEX IF NOT EXISTS idx_wm_worker ON worker_meetings(worker_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_wn_worker ON worker_notes(worker_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_name ON workers(name)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_workers_telegram ON workers(telegram_id)")
 
             # Очистка брошенных резервов: свежие резервы не трогаем, иначе
             # другой процесс мог бы получить уже выданный ID.
@@ -516,7 +517,12 @@ async def _migrate_from_json(db: aiosqlite.Connection):
 # ─── Синхронизация файлов на диске → БД ──────────────────────────────
 
 async def _sync_docs_from_disk(db: aiosqlite.Connection):
-    """Сканировать users/docs/ и дописать недостающие записи в worker_documents."""
+    """Сканировать users/docs/ и дописать недостающие записи в worker_documents.
+
+    Префикс файла не уникален между категориями (snils, reg, bank и т.д.
+    повторяются), поэтому сопоставляем файл с типом документа только внутри
+    категории самого работника (по citizenship), а не глобально.
+    """
     from config import DOCS_DIR
 
     if not os.path.isdir(DOCS_DIR):
@@ -525,16 +531,24 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
     cursor = await db.execute("SELECT id FROM workers")
     worker_ids = {row[0] for row in await cursor.fetchall()}
 
-    prefix_to_doc = {}
-    for cat_docs in DOC_FLOWS.values():
-        for doc in cat_docs:
-            prefix_to_doc[doc.prefix] = doc.key
-
     added = 0
     for worker_id in worker_ids:
         worker_dir = os.path.join(DOCS_DIR, worker_id)
         if not os.path.isdir(worker_dir):
             continue
+
+        # Категория работника — нужно знать, какие префиксы ему принадлежат.
+        cursor = await db.execute(
+            "SELECT citizenship FROM workers WHERE id = ?", (worker_id,)
+        )
+        row = await cursor.fetchone()
+        citizenship = row[0] if row else None
+        if citizenship not in DOC_FLOWS:
+            continue
+
+        prefix_to_doc = {}
+        for doc in DOC_FLOWS[citizenship]:
+            prefix_to_doc[doc.prefix] = doc.key
 
         cursor = await db.execute(
             "SELECT doc_type FROM worker_documents WHERE worker_id = ?", (worker_id,)
@@ -556,7 +570,7 @@ async def _sync_docs_from_disk(db: aiosqlite.Connection):
         # Коммит после каждого работника чтобы не держать блокировку долго
         if added:
             await db.commit()
-        logger.info("Синхронизировано %d документов из файловой системы", added)
+    logger.info("Синхронизировано %d документов из файловой системы", added)
 
 
 # ─── CRUD операции ──────────────────────────────────────────────────
@@ -900,9 +914,12 @@ async def set_legal_entity(worker_id: str, value: str) -> bool:
 
 
 async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> bool:
-    """Сохранить HR-статус. Дата активна для всех статусов (дд.мм.гггг)."""
+    """Сохранить HR-статус. Для employed/fired дата обязательна."""
     if status not in HR_STATUSES:
         return False
+    if status in ('employed', 'fired'):
+        if not date_value or not _valid_hr_date_local(date_value):
+            return False
     if date_value is not None and not _valid_hr_date_local(date_value):
         return False
     async with _get_conn() as db:
@@ -915,16 +932,20 @@ async def set_hr_status(worker_id: str, status: str, date_value: str | None) -> 
 
 
 def _valid_hr_date_local(value: str) -> bool:
-    """Проверить дату в формате ДД.ММ.ГГГГ."""
+    """Проверить дату в формате ДД.ММ.ГГГГ или YYYY-MM-DD."""
     import re
     from datetime import datetime
-    if not isinstance(value, str) or not re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', value):
+    if not isinstance(value, str) or not value:
         return False
-    try:
-        datetime.strptime(value, '%d.%m.%Y')
-        return True
-    except ValueError:
-        return False
+    for fmt, pattern in (('%d.%m.%Y', r'\d{2}\.\d{2}\.\d{4}'),
+                         ('%Y-%m-%d', r'\d{4}-\d{2}-\d{2}')):
+        if re.fullmatch(pattern, value):
+            try:
+                datetime.strptime(value, fmt)
+                return True
+            except ValueError:
+                return False
+    return False
 
 
 async def set_documents_signed(worker_id: str, value: str) -> bool:

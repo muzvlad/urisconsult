@@ -7,6 +7,7 @@ import asyncio
 import tempfile
 import mimetypes
 import logging
+import threading
 from flask import Flask, jsonify, request, send_from_directory
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,9 +26,26 @@ MIME_OVERRIDES = {
     '.bmp': 'image/bmp', '.pdf': 'application/pdf',
 }
 
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_lock = threading.Lock()
+
+
+def _ensure_loop():
+    """Гарантировать наличие одного event loop в фоновом потоке."""
+    global _loop
+    if _loop is None:
+        with _loop_lock:
+            if _loop is None:
+                _loop = asyncio.new_event_loop()
+                t = threading.Thread(target=_loop.run_forever, daemon=True, name="api-event-loop")
+                t.start()
+
 
 def run_async(coro):
-    return asyncio.run(coro)
+    """Выполнить корутину на общем event loop (без asyncio.run на каждый запрос)."""
+    _ensure_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, _loop)
+    return future.result(timeout=30)
 
 
 def _valid_iso_date(value: str) -> bool:
@@ -61,15 +79,19 @@ def _valid_meeting_date(value: str) -> bool:
 
 
 def _valid_hr_date(value: str) -> bool:
-    """Проверить HR-дату: только дд.мм.гггг."""
+    """Проверить HR-дату: дд.мм.гггг или YYYY-MM-DD."""
     from datetime import datetime
-    if not isinstance(value, str) or not re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', value):
+    if not isinstance(value, str) or not value:
         return False
-    try:
-        datetime.strptime(value, '%d.%m.%Y')
-        return True
-    except ValueError:
-        return False
+    for fmt, pattern in (('%d.%m.%Y', r'\d{2}\.\d{2}\.\d{4}'),
+                         ('%Y-%m-%d', r'\d{4}-\d{2}-\d{2}')):
+        if re.fullmatch(pattern, value):
+            try:
+                datetime.strptime(value, fmt)
+                return True
+            except ValueError:
+                return False
+    return False
 
 
 # ─── Workers ───────────────────────────────────────────────────────────
@@ -281,7 +303,7 @@ def set_hr_status(worker_id):
         if date_value is not None and not _valid_hr_date(date_value):
             return jsonify({"error": "Invalid hr_status_date"}), 400
         ok = run_async(db.set_hr_status(worker_id, status, date_value))
-        return jsonify({"ok": ok}), (200 if ok else 404)
+        return jsonify({"ok": ok}), (200 if ok else 400)
     except Exception as e:
         _logger.error("set_hr_status(%s) error: %s", worker_id, e)
         return jsonify({"error": "Internal error"}), 500

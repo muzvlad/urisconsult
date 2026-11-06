@@ -3,8 +3,6 @@
 """
 from __future__ import annotations
 import json
-import urllib.request
-import urllib.parse
 import threading
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Callable, Any
@@ -243,38 +241,13 @@ class TelegramService:
             return line
 
         reasons_text = "\n".join(_fmt(r) for r in reasons)
-        text = (
-            f"❌ Ваша анкета #{worker.id} отклонена.\n\n"
-            f"Необходимо исправить:\n{reasons_text}"
-        )
-
-        import json as _json
-        keyboard = _json.dumps({
-            "inline_keyboard": [[
-                {"text": "✏️ Исправить анкету", "callback_data": f"fix_rejected:{worker.id}"},
-                {"text": "📝 Новая анкета", "callback_data": f"new_rejected:{worker.id}"},
-            ]]
-        })
-
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode({
-            "chat_id": telegram_id,
-            "text": text,
-            "reply_markup": keyboard,
-        }).encode()
-
-        try:
-            log_info(f"Sending rejection to chat_id={telegram_id}, worker={worker.id}")
-            req = urllib.request.Request(url, data=data, method="POST")
-            with urllib.request.urlopen(req, timeout=self.config.telegram_timeout) as resp:
-                result = resp.read().decode()
-                log_info(f"Telegram API response: {resp.status} - {result}")
-                if callback:
-                    callback(True, "Уведомление отправлено")
-        except Exception as e:
-            log_error(f"Telegram send error: {e}")
-            if callback:
-                callback(False, f"Ошибка отправки: {e}")
+        # Уведомления об отказе отправляются фоновой задачей бота
+        # (check_rejected_workers в bot/bot.py). UI не дублирует отправку,
+        # чтобы пользователь не получал одно и то же уведомление дважды.
+        log_info(f"Rejection for worker {worker.id} (chat_id={telegram_id}) "
+                 f"will be sent by bot background task; reasons: {reasons_text}")
+        if callback:
+            callback(True, "Уведомление будет отправлено ботом")
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False)

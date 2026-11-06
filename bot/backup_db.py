@@ -5,7 +5,7 @@
 """
 import os
 import sys
-import shutil
+import sqlite3
 
 # Пути
 BOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +18,11 @@ BACKUP_DIR = os.path.join(PROJECT_ROOT, "backups")
 
 
 def backup_db():
-    """Создать бэкап БД."""
+    """Создать бэкап БД.
+
+    Использует SQLite online backup API, чтобы корректно скопировать БД
+    в режиме WAL (включая некоммиченные изменения из -wal файла).
+    """
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
     timestamp = now_msk().strftime("%Y%m%d_%H%M%S")
@@ -29,7 +33,14 @@ def backup_db():
         print(f"БД не найдена: {DB_PATH}")
         return None
 
-    shutil.copy2(DB_PATH, backup_path)
+    src = sqlite3.connect(DB_PATH)
+    dst = sqlite3.connect(backup_path)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
     size_kb = os.path.getsize(backup_path) / 1024
     print(f"Бэкап создан: {backup_path} ({size_kb:.1f} KB)")
 

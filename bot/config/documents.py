@@ -276,7 +276,7 @@ DOC_PROMPTS: Dict[str, str] = {
     'vnzh_work_book': '📖 Отправьте трудовую книжку или ЭТК с Госуслуг:',
     'vnzh_bank_details': '💳 Отправьте реквизиты счета банковской карты:',
     'russia_passport_propiska': '📖 Отправьте паспорт (разворот прописки):',
-    'russia_propiska': '📋 Отправьте прописку:',
+    'russia_passport_propiska': '📋 Отправьте прописку:',
     'russia_inn': '🔢 Отправьте ИНН:',
     'russia_snils': '📄 Отправьте СНИЛС:',
     'russia_education_doc': '🎓 Отправьте документ об образовании (или пропустите):',

@@ -100,7 +100,7 @@ class TestDatabaseSchema:
         conn = sqlite3.connect(db_path)
         conn.execute(
             "CREATE TABLE workers (id TEXT PRIMARY KEY, name TEXT NOT NULL, "
-            "status TEXT DEFAULT 'pending', created_at TEXT)"
+            "status TEXT DEFAULT 'pending', created_at TEXT, telegram_id INTEGER)"
         )
         conn.execute(
             "CREATE TABLE worker_meetings (id INTEGER PRIMARY KEY AUTOINCREMENT, "

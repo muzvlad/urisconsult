@@ -44,21 +44,20 @@ class TestWorkersApi:
 
 class TestHrStatusApi:
     def test_employed_requires_date(self, client):
-        # Дата теперь активна для любого статуса, но не обязательна
+        # employed требует дату — без даты 400
         assert client.put('/api/workers/00001/hr-status',
-                          json={'hr_status': 'employed'}).status_code == 200
-        # Неверный формат даты (ISO вместо ДД.ММ.ГГГГ) — 400
-        assert client.put('/api/workers/00001/hr-status',
-                          json={'hr_status': 'employed',
-                                'hr_status_date': '2026-01-01'}).status_code == 400
+                          json={'hr_status': 'employed'}).status_code == 400
+        # невалидный формат даты — 400
         assert client.put('/api/workers/00001/hr-status',
                           json={'hr_status': 'employed',
                                 'hr_status_date': '1.1.2026'}).status_code == 400
-
-        resp = client.put('/api/workers/00001/hr-status',
+        # оба формата даты допустимы (ДД.ММ.ГГГГ и YYYY-MM-DD)
+        assert client.put('/api/workers/00001/hr-status',
                           json={'hr_status': 'employed',
-                                'hr_status_date': '01.01.2026'})
-        assert resp.status_code == 200
+                                'hr_status_date': '2026-01-01'}).status_code == 200
+        assert client.put('/api/workers/00001/hr-status',
+                          json={'hr_status': 'employed',
+                                'hr_status_date': '01.01.2026'}).status_code == 200
         worker = client.get('/api/workers/00001').get_json()
         assert worker['hr_status'] == 'employed'
         assert worker['hr_status_date'] == '01.01.2026'
