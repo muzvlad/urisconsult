@@ -4,6 +4,7 @@
 from __future__ import annotations
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Callable, Any
 from dataclasses import dataclass
@@ -48,8 +49,9 @@ class DocumentService:
         self.paths = get_paths()
         self.config = get_config()
         self._doc_flows, self._doc_labels, self._doc_prefixes = get_document_config()
-        self._image_cache: Dict[str, ImageTk.PhotoImage] = {}
+        self._image_cache: Dict[str, Tuple[float, ImageTk.PhotoImage]] = {}
         self._cache_max_size = 50
+        self._cache_ttl = 300.0  # 5 минут
 
     def get_worker_documents(self, worker: Worker) -> List[DocumentInfo]:
         """Получить список документов сотрудника с информацией о файлах."""
@@ -111,25 +113,44 @@ class DocumentService:
         api = get_db_service()
         return api.replace_document(worker.id, doc_type, old_filename, new_file_path)
 
+    def _cache_get(self, cache_key: str) -> Optional[ImageTk.PhotoImage]:
+        """Запись из кэша, если она не старше TTL."""
+        entry = self._image_cache.get(cache_key)
+        if not entry:
+            return None
+        stamp, photo = entry
+        if time.monotonic() - stamp > self._cache_ttl:
+            del self._image_cache[cache_key]
+            return None
+        return photo
+
+    def _cache_put(self, cache_key: str, photo: ImageTk.PhotoImage) -> None:
+        """Положить миниатюру в кэш: вытесняем старые и по TTL, и по количеству."""
+        now = time.monotonic()
+        expired = [k for k, (stamp, _) in self._image_cache.items()
+                   if now - stamp > self._cache_ttl]
+        for key in expired:
+            del self._image_cache[key]
+        if len(self._image_cache) >= self._cache_max_size:
+            first_key = next(iter(self._image_cache))
+            del self._image_cache[first_key]
+        self._image_cache[cache_key] = (now, photo)
+
     def load_thumbnail(self, path: Path, size: Optional[Tuple[int, int]] = None) -> Optional[ImageTk.PhotoImage]:
         """Загрузить и закэшировать миниатюру."""
         size = size or self.config.thumbnail_size
         cache_key = f"{path}:{size[0]}x{size[1]}"
 
-        if cache_key in self._image_cache:
-            return self._image_cache[cache_key]
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         try:
-            image = Image.open(path)
-            image.thumbnail(size, Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(image)
+            with Image.open(path) as image:
+                image.thumbnail(size, Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(image)
 
-            # Ограничение размера кэша
-            if len(self._image_cache) >= self._cache_max_size:
-                first_key = next(iter(self._image_cache))
-                del self._image_cache[first_key]
-
-            self._image_cache[cache_key] = photo
+            self._cache_put(cache_key, photo)
             return photo
         except Exception:
             return None
@@ -137,8 +158,9 @@ class DocumentService:
     def load_pdf_thumbnail(self, path: Path, size: Tuple[int, int] = (120, 120)) -> Optional[ImageTk.PhotoImage]:
         """Миниатюра первой страницы PDF (теми через PyMuPDF)."""
         cache_key = f"pdf:{path}:{size[0]}x{size[1]}"
-        if cache_key in self._image_cache:
-            return self._image_cache[cache_key]
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         try:
             import fitz
@@ -150,10 +172,7 @@ class DocumentService:
             image.thumbnail(size, Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(image)
 
-            if len(self._image_cache) >= self._cache_max_size:
-                first_key = next(iter(self._image_cache))
-                del self._image_cache[first_key]
-            self._image_cache[cache_key] = photo
+            self._cache_put(cache_key, photo)
             return photo
         except Exception:
             return None
@@ -299,6 +318,7 @@ class PDFExportService:
             photo_path = self.doc_service.find_photo(worker.id)
             if photo_path:
                 try:
+                    from reportlab.lib.utils import ImageReader
                     img = ImageReader(str(photo_path))
                     photo_x = width - 50 - 80
                     photo_y = height - 50 - 80
@@ -329,7 +349,6 @@ class PDFExportService:
                 if entries and worker.id:
                     filename_doc = (entries[0].get('filename', '')
                                     if isinstance(entries[0], dict) else str(entries[0]))
-                    doc_path = self.doc_service._find_document_file(worker.id, doc.prefix, filename_doc)
 
                     c.drawString(70, y, f"{doc.label}: {filename_doc}")
                     if len(entries) > 1:
@@ -381,7 +400,6 @@ class PDFExportService:
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.utils import ImageReader
         except ImportError:
             return False, "Библиотека reportlab не установлена"
 
@@ -404,7 +422,6 @@ class PDFExportService:
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.utils import ImageReader
         except ImportError:
             return False, "Библиотека reportlab не установлена"
 
@@ -421,175 +438,6 @@ class PDFExportService:
 
         c.save()
         return True, f"PDF сохранён: {output_path}"
-
-    def export_list(self, workers: List[Worker], output_path: Path,
-                    period_label: str = "",
-                    progress_callback: Optional[Callable[[int, int], None]] = None) -> Tuple[bool, str]:
-        """Экспортировать список анкет в PDF — альбомная таблица.
-
-        Каждая анкета — одна строка таблицы со столбцами из найденных
-        анкет. Ориентация альбомная, текст обрезается с переносом,
-        не выходя за края листа.
-        """
-        try:
-            from reportlab.pdfgen import canvas as pdf_canvas
-            from reportlab.lib.pagesizes import A4, landscape
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-        except ImportError:
-            return False, "Библиотека reportlab не установлена"
-
-        self._register_font()
-
-        c = pdf_canvas.Canvas(str(output_path), pagesize=landscape(A4))
-        width, height = landscape(A4)
-
-        # Поля полосы: 20 слева/справа, 45 сверху/снизу
-        margin = 20
-        top_margin = 45
-        bottom_margin = 35
-        content_width = width - 2 * margin
-
-        # Заголовок документа
-        c.setFont(self._font_name, 16)
-        c.drawString(margin, height - 40, "Список сотрудников")
-        if period_label:
-            c.setFont(self._font_name, 12)
-            c.drawString(margin, height - 65, f"Период: {period_label}")
-            y = height - 100
-        else:
-            y = height - 80
-
-        # Колонки таблицы: (заголовок, доля ширины)
-        col_specs = [
-            ("ID", 0.05),
-            ("ФИО", 0.18),
-            ("Гражданство", 0.10),
-            ("Пол", 0.06),
-            ("Дата рожд.", 0.08),
-            ("Объект", 0.12),
-            ("Заказчик", 0.12),
-            ("Должность", 0.10),
-            ("Телефон", 0.12),
-            ("Статус анкеты", 0.09),
-            ("HR-статус", 0.10),
-        ]
-        total_share = sum(w for _, w in col_specs)
-        columns = []
-        x = margin
-        for label, share in col_specs:
-            w = content_width * share / total_share
-            columns.append((label, x, w))
-            x += w
-
-        def draw_header(yy: float) -> None:
-            c.setFont(self._font_name, 9)
-            c.setFillColorRGB(0.82, 0.82, 0.82)
-            c.rect(margin, yy - 8, content_width, 16, stroke=0, fill=1)
-            c.setFillColorRGB(0, 0, 0)
-            for label, x, w in columns:
-                c.drawString(x + 4, yy - 5, label)
-
-        draw_header(y)
-        y -= 18
-
-        row_height = 14
-        font_size = 8.5
-        line_height = font_size + 2
-
-        def wrap_text(text: str, x: float, w: float) -> List[str]:
-            """Разбить текст на строки по ширине колонки."""
-            if not text:
-                return [""]
-            c.setFont(self._font_name, font_size)
-            max_width = w - 8
-            words = str(text).split()
-            lines: List[str] = []
-            current = ""
-            for word in words:
-                trial = (current + " " + word).strip()
-                if c.stringWidth(trial, self._font_name, font_size) <= max_width:
-                    current = trial
-                else:
-                    if current:
-                        lines.append(current)
-                    current = word
-            if current:
-                lines.append(current)
-            return lines or [""]
-
-        for idx, worker in enumerate(workers):
-            # Расчёт необходимой высоты строки (максимальное число строк в ячейках)
-            values = [
-                worker.id or "",
-                worker.name or "",
-                worker.citizenship or "",
-                worker.gender or "",
-                format_date(worker.date) if worker.date else "",
-                worker.object or "",
-                worker.customer or "",
-                worker.position or "",
-                worker.phone_main or "",
-                STATUS_LABELS.get(worker.status, worker.status),
-                HR_STATUS_LABELS.get(worker.hr_status, worker.hr_status),
-            ]
-            wrapped: List[List[str]] = []
-            max_lines = 1
-            for val, (label, x, w) in zip(values, columns):
-                lines = wrap_text(val, x, w)
-                wrapped.append(lines)
-                max_lines = max(max_lines, len(lines))
-
-            need_height = max_lines * line_height + 6
-            if y - need_height < bottom_margin:
-                c.showPage()
-                y = height - top_margin
-                draw_header(y)
-                y -= 18
-
-            # Тень строки (чередование)
-            if idx % 2 == 1:
-                c.setFillColorRGB(0.96, 0.96, 0.96)
-                c.rect(margin, y - need_height + 2, content_width, need_height - 2,
-                       stroke=0, fill=1)
-                c.setFillColorRGB(0, 0, 0)
-
-            # Границы ячеек
-            c.setStrokeColorRGB(0.85, 0.85, 0.85)
-            c.setLineWidth(0.5)
-            c.rect(margin, y - need_height + 2, content_width, need_height - 2,
-                   stroke=1, fill=0)
-
-            # Текст ячеек
-            for (val, lines, (label, x, w)) in zip(values, wrapped, columns):
-                line_y = y - line_height
-                for line in lines:
-                    c.drawString(x + 4, line_y, line)
-                    line_y -= line_height
-
-            y -= need_height
-
-        c.save()
-        return True, f"PDF сохранён: {output_path}"
-
-    def _count_pdf_items(self, worker: Worker) -> int:
-        """Подсчет общего количества элементов для прогресса."""
-        from src.api_client import get_db_service
-        count = 10  # базовые поля
-        if self.doc_service.find_photo(worker.id):
-            count += 1
-        citizenship = worker.citizenship
-        normalized = normalize_citizenship(citizenship)
-        if normalized in self.doc_service._doc_flows:
-            db_docs = get_db_service().get_documents(worker.id)
-            for doc in self.doc_service._doc_flows[normalized]:
-                count += 1
-        if worker.is_rejected and worker.reasons:
-            count += len(worker.reasons) + 1
-        meetings = get_db_service().get_meetings(worker.id)
-        if meetings:
-            count += len(meetings) + 1
-        return count
 
     def _register_font(self) -> None:
         """Зарегистрировать TTF шрифт для поддержки кириллицы."""

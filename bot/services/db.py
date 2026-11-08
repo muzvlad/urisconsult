@@ -637,7 +637,10 @@ async def save_worker(data: dict) -> str:
 
         placeholders = ', '.join(['?'] * len(personal))
         cols = ', '.join(personal.keys())
-        update_cols = [k for k in personal.keys() if k not in ('id', 'created_at')]
+        # В UPDATE идут только те колонки, что реально передали: иначе
+        # частичное обновление затирает поля, которых не было в data
+        update_cols = [k for k in personal.keys()
+                       if k not in ('id', 'created_at') and (k in data or k == 'updated_at')]
         update_clause = ', '.join(f"{k} = excluded.{k}" for k in update_cols)
         await db.execute(
             f"INSERT INTO workers ({cols}) VALUES ({placeholders}) "
@@ -669,11 +672,22 @@ async def save_worker(data: dict) -> str:
 
 
 async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
-    """Сохранить документы работника. doc_files = {doc_type: filename | [filename, ...]}."""
+    """Сохранить документы работника. doc_files = {doc_type: filename | [filename, ...]}.
+
+    created_at первой загрузки не перезаписывается: если файл с тем же именем
+    уже был загружен, дата сохраняется (спека 051).
+    """
     # created_at пишем явно московским временем: DEFAULT CURRENT_TIMESTAMP
     # в SQLite отдаёт UTC, из-за чего «Залит:» показывалось бы на 3 часа раньше.
     now = now_msk().isoformat()
     async with _get_conn() as db:
+        # Запоминаем дату первой загрузки по каждому имени файла
+        cursor = await db.execute(
+            "SELECT doc_type, filename, created_at FROM worker_documents WHERE worker_id = ?",
+            (worker_id,)
+        )
+        first_loaded = {(row[0], row[1]): row[2] for row in await cursor.fetchall()}
+
         for doc_type in doc_files:
             await db.execute(
                 "DELETE FROM worker_documents WHERE worker_id = ? AND doc_type = ?",
@@ -683,12 +697,33 @@ async def save_documents(worker_id: str, doc_files: dict[str, str | list[str]]):
             filenames = value if isinstance(value, list) else [value]
             for filename in filenames:
                 if filename:
+                    created_at = first_loaded.get((doc_type, filename)) or now
                     await db.execute(
                         "INSERT INTO worker_documents (worker_id, doc_type, filename, created_at) "
                         "VALUES (?, ?, ?, ?)",
-                        (worker_id, doc_type, filename, now)
+                        (worker_id, doc_type, filename, created_at)
                     )
         await db.commit()
+
+
+async def add_document(worker_id: str, doc_type: str, filename: str) -> bool:
+    """Добавить запись о документе, если её ещё нет."""
+    if not filename:
+        return False
+    async with _get_conn() as db:
+        cursor = await db.execute(
+            "SELECT id FROM worker_documents WHERE worker_id = ? AND doc_type = ? AND filename = ?",
+            (worker_id, doc_type, filename)
+        )
+        if await cursor.fetchone():
+            return False
+        await db.execute(
+            "INSERT INTO worker_documents (worker_id, doc_type, filename, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (worker_id, doc_type, filename, now_msk().isoformat())
+        )
+        await db.commit()
+        return True
 
 
 async def replace_document(worker_id: str, doc_type: str, old_filename: str) -> bool:
@@ -739,6 +774,18 @@ async def get_worker(worker_id: str) -> dict | None:
         return result
 
 
+# Колонки для списочных выборок: без тяжёлых JSON (relatives_json) и без email
+# (email убран из анкеты по спеке 014). rejection_reasons нужны для экспорта
+# карточек в PDF, поэтому остаются.
+WORKER_LIST_COLUMNS = (
+    "id, name, citizenship, gender, position, object, customer, object_address, "
+    "manager, phone_main, phone_additional, date, registration, marital_status, "
+    "telegram_id, telegram_username, created_at, updated_at, status, "
+    "rejection_reasons, legal_entity, hr_status, hr_status_date, "
+    "documents_signed, archived_at"
+)
+
+
 def _worker_filters(archived: str = '0', date_from: str | None = None,
                     date_to: str | None = None) -> tuple[str, list]:
     """Общие условия выборки анкет: архив и период по created_at."""
@@ -763,7 +810,7 @@ async def get_all_workers(archived: str = '0', date_from: str | None = None,
     where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            f"SELECT * FROM workers WHERE {where} ORDER BY id", params
+            f"SELECT {WORKER_LIST_COLUMNS} FROM workers WHERE {where} ORDER BY id", params
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -793,7 +840,7 @@ async def search_workers(query: str, archived: str = '0',
     where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            f"SELECT * FROM workers WHERE name LIKE ? AND {where} ORDER BY id",
+            f"SELECT {WORKER_LIST_COLUMNS} FROM workers WHERE name LIKE ? AND {where} ORDER BY id",
             [f"%{query}%", *params]
         )
         rows = await cursor.fetchall()
@@ -807,7 +854,7 @@ async def get_workers_by_status(status: str, archived: str = '0',
     where, params = _worker_filters(archived, date_from, date_to)
     async with _get_conn() as db:
         cursor = await db.execute(
-            f"SELECT * FROM workers WHERE status = ? AND {where} ORDER BY id",
+            f"SELECT {WORKER_LIST_COLUMNS} FROM workers WHERE status = ? AND {where} ORDER BY id",
             [status, *params]
         )
         rows = await cursor.fetchall()

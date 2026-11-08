@@ -20,6 +20,7 @@ dependencies = [
     "reportlab>=3.6.0",
     "flask>=3.0.0",
     "pymupdf>=1.24.0",
+    "openpyxl>=3.1.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,6 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["docs_project/tests", "UI/tests"]
+testpaths = ["docs_project/tests", "UI/tests", "bot/tests"]
 asyncio_mode = "auto"
 pythonpath = ["UI", "bot", "shared"]

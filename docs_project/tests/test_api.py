@@ -10,6 +10,9 @@ BOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), 'bot')
 sys.path.insert(0, BOT_DIR)
 
+# Минимальная сигнатура JPEG: API проверяет содержимое файла по magic-байтам
+JPEG_BYTES = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00'
+
 
 @pytest.fixture
 def client(feature_db, worker_factory):
@@ -150,17 +153,17 @@ class TestDocumentsApi:
         worker_dir = docs_dir / '00001'
         worker_dir.mkdir()
         target = worker_dir / 'passport.jpg'
-        target.write_bytes(b'old-content')
+        target.write_bytes(JPEG_BYTES)
 
         resp = client.post('/api/workers/00001/documents', data={
             'doc_type': 'photo',
             'old_filename': 'passport.jpg',
-            'file': (io.BytesIO(b'new-content'), 'upload.jpg'),
+            'file': (io.BytesIO(JPEG_BYTES), 'upload.jpg'),
         }, content_type='multipart/form-data')
         assert resp.status_code == 200
         assert resp.get_json()['ok'] is True
 
-        assert target.read_bytes() == b'new-content'
+        assert target.read_bytes() == JPEG_BYTES
 
         docs = client.get('/api/workers/00001/documents').get_json()
         assert [d['filename'] for d in docs['photo']] == ['passport.jpg']

@@ -7,6 +7,7 @@ FSM генерируется динамически из config.documents — д
 import re
 import logging
 from aiogram import types, F
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove
@@ -301,21 +302,38 @@ async def process_russia_relatives(message: types.Message, state: FSMContext):
 
 # ─── Регистрация обработчиков ──────────────────────────────────────
 
+# Поля, которые заполняются текстом (citizenship — кнопками, его нет в списке)
+TEXT_FIELDS = [
+    'name', 'gender', 'position', 'object', 'customer', 'object_address',
+    'manager', 'phone_main', 'phone_additional', 'date',
+    'russia_marital_status', 'russia_relatives',
+]
+
+
+async def expect_text(message: types.Message):
+    """Вместо текста пришло фото или файл."""
+    await message.answer("❌ Это поле заполняется текстом. Отправьте сообщение текстом.")
+
+
 def register_registration_handlers(dp, form_class):
     """Регистрация обработчиков регистрации."""
-    dp.message.register(process_name, form_class.name)
+    text_states = [getattr(form_class, name) for name in TEXT_FIELDS]
+    dp.message.register(process_name, form_class.name, F.text)
     dp.callback_query.register(process_citizenship_callback, form_class.citizenship,
                                F.data.startswith("citizenship_"))
-    dp.message.register(process_gender, form_class.gender)
-    dp.message.register(process_position, form_class.position)
-    dp.message.register(process_object, form_class.object)
-    dp.message.register(process_customer, form_class.customer)
-    dp.message.register(process_object_address, form_class.object_address)
-    dp.message.register(process_manager, form_class.manager)
-    dp.message.register(process_phone_main, form_class.phone_main)
-    dp.message.register(process_phone_additional, form_class.phone_additional)
-    dp.message.register(process_date, form_class.date)
+    dp.message.register(process_gender, form_class.gender, F.text)
+    dp.message.register(process_position, form_class.position, F.text)
+    dp.message.register(process_object, form_class.object, F.text)
+    dp.message.register(process_customer, form_class.customer, F.text)
+    dp.message.register(process_object_address, form_class.object_address, F.text)
+    dp.message.register(process_manager, form_class.manager, F.text)
+    dp.message.register(process_phone_main, form_class.phone_main, F.text)
+    dp.message.register(process_phone_additional, form_class.phone_additional, F.text)
+    dp.message.register(process_date, form_class.date, F.text)
 
     # Обработчики для России (доп. поля)
-    dp.message.register(process_russia_marital_status, form_class.russia_marital_status)
-    dp.message.register(process_russia_relatives, form_class.russia_relatives)
+    dp.message.register(process_russia_marital_status, form_class.russia_marital_status, F.text)
+    dp.message.register(process_russia_relatives, form_class.russia_relatives, F.text)
+
+    # Фото/документ в текстовом поле — просим текст, а не падаем с AttributeError
+    dp.message.register(expect_text, StateFilter(*text_states), ~F.text)

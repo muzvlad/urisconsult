@@ -22,7 +22,7 @@ class RejectDialog:
     """Диалог выбора полей для отклонения."""
 
     def __init__(self, parent: tk.Widget, worker: Worker,
-                 on_confirm: Callable[[Worker, List[str]], None]):
+                 on_confirm: Callable[[Worker, List[Dict[str, str]]], None]):
         self.worker = worker
         self.on_confirm = on_confirm
         self.config = get_config()

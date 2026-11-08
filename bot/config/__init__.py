@@ -4,6 +4,7 @@
 Все импорты из `from config import X` продолжают работать.
 Новые импорты: `from config.documents import DOC_FLOWS, get_doc_flow, ...`
 """
+import logging
 import os
 import sys
 from dotenv import load_dotenv
@@ -28,6 +29,12 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 NETWORK_SERVER = os.getenv("NETWORK_SERVER", "")
 
+# Порт HTTP-API (Flask). Один на весь проект: UI ходит только на него.
+API_PORT = int(os.getenv("API_PORT", "56755"))
+
+# Токен доступа к API. Пусто — API работает без авторизации (как раньше).
+API_TOKEN = os.getenv("API_TOKEN", "")
+
 # Пути к папкам — приоритет сетевому серверу
 try:
     if NETWORK_SERVER and os.path.isdir(NETWORK_SERVER):
@@ -37,6 +44,10 @@ try:
     else:
         raise OSError("Network server not available")
 except (OSError, PermissionError):
+    if NETWORK_SERVER:
+        logging.getLogger(__name__).warning(
+            "Сетевой сервер %s недоступен — используется локальная БД %s",
+            NETWORK_SERVER, os.path.join(BASE_DIR, "Users"))
     USERS_DIR = os.path.join(BASE_DIR, "Users")
     DB_PATH = os.path.join(USERS_DIR, "users.db")
     DOCS_DIR = os.path.join(USERS_DIR, "docs")

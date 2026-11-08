@@ -9,7 +9,7 @@ from aiogram import types, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove
 
-from config import DOCS_DIR
+from config import DOCS_DIR, ALLOWED_EXTENSIONS
 from config.documents import (
     DOC_FLOWS, DOC_PROMPTS, get_doc_flow, get_next_doc, get_doc_by_key,
 )
@@ -59,6 +59,19 @@ async def _download_document(message: types.Message, state: FSMContext, bot: Bot
             temp_path = os.path.join(DOCS_DIR, f"temp_{doc_key}_{message.from_user.id}{ext}")
 
         await bot.download_file(file_path, temp_path)
+
+        # Сверяем содержимое с расширением: переименованный .exe не пройдёт
+        is_ok, magic_err = FileSaver.check_magic(temp_path)
+        if not is_ok:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+            await message.answer(
+                f"❌ {magic_err}\n"
+                "Попробуйте еще раз или нажмите 'Пропустить':"
+            )
+            return False
 
         if is_multi:
             paths.append(temp_path)

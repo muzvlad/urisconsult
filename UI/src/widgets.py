@@ -185,16 +185,6 @@ class WorkerListWidget(tk.Frame):
         self._filter_text = self._filter_var.get().strip().lower()
         self._refresh_tree()
 
-    def _sort_by(self, column: str) -> None:
-        if self._sort_column == column:
-            self._sort_reverse = not self._sort_reverse
-        else:
-            self._sort_column = column
-            self._sort_reverse = False
-
-        self._update_headers()
-        self._apply_sort()
-
     def _update_headers(self) -> None:
         arrow = " ▲" if not self._sort_reverse else " ▼"
         for col in self.COLUMNS:
@@ -277,7 +267,9 @@ class WorkerListWidget(tk.Frame):
 
     def set_workers(self, workers: List[Worker]) -> None:
         self.workers = workers
-        self._selected_ids.clear()
+        # Выделение сохраняем для анкет, которые остались в списке
+        ids = {w.id for w in workers}
+        self._selected_ids &= ids
         self._apply_sort()
 
     def _on_select(self, event) -> None:

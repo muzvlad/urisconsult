@@ -14,7 +14,7 @@ from keyboards.reply_kb import get_confirmation_keyboard
 from services.file_saver import FileSaver
 from services.db_saver import DBSaver
 from handlers.commands import cleanup_user_temp_files
-from handlers.registration import get_worker_form
+from handlers.registration import get_worker_form, expect_text
 from utils import build_edit_keyboard
 
 logger = logging.getLogger(__name__)
@@ -231,4 +231,6 @@ def register_confirmation_handlers(dp, form_class):
     """Регистрация обработчиков подтверждения."""
     dp.callback_query.register(process_confirmation, form_class.confirmation)
     dp.callback_query.register(process_edit, form_class.edit, F.data.startswith("edit_"))
-    dp.message.register(process_edit_value, form_class.edit)
+    dp.message.register(process_edit_value, form_class.edit, F.text)
+    # Фото/документ вместо значения поля
+    dp.message.register(expect_text, form_class.edit, ~F.text)

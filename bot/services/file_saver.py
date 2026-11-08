@@ -11,9 +11,35 @@ from config.documents import DOC_PREFIXES
 
 logger = logging.getLogger(__name__)
 
+# Сигнатуры файлов по magic-байтам: расширение можно подделать, сигнатуру — нет.
+MAGIC_BYTES = {
+    '.jpg': (b'\xff\xd8\xff',),
+    '.jpeg': (b'\xff\xd8\xff',),
+    '.png': (b'\x89PNG\r\n\x1a\n',),
+    '.gif': (b'GIF87a', b'GIF89a'),
+    '.bmp': (b'BM',),
+    '.pdf': (b'%PDF',),
+}
+
 
 class FileSaver:
     """Класс для сохранения файлов в папку docs."""
+
+    @staticmethod
+    def check_magic(file_path: str) -> tuple[bool, str]:
+        """Проверить, что содержимое файла соответствует его расширению."""
+        ext = os.path.splitext(file_path)[1].lower()
+        signatures = MAGIC_BYTES.get(ext)
+        if not signatures:
+            return False, f"Недопустимый формат: {ext}"
+        try:
+            with open(file_path, 'rb') as f:
+                head = f.read(8)
+        except OSError as e:
+            return False, f"Не удалось прочитать файл: {e}"
+        if not any(head.startswith(sig) for sig in signatures):
+            return False, f"Содержимое файла не соответствует расширению {ext}"
+        return True, ""
 
     @staticmethod
     def validate_file(file_path: str, file_size: int = 0) -> tuple[bool, str]:

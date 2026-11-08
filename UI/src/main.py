@@ -6,6 +6,7 @@ import sys
 import logging
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, List, Dict, Any
 
@@ -110,19 +111,25 @@ class DBViewerApp:
         self._auto_refresh_bell()
 
     def _auto_refresh_bell(self) -> None:
-        """Автоматическое обновление колокольчика каждые 15 секунд (в фоне)."""
-        def _run():
-            try:
-                count = self.api.get_pending_count()
-            except Exception as e:
-                log_error(f"Bell refresh error: {e}")
-                count = 0
-            # Обновить UI в главном потоке
-            self.root.after(0, lambda: self.bell.set_count(count) if self.bell else None)
-            # Следующая итерация
-            self.root.after(15000, self._auto_refresh_bell)
+        """Обновление колокольчика: один поток на всё время работы приложения."""
+        if getattr(self, "_bell_thread", None) is not None:
+            return
+        stop = threading.Event()
+        self._bell_stop = stop
 
-        threading.Thread(target=_run, daemon=True).start()
+        def _loop():
+            while not stop.is_set():
+                try:
+                    count = self.api.get_pending_count()
+                except Exception as e:
+                    log_error(f"Bell refresh error: {e}")
+                    count = None
+                if count is not None:
+                    self.root.after(0, lambda c=count: self.bell.set_count(c) if self.bell else None)
+                stop.wait(15)
+
+        self._bell_thread = threading.Thread(target=_loop, daemon=True, name="bell")
+        self._bell_thread.start()
 
     def _refresh_all(self) -> None:
         """Обновить всё: колокольчик + текущий список."""

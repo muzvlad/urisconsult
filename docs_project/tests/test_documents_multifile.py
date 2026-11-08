@@ -37,8 +37,9 @@ class TestMultiFileTempPaths:
 
         async def fake_download(file_path, dest):
             counter["n"] += 1
-            with open(dest, "w", encoding="utf-8") as f:
-                f.write(f"CONTENT_{counter['n']}")
+            with open(dest, "wb") as f:
+                # сигнатура JPEG — бот проверяет содержимое по magic-байтам
+                f.write(b'\xff\xd8\xff\xe0' + f"CONTENT_{counter['n']}".encode())
 
         bot.download_file = fake_download
 
@@ -66,10 +67,10 @@ class TestMultiFileTempPaths:
         assert len(paths) == 2
         assert paths[0] != paths[1]
 
-        with open(paths[0], encoding="utf-8") as f:
-            c1 = f.read().strip()
-        with open(paths[1], encoding="utf-8") as f:
-            c2 = f.read().strip()
+        with open(paths[0], "rb") as f:
+            c1 = f.read()[4:].decode()
+        with open(paths[1], "rb") as f:
+            c2 = f.read()[4:].decode()
         assert {c1, c2} == {"CONTENT_1", "CONTENT_2"}
         # temp_files — без дублей путей
         assert kwargs["temp_files"] == paths

@@ -55,8 +55,15 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
         worker_data = {'id': worker_id}
         for k in ['name', 'citizenship', 'gender', 'date', 'manager',
                    'object', 'customer', 'object_address', 'position', 'phone_main',
-                   'phone_additional']:
+                   'phone_additional', 'registration']:
             worker_data[k] = worker.get(k)
+        # Поля БД → поля FSM: иначе save_worker затрёт их пустыми значениями
+        worker_data['russia_marital_status'] = worker.get('marital_status', '')
+        try:
+            relatives = json.loads(worker.get('relatives_json') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            relatives = []
+        worker_data['russia_relatives_list'] = relatives
         await state.update_data(**worker_data)
         await state.update_data(editing_rejected=True, rejection_reasons=reasons)
 
@@ -67,7 +74,9 @@ async def handle_rejected_callback(callback: types.CallbackQuery, state: FSMCont
             await state.set_state(get_worker_form().name)
 
     elif data.startswith("new_rejected:"):
-        await db.resubmit_worker(worker_id)
+        # Отклонённая анкета остаётся отклонённой (история) — новая создаётся
+        # отдельной записью. Раньше здесь был db.resubmit_worker: в «ожидании»
+        # появлялись две анкеты — старая (без документов) и новая.
         await state.clear()
         await callback.message.edit_text(
             "Начинаем заполнение новой анкеты.\n"

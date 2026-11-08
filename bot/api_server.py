@@ -4,6 +4,7 @@ import sys
 import re
 import shutil
 import asyncio
+import hmac
 import tempfile
 import mimetypes
 import logging
@@ -12,10 +13,13 @@ from flask import Flask, jsonify, request, send_from_directory
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import DB_PATH, DOCS_DIR
+from config import DB_PATH, DOCS_DIR, API_PORT, API_TOKEN, MAX_FILE_SIZE
 from services import db
 
 app = Flask(__name__)
+
+# Тело запроса ограничено: файл до 20 МБ + 1 МБ на multipart-обвязку
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE + 1024 * 1024
 
 _logger = logging.getLogger(__name__)
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
@@ -26,8 +30,32 @@ MIME_OVERRIDES = {
     '.bmp': 'image/bmp', '.pdf': 'application/pdf',
 }
 
+# ID анкеты и имя файла — только буквы, цифры, дефис и подчёркивание.
+# Без этой проверки worker_id='..' уводит пути за пределы DOCS_DIR.
+SAFE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+SAFE_FILENAME_RE = re.compile(r'^[A-Za-z0-9_.-]{1,128}$')
+
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
+
+
+@app.before_request
+def _guard_request():
+    """Авторизация и проверка параметров пути до обработчика."""
+    if API_TOKEN:
+        token = request.headers.get('X-API-Token', '')
+        if not token or not hmac.compare_digest(token.encode(), API_TOKEN.encode()):
+            return jsonify({"error": "Unauthorized"}), 401
+
+    args = request.view_args or {}
+    worker_id = args.get('worker_id')
+    if worker_id is not None and not SAFE_ID_RE.match(worker_id):
+        return jsonify({"error": "Invalid worker_id"}), 400
+
+    filename = args.get('filename')
+    if filename is not None and (not SAFE_FILENAME_RE.match(filename)
+                                 or '..' in filename):
+        return jsonify({"error": "Invalid filename"}), 400
 
 
 def _ensure_loop():
@@ -164,7 +192,11 @@ def upload_document(worker_id):
             tmp_path = os.path.join(tmp_dir, 'upload' + (src_ext or '.jpg'))
             file_storage.save(tmp_path)
 
-            is_valid, err = FileSaver.validate_file(tmp_path)
+            is_valid, err = FileSaver.validate_file(tmp_path, os.path.getsize(tmp_path))
+            if not is_valid:
+                return jsonify({"error": err}), 400
+
+            is_valid, err = FileSaver.check_magic(tmp_path)
             if not is_valid:
                 return jsonify({"error": err}), 400
 
@@ -177,7 +209,9 @@ def upload_document(worker_id):
                 shutil.copy2(tmp_path, new_path)
                 run_async(db.replace_document(worker_id, doc_type, old_filename))
             else:
-                FileSaver.save_document(tmp_path, worker_id, doc_type)
+                filename = FileSaver.save_document(tmp_path, worker_id, doc_type)
+                # Без записи в БД документ не виден в карточке
+                run_async(db.add_document(worker_id, doc_type, filename))
 
             # Обновляем дату редактирования анкеты
             worker = run_async(db.get_worker(worker_id))
@@ -298,8 +332,12 @@ def set_hr_status(worker_id):
         data = request.get_json(force=True)
         status = data.get('hr_status', '')
         date_value = data.get('hr_status_date')
+        if isinstance(date_value, str):
+            date_value = date_value.strip() or None
         if status not in db.HR_STATUSES:
             return jsonify({"error": "Invalid hr_status"}), 400
+        if status in ('employed', 'fired') and not date_value:
+            return jsonify({"error": "Date required for this status"}), 400
         if date_value is not None and not _valid_hr_date(date_value):
             return jsonify({"error": "Invalid hr_status_date"}), 400
         ok = run_async(db.set_hr_status(worker_id, status, date_value))
@@ -422,4 +460,4 @@ def serve_doc(worker_id, filename):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=API_PORT, debug=False, threaded=True)

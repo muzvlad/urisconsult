@@ -55,17 +55,23 @@ goto :clone_done
 :pull
 echo    Pulling latest changes...
 for /f %%i in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set OLD_COMMIT=%%i
-git -C "%REPO_DIR%" checkout -- . 2>nul
 REM Обновить remote URL с актуальным токеном, чтобы fetch работал с приватным репозиторием
 if exist "%TOKEN_FILE%" (
     set /p GITHUB_TOKEN=<"%TOKEN_FILE%"
     git -C "%REPO_DIR%" remote set-url origin "https://x-access-token:!GITHUB_TOKEN!@github.com/muzvlad/urisconsult.git" >nul 2>&1
 )
 git -C "%REPO_DIR%" fetch --quiet origin 2>nul
-git -C "%REPO_DIR%" reset --hard origin/master --quiet 2>nul
-if errorlevel 1 (
-    echo    [ERROR] Fetch/reset failed. Check internet or token.
-    goto :fail
+REM Сброс делаем только на чистом дереве — локальные правки не затираем
+set DIRTY=
+for /f "tokens=*" %%i in ('git -C "%REPO_DIR%" status --porcelain 2^>nul') do set DIRTY=1
+if defined DIRTY (
+    echo    [WARN] Local changes found - keeping them, update manually.
+) else (
+    git -C "%REPO_DIR%" reset --hard origin/master --quiet 2>nul
+    if errorlevel 1 (
+        echo    [ERROR] Fetch/reset failed. Check internet or token.
+        goto :fail
+    )
 )
 for /f %%i in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set NEW_COMMIT=%%i
 if not "%OLD_COMMIT%"=="%NEW_COMMIT%" (
@@ -116,7 +122,7 @@ if exist "%REPO_DIR%\bot\.env" (
     if errorlevel 1 (
         echo    Adding API_SERVER...
         echo.>> "%REPO_DIR%\bot\.env"
-        set /p API_SRV="    API server (http://ip:8080) or Enter to skip: "
+        set /p API_SRV="    API server (http://ip:56755) or Enter to skip: "
         if "!API_SRV!"=="" (
             echo.>> "%REPO_DIR%\bot\.env"
         ) else (
@@ -129,7 +135,7 @@ if exist "%REPO_DIR%\bot\.env" (
 )
 echo.
 set /p BOT_TOKEN="    Bot token from @BotFather (Enter to skip): "
-set /p API_SRV="    API server (http://ip:8080) or Enter to skip: "
+set /p API_SRV="    API server (http://ip:56755) or Enter to skip: "
 if "%BOT_TOKEN%"=="" (
     echo BOT_TOKEN=YOUR_TOKEN_HERE> "%REPO_DIR%\bot\.env"
     echo API_SERVER=%API_SRV%>> "%REPO_DIR%\bot\.env"

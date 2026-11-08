@@ -17,23 +17,51 @@ from src.models import Worker
 logger = logging.getLogger(__name__)
 
 
+class APIError(Exception):
+    """Ошибка HTTP-ответа API с кодом и текстом сервера."""
+
+    def __init__(self, code: int, message: str = ""):
+        super().__init__(f"HTTP {code}: {message}" if message else f"HTTP {code}")
+        self.code = code
+        self.message = message
+
+
+def _error_text(e: urllib.error.HTTPError) -> str:
+    """Текст ошибки из тела ответа API."""
+    try:
+        body = e.read().decode("utf-8", errors="replace")
+        data = json.loads(body)
+        if isinstance(data, dict):
+            return str(data.get("error", body))
+    except Exception:
+        pass
+    return getattr(e, "reason", "") or ""
+
+
 class APIClient:
     """Drop-in replacement for DatabaseService that talks to the API server."""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, token: str = ""):
         self.base_url = base_url.rstrip("/")
+        self.token = token
         self._cache_dir = Path(os.path.expanduser("~")) / ".urisconsult_cache"
         self._cache_dir.mkdir(exist_ok=True)
+
+    def _open(self, req: urllib.request.Request, timeout: int = 30):
+        """Открыть запрос, добавив токен доступа, если он задан."""
+        if self.token:
+            req.add_header("X-API-Token", self.token)
+        return urllib.request.urlopen(req, timeout=timeout)
 
     def _get(self, path: str) -> dict | list | None:
         url = self.base_url + path
         try:
             req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with self._open(req) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             logger.warning("GET %s → %s", url, e.code)
-            return None
+            raise APIError(e.code, _error_text(e)) from e
         except Exception as e:
             raise ConnectionError(f"Cannot reach server: {e}") from e
 
@@ -43,11 +71,11 @@ class APIClient:
         try:
             req = urllib.request.Request(url, data=body, method="PUT")
             req.add_header("Content-Type", "application/json")
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with self._open(req) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             logger.warning("PUT %s → %s", url, e.code)
-            return {}
+            raise APIError(e.code, _error_text(e)) from e
         except Exception as e:
             raise ConnectionError(f"Cannot reach server: {e}") from e
 
@@ -55,11 +83,11 @@ class APIClient:
         url = self.base_url + path
         try:
             req = urllib.request.Request(url, method="DELETE")
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with self._open(req) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             logger.warning("DELETE %s → %s", url, e.code)
-            return {}
+            raise APIError(e.code, _error_text(e)) from e
         except Exception as e:
             raise ConnectionError(f"Cannot reach server: {e}") from e
 
@@ -69,11 +97,11 @@ class APIClient:
         try:
             req = urllib.request.Request(url, data=body, method="POST")
             req.add_header("Content-Type", "application/json")
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with self._open(req) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             logger.warning("POST %s → %s", url, e.code)
-            return {}
+            raise APIError(e.code, _error_text(e)) from e
         except Exception as e:
             raise ConnectionError(f"Cannot reach server: {e}") from e
 
@@ -98,13 +126,23 @@ class APIClient:
         return [_dict_to_worker(d) for d in data]
 
     def get_worker(self, worker_id: str) -> Optional[Worker]:
-        data = self._get(f"/api/workers/{worker_id}")
+        try:
+            data = self._get(f"/api/workers/{worker_id}")
+        except APIError as e:
+            if e.code == 404:
+                return None
+            raise
         if not data:
             return None
         return _dict_to_worker(data)
 
     def get_documents(self, worker_id: str) -> Dict[str, List[Dict[str, str]]]:
-        data = self._get(f"/api/workers/{worker_id}/documents")
+        try:
+            data = self._get(f"/api/workers/{worker_id}/documents")
+        except APIError as e:
+            if e.code == 404:
+                return {}
+            raise
         return data if isinstance(data, dict) else {}
 
     def replace_document(self, worker_id: str, doc_type: str,
@@ -128,15 +166,36 @@ class APIClient:
 
             req = urllib.request.Request(url, data=body, method="POST")
             req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with self._open(req, 60) as resp:
                 result = json.loads(resp.read().decode())
+            if result.get("ok"):
+                self._drop_cache(worker_id, old_filename)
             return bool(result.get("ok"))
+        except urllib.error.HTTPError as e:
+            logger.warning("replace_document %s failed: %s", url, e.code)
+            raise APIError(e.code, _error_text(e)) from e
+        except APIError:
+            raise
         except Exception as e:
             logger.warning("replace_document %s failed: %s", url, e)
             return False
 
+    def _drop_cache(self, worker_id: str, filename: str) -> None:
+        """Удалить кэшированный файл — после перезаливки содержимое изменилось."""
+        if not filename:
+            return
+        try:
+            (self._cache_dir / worker_id / filename).unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning("Не удалось удалить кэш %s/%s: %s", worker_id, filename, e)
+
     def get_meetings(self, worker_id: str) -> List[dict]:
-        data = self._get(f"/api/workers/{worker_id}/meetings")
+        try:
+            data = self._get(f"/api/workers/{worker_id}/meetings")
+        except APIError as e:
+            if e.code == 404:
+                return []
+            raise
         return data if isinstance(data, list) else []
 
     def add_meeting(self, worker_id: str, date: str, note: str) -> bool:
@@ -144,7 +203,12 @@ class APIClient:
         return bool(resp)
 
     def get_notes(self, worker_id: str) -> List[dict]:
-        data = self._get(f"/api/workers/{worker_id}/notes")
+        try:
+            data = self._get(f"/api/workers/{worker_id}/notes")
+        except APIError as e:
+            if e.code == 404:
+                return []
+            raise
         return data if isinstance(data, list) else []
 
     def add_note(self, worker_id: str, text: str) -> bool:
@@ -175,7 +239,12 @@ class APIClient:
         return bool(self._post(f"/api/workers/{worker_id}/unarchive", {}))
 
     def get_pending_count(self) -> int:
-        data = self._get("/api/pending/count")
+        try:
+            data = self._get("/api/pending/count")
+        except APIError as e:
+            if e.code == 404:
+                return 0
+            raise
         return data.get("count", 0) if isinstance(data, dict) else 0
 
     def accept_worker(self, worker_id: str) -> bool:
@@ -202,7 +271,7 @@ class APIClient:
         url = self.base_url + f"/docs/{worker_id}/{filename}"
         try:
             req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with self._open(req) as resp:
                 target.write_bytes(resp.read())
             return target
         except Exception as e:
@@ -252,8 +321,8 @@ _api_client: Optional[APIClient] = None
 def get_db_service() -> APIClient:
     global _api_client
     if _api_client is None:
-        from src.config import API_SERVER
+        from src.config import API_SERVER, API_TOKEN
         from src.logging_config import diagnostic_log
         diagnostic_log(f"API URL: {API_SERVER}")
-        _api_client = APIClient(API_SERVER)
+        _api_client = APIClient(API_SERVER, API_TOKEN)
     return _api_client

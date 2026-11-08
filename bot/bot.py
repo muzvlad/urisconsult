@@ -13,7 +13,7 @@ from aiogram import Bot, Dispatcher
 from services.fsm_storage import SQLiteStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault, InlineKeyboardButton, InlineKeyboardMarkup
 
-from config import BOT_TOKEN, DOCS_DIR, DB_PATH, ensure_dirs
+from config import BOT_TOKEN, DOCS_DIR, DB_PATH, API_PORT, API_TOKEN, ensure_dirs
 from config.documents import FIELD_LABELS
 from handlers.commands import register_commands, get_start_keyboard
 from handlers.registration import register_registration_handlers, get_worker_form
@@ -86,9 +86,6 @@ def console_print(msg, color='white'):
     print(f"{c}{msg}{reset}", flush=True)
 
 
-API_PORT = 56755
-
-
 def _start_api_server():
     """Запустить Flask API-сервер в фоновом потоке."""
     try:
@@ -150,6 +147,8 @@ async def on_startup(bot: Bot):
     console_print(f"  БД: {DB_PATH}")
     console_print(f"  Документы: {DOCS_DIR}")
     console_print(f"  API: http://0.0.0.0:{API_PORT}")
+    if not API_TOKEN:
+        console_print("  [ВНИМАНИЕ] API без авторизации — задайте API_TOKEN в bot/.env", 'yellow')
     if temp_count:
         console_print(f"  Очищено {temp_count} temp-файлов")
     console_print("=" * 50, 'green')

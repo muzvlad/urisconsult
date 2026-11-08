@@ -58,6 +58,11 @@ class ThrottlingMiddleware(BaseMiddleware):
         now = time.time()
         timestamps = self.user_timestamps[user_id]
 
+        # Фото и документы в лимит не входят: клиент грузит файлы подряд
+        # и не должен терять их из-за «слишком много сообщений»
+        if getattr(event, "photo", None) or getattr(event, "document", None):
+            return await handler(event, data)
+
         # Удаляем старые метки
         timestamps = [t for t in timestamps if now - t < self.period]
         self.user_timestamps[user_id] = timestamps

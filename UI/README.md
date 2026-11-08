@@ -64,7 +64,7 @@ UI/
 │   ├── dialogs.py
 │   ├── config.py         # API_SERVER, HR-статусы, даты
 │   └── logging_config.py
-├── tests/                # 30 тестов
+├── tests/                # 36 тестов
 └── assets/fonts/         # Lora
 ```
 
@@ -85,7 +85,7 @@ UI/
 python -m pytest UI/tests -q
 ```
 
-30 тестов.
+36 тестов.
 
 ## Требования
 

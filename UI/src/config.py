@@ -179,6 +179,23 @@ def _icon_path(name: str) -> Path:
 
 
 # ─── API сервер ───
+def _read_env_value(key: str) -> str:
+    """Прочитать значение из .env файла (bot/.env или .env в корне)."""
+    base = _get_base_path()
+    for env_path in (base / "bot" / ".env", base / ".env"):
+        if not env_path.exists():
+            continue
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{key}="):
+                        return line.split("=", 1)[1].strip()
+        except Exception:
+            pass
+    return ""
+
+
 def _get_api_server() -> str:
     """Прочитать адрес API сервера: env var > .env файл > hardcoded."""
     # 1. Переменная окружения (run.bat, docker и т.д.)
@@ -186,25 +203,22 @@ def _get_api_server() -> str:
     if env_val:
         return env_val
     # 2. .env файл
-    base = _get_base_path()
-    env_candidates = [
-        base / "bot" / ".env",
-        base / ".env",
-    ]
-    for env_path in env_candidates:
-        if env_path.exists():
-            try:
-                with open(env_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("API_SERVER="):
-                            return line.split("=", 1)[1].strip()
-            except Exception:
-                pass
+    file_val = _read_env_value("API_SERVER")
+    if file_val:
+        return file_val
     # 3. Hardcoded fallback (сервер бота)
     return "http://144.76.70.246:56755"
 
+
+def _get_api_token() -> str:
+    """Токен доступа к API: env var > .env файл > пусто (без авторизации)."""
+    env_val = os.environ.get("API_TOKEN", "").strip()
+    if env_val:
+        return env_val
+    return _read_env_value("API_TOKEN")
+
 API_SERVER = _get_api_server()
+API_TOKEN = _get_api_token()
 
 
 def _log_config(msg):
