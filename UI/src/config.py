@@ -179,6 +179,13 @@ def _icon_path(name: str) -> Path:
 
 
 # ─── API сервер ───
+def _strip_quotes(value: str) -> str:
+    """Снять обрамляющие кавычки — так же, как это делает python-dotenv на сервере."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
 def _read_env_value(key: str) -> str:
     """Прочитать значение из .env файла (bot/.env или .env в корне)."""
     base = _get_base_path()
@@ -186,11 +193,11 @@ def _read_env_value(key: str) -> str:
         if not env_path.exists():
             continue
         try:
-            with open(env_path, "r", encoding="utf-8") as f:
+            with open(env_path, "r", encoding="utf-8-sig") as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith(f"{key}="):
-                        return line.split("=", 1)[1].strip()
+                        return _strip_quotes(line.split("=", 1)[1].strip())
         except Exception:
             pass
     return ""
@@ -210,12 +217,24 @@ def _get_api_server() -> str:
     return "http://144.76.70.246:56755"
 
 
+def _builtin_api_token() -> str:
+    """Токен, вшитый в EXE при сборке (сгенерированный src/_api_secret.py)."""
+    try:
+        from src._api_secret import API_TOKEN  # noqa: WPS433
+    except Exception:
+        return ""
+    return str(API_TOKEN or "").strip()
+
+
 def _get_api_token() -> str:
-    """Токен доступа к API: env var > .env файл > пусто (без авторизации)."""
+    """Токен доступа к API: env var > .env файл > вшитый в EXE > пусто."""
     env_val = os.environ.get("API_TOKEN", "").strip()
     if env_val:
         return env_val
-    return _read_env_value("API_TOKEN")
+    file_val = _read_env_value("API_TOKEN")
+    if file_val:
+        return file_val
+    return _builtin_api_token()
 
 API_SERVER = _get_api_server()
 API_TOKEN = _get_api_token()

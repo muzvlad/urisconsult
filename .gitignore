@@ -39,6 +39,9 @@ bot/Users/docs/*
 .env.*.local
 .token
 
+# Сгенерированный при сборке модуль с API-токеном
+UI/src/_api_secret.py
+
 # Logs
 *.log
 logs/
