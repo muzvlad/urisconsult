@@ -204,7 +204,7 @@ def _read_env_value(key: str) -> str:
 
 
 def _get_api_server() -> str:
-    """Прочитать адрес API сервера: env var > .env файл > hardcoded."""
+    """Прочитать адрес API сервера: env var > .env файл. Без fallback — требуется явная настройка."""
     # 1. Переменная окружения (run.bat, docker и т.д.)
     env_val = os.environ.get("API_SERVER", "").strip()
     if env_val:
@@ -213,8 +213,11 @@ def _get_api_server() -> str:
     file_val = _read_env_value("API_SERVER")
     if file_val:
         return file_val
-    # 3. Hardcoded fallback (сервер бота)
-    return "http://144.76.70.246:56755"
+    # 3. Настройка не найдена — падаем с понятной ошибкой
+    raise RuntimeError(
+        "API_SERVER не задан. Установите переменную окружения API_SERVER "
+        "или добавьте API_SERVER=http://host:port в .env файл."
+    )
 
 
 def _builtin_api_token() -> str:
